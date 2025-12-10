@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import './Game.css';
 
@@ -7,13 +7,21 @@ const API_URL = 'http://localhost:8000/api';
 
 function Game() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [partida, setPartida] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    startNewGame();
-  }, []);
+    // Si viene con datos iniciales de Players, usarlos directamente
+    if (location.state?.partidaInicial) {
+      setPartida(location.state.partidaInicial);
+      setLoading(false);
+    } else {
+      // Si no, crear una partida por defecto
+      startNewGame();
+    }
+  }, [location.state]);
 
   const startNewGame = async () => {
     setLoading(true);

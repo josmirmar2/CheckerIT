@@ -1,0 +1,262 @@
+.players-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.players-content {
+  text-align: center;
+  background: rgba(255, 255, 255, 0.95);
+  padding: 50px 60px;
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  max-width: 600px;
+  width: 100%;
+}
+
+.game-title {
+  font-size: 3.5rem;
+  font-weight: bold;
+  color: #667eea;
+  margin-bottom: 10px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.game-subtitle {
+  font-size: 1.3rem;
+  color: #764ba2;
+  margin-bottom: 40px;
+  font-weight: 300;
+}
+
+.setup-section {
+  text-align: left;
+}
+
+.player-count-section {
+  margin-bottom: 35px;
+}
+
+.player-count-section > label {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 15px;
+}
+
+.player-count-buttons {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.count-button {
+  width: 50px;
+  height: 50px;
+  font-size: 1.2rem;
+  font-weight: 700;
+  border: 2px solid #667eea;
+  background-color: white;
+  color: #667eea;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.count-button:hover {
+  background-color: #667eea;
+  color: white;
+  transform: scale(1.1);
+}
+
+.count-button.active {
+  background-color: #667eea;
+  color: white;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.players-input-section {
+  margin-bottom: 30px;
+}
+
+.section-label {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.players-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.player-input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.player-input-group label {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #555;
+}
+
+.player-input-group input {
+  padding: 12px 15px;
+  font-size: 1rem;
+  border: 2px solid #e0e0e0;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.player-input-group input:focus {
+  outline: none;
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.player-input-group input::placeholder {
+  color: #bbb;
+}
+
+.error-message {
+  background-color: #ffe0e0;
+  border: 2px solid #ff6b6b;
+  color: #d32f2f;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 25px;
+  font-weight: 500;
+}
+
+.button-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-top: 35px;
+}
+
+.menu-button {
+  padding: 16px 40px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.start-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+}
+
+.start-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.6);
+}
+
+.back-button {
+  background-color: #f0f0f0;
+  color: #333;
+  border: 2px solid #ddd;
+}
+
+.back-button:hover:not(:disabled) {
+  background-color: #e0e0e0;
+  border-color: #999;
+}
+
+.menu-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 600px) {
+  .players-content {
+    padding: 30px 25px;
+  }
+
+  .game-title {
+    font-size: 2.5rem;
+  }
+
+  .game-subtitle {
+    font-size: 1.1rem;
+    margin-bottom: 30px;
+  }
+
+  .player-count-buttons {
+    flex-wrap: wrap;
+  }
+
+  .count-button {
+    width: 45px;
+    height: 45px;
+    font-size: 1rem;
+  }
+
+  .players-list {
+    gap: 12px;
+  }
+
+  .menu-button {
+    padding: 14px 30px;
+    font-size: 1rem;
+  }
+}
+
+
+.start-button {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.start-button:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+}
+
+.tutorial-button {
+  background: white;
+  color: #667eea;
+  border: 2px solid #667eea;
+}
+
+.tutorial-button:hover {
+  background: #667eea;
+  color: white;
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+}
+
+@media (max-width: 600px) {
+  .home-content {
+    padding: 40px 30px;
+  }
+  
+  .game-title {
+    font-size: 3rem;
+  }
+  
+  .game-subtitle {
+    font-size: 1.2rem;
+  }
+  
+  .menu-button {
+    padding: 15px 30px;
+    font-size: 1rem;
+  }
+}
