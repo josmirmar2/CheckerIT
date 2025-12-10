@@ -6,7 +6,7 @@ function Home() {
   const navigate = useNavigate();
 
   const handleStartGame = () => {
-    navigate('/game');
+    navigate('/players');
   };
 
   const handleTutorial = () => {
@@ -17,14 +17,14 @@ function Home() {
     <div className="home-container">
       <div className="home-content">
         <h1 className="game-title">CheckerIT</h1>
-        <p className="game-subtitle">Damas Chinas</p>
+        <p className="game-subtitle">El mejor juego online para jugar a las Damas Chinas</p>
         
         <div className="button-container">
           <button 
             className="menu-button start-button" 
             onClick={handleStartGame}
           >
-            Empezar Partida
+            Nueva Partida
           </button>
           
           <button 
