@@ -3,8 +3,11 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import './Game.css';
 import { MUSIC_LIST, getRandomMusicIndex } from './musicList';
+import Board from './Board';
 
 const API_URL = 'http://localhost:8000/api';
+// Colores por jugador, alineados con las puntas del tablero
+const PLAYER_COLORS = ['#FFFFFF', '#4444FF', '#44DD44', '#000000', '#FF4444', '#FFDD44'];
 
 function Game() {
   const navigate = useNavigate();
@@ -203,8 +206,8 @@ function Game() {
                     <img src={getIconSrc(jugador.icono)} alt={jugador.nombre || 'IA'} />
                   </div>
                   <div className="turn-info">
+                    <div className="turn-color-dot" style={{ backgroundColor: PLAYER_COLORS[idx] }} />
                     <span className="turn-name">{jugador.nombre || `IA ${jugador.dificultad}`}</span>
-                    <span className="turn-type">{jugador.tipo === 'humano' ? 'Humano' : `IA ${jugador.dificultad}`}</span>
                   </div>
                 </div>
               );
@@ -224,13 +227,7 @@ function Game() {
           </div>
 
           <div className="board-container">
-            <div className="board-placeholder">
-              <p>Tablero de Damas Chinas</p>
-              <p className="board-note">(Aquí se implementará el tablero del juego)</p>
-              <p className="board-info">
-                {partida?.turnos?.length > 0 && `Turno ${partida.turnos[partida.turnos.length - 1].numero}`}
-              </p>
-            </div>
+            <Board jugadoresConfig={jugadoresConfig} />
           </div>
 
           <div className="game-controls">

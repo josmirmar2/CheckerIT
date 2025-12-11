@@ -1,0 +1,178 @@
+import React, { useState, useEffect } from 'react';
+import './Board.css';
+
+const Board = ({ jugadoresConfig }) => {
+  // Paleta previa
+  // Orden: 0 Blanco, 1 Azul, 2 Verde, 3 Negro, 4 Rojo, 5 Amarillo
+  const BOARD_COLORS = ['#FFFFFF', '#0000ffff', '#00ff00ff', '#000000', '#ff0000ff', '#ffbf00ff'];
+  const LIGHT_COLORS = ['#ffffffcf', '#8888ffaf', '#9af89aab', '#666666af', '#ffa2a2a1', '#ffe988b6'];
+
+  const getActivePuntas = (numJugadores) => {
+    switch (numJugadores) {
+      case 2:
+        return [0, 3];
+      case 3:
+        return [0, 4, 5];
+      case 4:
+        return [1, 2, 4, 5];
+      case 6:
+        return [0, 1, 2, 3, 4, 5];
+      default:
+        return [];
+    }
+  };
+
+  const generarTablero = () => {
+    const filas = [
+      [0],
+      [0, 1],  
+      [0, 1, 2],                         
+      [0, 1, 2, 3],  
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      [0, 1, 2, 3, 4, 5, 6, 7, 8],                      
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+      [0, 1, 2, 3],
+      [0, 1, 2],
+      [0, 1],
+      [0],                       
+    ];
+
+    
+    const posicionAPunta = {
+      // Punta 0 (Arriba)
+      '0-0': 0, '1-1': 0, '0-3': 0, '1-3': 0, '2-3': 0,
+      '0-1': 0, '0-2': 0, '1-2': 0, '2-2': 0, '3-3': 0,
+      // Punta 1 (Izquierda-Arriba)
+      '0-4': 1, '2-4': 1, '0-5': 1, '2-5': 1, '1-6': 1,
+      '1-4': 1, '3-4': 1, '1-5': 1, '0-6': 1, '0-7': 1,
+      // Punta 2 (Derecha-Arriba)
+      '12-4': 2, '10-4': 2, '11-5': 2, '9-5': 2, '9-6': 2,
+      '11-4': 2, '9-4': 2, '10-5': 2, '10-6': 2, '9-7': 2,
+      // Punta 4 (Izquierda-Abajo)
+      '0-9': 4, '0-11': 4, '1-11': 4, '0-12': 4, '2-12': 4,
+      '0-10': 4, '1-10': 4, '2-11': 4, '1-12': 4, '3-12': 4,
+      // Punta 5 (Derecha-Abajo)
+      '9-9': 5, '9-11': 5, '10-11': 5, '10-12': 5, '12-12': 5,
+      '9-10': 5, '10-10': 5, '11-11': 5, '9-12': 5, '11-12': 5,
+      // Punta 3 (Abajo)
+      '3-13': 3, '1-13': 3, '0-14': 3, '2-14': 3, '1-15': 3,
+      '2-13': 3, '0-13': 3, '1-14': 3, '0-15': 3, '0-16': 3,
+    };
+
+    const activePuntas = getActivePuntas(jugadoresConfig.length);
+    const tablero = [];
+    let huecoId = 0;
+
+    filas.forEach((fila, filaIdx) => {
+      const huecosFila = [];
+      const numHuecos = fila.length;
+      const offset = (10 - numHuecos) / 2; 
+
+      fila.forEach((_, colIdx) => {
+        const punta = posicionAPunta[`${colIdx}-${filaIdx}`] ?? null;
+        const tieneJugador = punta !== null && activePuntas.includes(punta);
+
+        huecosFila.push({
+          id: huecoId++,
+          punta,
+          jugadorIndex: tieneJugador ? punta : null,
+          offset,
+        });
+      });
+
+      tablero.push(huecosFila);
+    });
+
+    return tablero;
+  };
+
+  const [tablero, setTablero] = useState(() => generarTablero());
+  const [boardPieces, setBoardPieces] = useState([]);
+  const [selectedCell, setSelectedCell] = useState(null);
+
+  const activePuntas = getActivePuntas(jugadoresConfig.length);
+
+  useEffect(() => {
+    const layout = generarTablero();
+    setTablero(layout);
+
+    const piezas = layout.map((fila) =>
+      fila.map((hueco) => {
+        const punta = hueco.punta;
+        const hasPlayer = punta !== null && activePuntas.includes(punta);
+        return hasPlayer ? punta : null;
+      })
+    );
+
+    setBoardPieces(piezas);
+    setSelectedCell(null);
+  }, [jugadoresConfig.length]);
+
+  return (
+    <div className="chinese-checkers-board">
+      <div className="board-grid">
+        {tablero.map((fila, filaIdx) => (
+          <div key={filaIdx} className="board-row" style={{ justifyContent: 'center' }}>
+            {fila.map((hueco, colIdx) => {
+              const punta = hueco.punta;
+              const occupant = boardPieces[filaIdx]?.[colIdx] ?? null;
+              const hasPlayer = occupant !== null;
+              const jugador = hasPlayer ? jugadoresConfig[occupant] : null;
+              const baseColor = punta !== null ? BOARD_COLORS[punta] : '#f4ebd6ff';
+              const lightColor = punta !== null ? LIGHT_COLORS[punta] : '#f4ebd6ff';
+              const backgroundColor = hasPlayer ? BOARD_COLORS[occupant] : (punta !== null ? lightColor : '#f4ebd6ff');
+              const borderColor = hasPlayer ? BOARD_COLORS[occupant] : (punta !== null ? lightColor : '#e6dcc9');
+              const isSelected = selectedCell && selectedCell.fila === filaIdx && selectedCell.col === colIdx;
+
+              const onClick = () => {
+                if (hasPlayer) {
+                  setSelectedCell({ fila: filaIdx, col: colIdx });
+                } else if (selectedCell) {
+                  const { fila, col } = selectedCell;
+                  if (boardPieces[fila]?.[col] !== null) {
+                    const next = boardPieces.map((r) => [...r]);
+                    next[filaIdx][colIdx] = next[fila][col];
+                    next[fila][col] = null;
+                    setBoardPieces(next);
+                  }
+                  setSelectedCell(null);
+                }
+              };
+
+              return (
+                <div
+                  key={hueco.id}
+                  className={`board-cell${isSelected ? ' selected' : ''}`}
+                  style={{
+                    backgroundColor,
+                    borderColor,
+                  }}
+                  title={jugador ? `${jugador.nombre || 'IA'}` : 'Vacío'}
+                  onClick={onClick}
+                >
+                  {jugador && (
+                    <div className="cell-content">
+                      <img 
+                        src={require(`./images/icons/${jugador.icono}`)} 
+                        alt={jugador.nombre || 'IA'} 
+                        className="cell-icon"
+                      />
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+export default Board;
