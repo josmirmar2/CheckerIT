@@ -100,25 +100,21 @@
   max-width: 100%;
 }
 
-/* 2 jugadores: horizontal */
 .players-grid[data-players="2"] {
   grid-template-columns: repeat(2, minmax(250px, 280px));
   justify-content: center;
 }
 
-/* 3 jugadores: horizontal */
 .players-grid[data-players="3"] {
   grid-template-columns: repeat(3, minmax(250px, 280px));
   justify-content: center;
 }
 
-/* 4 jugadores: 2x2 */
 .players-grid[data-players="4"] {
   grid-template-columns: repeat(2, minmax(250px, 280px));
   justify-content: center;
 }
 
-/* 6 jugadores: 3x2 */
 .players-grid[data-players="6"] {
   grid-template-columns: repeat(3, minmax(250px, 280px));
   justify-content: center;

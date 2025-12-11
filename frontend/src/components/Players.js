@@ -107,7 +107,7 @@ function Players() {
 
       const response = await axios.post(`${API_URL}/partidas/start_game/`, datos);
       
-      navigate('/game', { state: { partidaInicial: response.data } });
+      navigate('/game', { state: { partidaInicial: response.data, jugadoresConfig: jugadores } });
     } catch (err) {
       console.error('Error al crear partida:', err);
       setError('Error al crear la partida. Verifica que el servidor esté activo.');
