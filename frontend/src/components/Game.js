@@ -38,10 +38,13 @@ function Game() {
 
   useEffect(() => {
     return () => {
-      // Limpiar al desmontar el componente
+      if (audioElement) {
+        audioElement.pause();
+        audioElement.currentTime = 0;
+      }
       setIsPlayingMusic(false);
     };
-  }, []);
+  }, [audioElement]);
 
   const formatTime = (seconds) => {
     const m = String(Math.floor(seconds / 60)).padStart(2, '0');
@@ -51,15 +54,46 @@ function Game() {
 
   const playRandomMusic = () => {
     if (MUSIC_LIST.length === 0) {
-      console.warn('No hay canciones en la lista de reproducción');
+      console.warn('No hay canciones en la carpeta music/');
       return;
+    }
+
+    if (audioElement) {
+      audioElement.pause();
+      audioElement.currentTime = 0;
     }
 
     const newIndex = getRandomMusicIndex(currentMusicIndex);
     setCurrentMusicIndex(newIndex);
+
+    try {
+      const audio = new Audio(require(`./music/${MUSIC_LIST[newIndex]}`));
+      audio.volume = 0.5; 
+      
+      audio.onended = () => {
+        playRandomMusic();
+      };
+
+      audio.onerror = () => {
+        console.error(`Error al reproducir: ${MUSIC_LIST[newIndex]}`);
+        playRandomMusic();
+      };
+
+      audio.play().catch((error) => {
+        console.error('Error al iniciar reproducción:', error);
+      });
+
+      setAudioElement(audio);
+    } catch (error) {
+      console.error(`No se pudo cargar el archivo: ${MUSIC_LIST[newIndex]}`, error);
+    }
   };
 
   const stopMusic = () => {
+    if (audioElement) {
+      audioElement.pause();
+      audioElement.currentTime = 0;
+    }
     setIsPlayingMusic(false);
     setCurrentMusicIndex(-1);
   };
@@ -226,34 +260,6 @@ function Game() {
           )}
         </aside>
       </div>
-      
-      {isPlayingMusic && currentMusicIndex >= 0 && (
-        <iframe
-          id="youtube-player"
-          style={{ display: 'none' }}
-          src={`https://www.youtube.com/embed/${MUSIC_LIST[currentMusicIndex]}?autoplay=1&enablejsapi=1`}
-          allow="autoplay; encrypted-media"
-          onLoad={(e) => {
-            const iframe = e.target;
-            const checkEnded = setInterval(() => {
-              iframe.contentWindow?.postMessage('{"event":"command","func":"getPlayerState","args":""}', '*');
-            }, 1000);
-            
-            window.addEventListener('message', (event) => {
-              if (event.data && typeof event.data === 'string') {
-                try {
-                  const data = JSON.parse(event.data);
-                  if (data.info === 0) {
-                    clearInterval(checkEnded);
-                    playRandomMusic();
-                  }
-                } catch (e) {
-                }
-              }
-            });
-          }}
-        />
-      )}
     </div>
   );
 }
