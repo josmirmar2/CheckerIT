@@ -1,10 +1,10 @@
-// Lista de canciones locales
-// Añade aquí los nombres de los archivos de audio que tengas en la carpeta music/
-// Formatos soportados: .mp3, .ogg, .wav
-
 export const MUSIC_LIST = [
-  // Ejemplo: 'cancion1.mp3', 'cancion2.mp3', 'musica-fondo.ogg'
-  // Añade tus archivos aquí
+  'track-1.mp3',
+  'track-2.mp3',
+  'track-3.mp3',
+  'track-4.mp3',
+  'track-5.mp3',
+  'track-6.mp3',
 ];
 
 export const getRandomMusicIndex = (previousIndex = -1) => {

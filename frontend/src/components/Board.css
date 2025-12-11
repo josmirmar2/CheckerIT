@@ -22,7 +22,7 @@
 
 .board-row {
   display: flex;
-  gap: 3px;
+  gap: 8px;
   justify-content: center;
 }
 

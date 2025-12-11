@@ -139,6 +139,7 @@
   margin-bottom: 20px;
   box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
   min-height: 420px;
+  min-width: 420px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -415,5 +416,6 @@
   .board-container {
     padding: 20px;
     min-height: 320px;
+    
   }
 }

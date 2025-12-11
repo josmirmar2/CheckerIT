@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import './Game.css';
@@ -6,7 +6,6 @@ import { MUSIC_LIST, getRandomMusicIndex } from './musicList';
 import Board from './Board';
 
 const API_URL = 'http://localhost:8000/api';
-// Colores por jugador, alineados con las puntas del tablero
 const PLAYER_COLORS = ['#FFFFFF', '#4444FF', '#44DD44', '#000000', '#FF4444', '#FFDD44'];
 
 function Game() {
@@ -19,7 +18,7 @@ function Game() {
   const [showHelp, setShowHelp] = useState(false);
   const [isPlayingMusic, setIsPlayingMusic] = useState(false);
   const [currentMusicIndex, setCurrentMusicIndex] = useState(-1);
-  const [audioElement, setAudioElement] = useState(null);
+  const audioRef = useRef(null);
 
   const jugadoresConfig = location.state?.jugadoresConfig || [];
 
@@ -41,13 +40,18 @@ function Game() {
 
   useEffect(() => {
     return () => {
-      if (audioElement) {
-        audioElement.pause();
-        audioElement.currentTime = 0;
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.loop = false;
+          audioRef.current.currentTime = 0;
+          audioRef.current.src = '';
+          audioRef.current.load();
+        } catch {}
       }
       setIsPlayingMusic(false);
     };
-  }, [audioElement]);
+  }, []);
 
   const formatTime = (seconds) => {
     const m = String(Math.floor(seconds / 60)).padStart(2, '0');
@@ -58,12 +62,19 @@ function Game() {
   const playRandomMusic = () => {
     if (MUSIC_LIST.length === 0) {
       console.warn('No hay canciones en la carpeta music/');
+      stopMusic();
       return;
     }
 
-    if (audioElement) {
-      audioElement.pause();
-      audioElement.currentTime = 0;
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.loop = false;
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = '';
+        audioRef.current.load();
+      } catch {}
+      audioRef.current = null;
     }
 
     const newIndex = getRandomMusicIndex(currentMusicIndex);
@@ -71,31 +82,36 @@ function Game() {
 
     try {
       const audio = new Audio(require(`./music/${MUSIC_LIST[newIndex]}`));
-      audio.volume = 0.5; 
-      
-      audio.onended = () => {
-        playRandomMusic();
-      };
+      audio.volume = 0.5;
+      audio.loop = true;
 
       audio.onerror = () => {
         console.error(`Error al reproducir: ${MUSIC_LIST[newIndex]}`);
-        playRandomMusic();
+        stopMusic();
       };
 
       audio.play().catch((error) => {
         console.error('Error al iniciar reproducción:', error);
       });
 
-      setAudioElement(audio);
+      audioRef.current = audio;
     } catch (error) {
       console.error(`No se pudo cargar el archivo: ${MUSIC_LIST[newIndex]}`, error);
+      stopMusic();
     }
   };
 
+
   const stopMusic = () => {
-    if (audioElement) {
-      audioElement.pause();
-      audioElement.currentTime = 0;
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.loop = false;
+        audioRef.current.currentTime = 0;
+        audioRef.current.src = '';
+        audioRef.current.load();
+      } catch {}
+      audioRef.current = null;
     }
     setIsPlayingMusic(false);
     setCurrentMusicIndex(-1);
@@ -117,15 +133,6 @@ function Game() {
       }
       return require(`./images/icons/${iconName}`);
     } catch (err) {
-      return '';
-    }
-  };
-
-  const getImageSrc = (imageName) => {
-    try {
-      return require(`./images/${imageName}`);
-    } catch (err) {
-      console.error(`Error cargando imagen: ${imageName}`, err);
       return '';
     }
   };
@@ -154,15 +161,6 @@ function Game() {
 
   const handleGoBack = () => {
     navigate('/');
-  };
-
-  const getEstadoTexto = (estado) => {
-    const estados = {
-      'EN_CURSO': 'En curso',
-      'PAUSADA': 'Pausada',
-      'FINALIZADA': 'Finalizada'
-    };
-    return estados[estado] || estado;
   };
 
   if (loading) {
@@ -218,7 +216,7 @@ function Game() {
         <main className="board-area">
           <div className="board-top">
             <button className="compact-button" onClick={toggleMusic}>
-              <i className={`fas fa-volume-${isPlayingMusic ? 'up' : 'mute'}`}></i>
+              <i className={`fas ${isPlayingMusic ? 'fa-volume-high' : 'fa-volume-xmark'}`}></i>
             </button>
             <div className="timer">⏱ {formatTime(elapsed)}</div>
             <button className="compact-button" onClick={handleGoBack}>
@@ -251,7 +249,7 @@ function Game() {
           {showHelp && (
             <div className="help-content">
               <h3>Asistente</h3>
-              <p>Chatbot de ayuda (próximamente)</p>
+              <p>Chatbot de ayuda</p>
               <p className="help-placeholder">Aquí aparecerán sugerencias y respuestas.</p>
             </div>
           )}

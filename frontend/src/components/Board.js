@@ -97,6 +97,10 @@ const Board = ({ jugadoresConfig }) => {
   const [selectedCell, setSelectedCell] = useState(null);
 
   const activePuntas = getActivePuntas(jugadoresConfig.length);
+  const puntaToPlayerIndex = activePuntas.reduce((acc, puntaIdx, playerIdx) => {
+    acc[puntaIdx] = playerIdx;
+    return acc;
+  }, {});
 
   useEffect(() => {
     const layout = generarTablero();
@@ -123,8 +127,11 @@ const Board = ({ jugadoresConfig }) => {
               const punta = hueco.punta;
               const occupant = boardPieces[filaIdx]?.[colIdx] ?? null;
               const hasPlayer = occupant !== null;
-              const jugador = hasPlayer ? jugadoresConfig[occupant] : null;
-              const baseColor = punta !== null ? BOARD_COLORS[punta] : '#f4ebd6ff';
+              const jugadorIndex = hasPlayer ? puntaToPlayerIndex[occupant] : null;
+              const jugador =
+                jugadorIndex !== null && jugadorIndex !== undefined
+                  ? jugadoresConfig[jugadorIndex]
+                  : null;
               const lightColor = punta !== null ? LIGHT_COLORS[punta] : '#f4ebd6ff';
               const backgroundColor = hasPlayer ? BOARD_COLORS[occupant] : (punta !== null ? lightColor : '#f4ebd6ff');
               const borderColor = hasPlayer ? BOARD_COLORS[occupant] : (punta !== null ? lightColor : '#e6dcc9');
