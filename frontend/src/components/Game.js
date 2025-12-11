@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import axios from 'axios';
 import './Game.css';
 import { MUSIC_LIST, getRandomMusicIndex } from './musicList';
 import Board from './Board';
 
-const API_URL = 'http://localhost:8000/api';
 const PLAYER_COLORS = ['#FFFFFF', '#4444FF', '#44DD44', '#000000', '#FF4444', '#FFDD44'];
 
 function Game() {
@@ -13,14 +11,30 @@ function Game() {
   const location = useLocation();
   const [partida, setPartida] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [elapsed, setElapsed] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
   const [isPlayingMusic, setIsPlayingMusic] = useState(false);
   const [currentMusicIndex, setCurrentMusicIndex] = useState(-1);
   const audioRef = useRef(null);
+  const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
+  const [moveMade, setMoveMade] = useState(false);
+  // eslint-disable-next-line no-unused-vars
+  const [lastMove, setLastMove] = useState(null);
+  const [lockedPiecePos, setLockedPiecePos] = useState(null);
+  const [originalPiecePos, setOriginalPiecePos] = useState(null);
+  const [undoToOriginalToken, setUndoToOriginalToken] = useState(0);
+  // eslint-disable-next-line no-unused-vars
+  const [boardResetKey, setBoardResetKey] = useState(0);
+  // eslint-disable-next-line no-unused-vars
+  const [undoToken, setUndoToken] = useState(0);
+  const [initialBoardState, setInitialBoardState] = useState(null);
+  const [turnCount, setTurnCount] = useState(1);
 
   const jugadoresConfig = location.state?.jugadoresConfig || [];
+
+  const handleGoBack = () => {
+    navigate('/');
+  };
 
   useEffect(() => {
     if (location.state?.partidaInicial) {
@@ -29,7 +43,7 @@ function Game() {
     } else {
       handleGoBack();
     }
-  }, [location.state]);
+  }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     const timerId = setInterval(() => {
@@ -126,6 +140,47 @@ function Game() {
     }
   };
 
+  const handleBoardMove = (move) => {
+    setLastMove(move);
+    setMoveMade(true);
+    setLockedPiecePos(move.to);
+    if (!originalPiecePos) {
+      setOriginalPiecePos(move.from);
+    }
+    if (!initialBoardState && move.boardState) {
+      setInitialBoardState(move.boardState);
+    }
+  };
+
+  const undoMove = () => {
+    if (!moveMade) return;
+    setUndoToOriginalToken((prev) => prev + 1);
+    setLastMove(null);
+    setMoveMade(false);
+    setLockedPiecePos(null);
+    setOriginalPiecePos(null);
+  };
+
+  const continueTurn = () => {
+    if (!moveMade) return;
+    setCurrentPlayerIndex((prev) => (prev + 1) % jugadoresConfig.length);
+    setTurnCount((prev) => prev + 1);
+    setLastMove(null);
+    setMoveMade(false);
+    setLockedPiecePos(null);
+    setOriginalPiecePos(null);
+    setInitialBoardState(null);
+  };
+  const passTurn = () => {
+    setCurrentPlayerIndex((prev) => (prev + 1) % jugadoresConfig.length);
+    setTurnCount((prev) => prev + 1);
+    setLastMove(null);
+    setMoveMade(false);
+    setLockedPiecePos(null);
+    setOriginalPiecePos(null);
+    setInitialBoardState(null);
+  };
+
   const getIconSrc = (iconName) => {
     try {
       if (iconName === 'Robot-icon.jpg') {
@@ -137,32 +192,6 @@ function Game() {
     }
   };
 
-  const handleEndTurn = async () => {
-    if (!partida) return;
-    
-    try {
-      const response = await axios.post(`${API_URL}/partidas/${partida.id_partida}/end_turn/`);
-      setPartida(response.data);
-    } catch (error) {
-      console.error('Error al finalizar turno:', error);
-    }
-  };
-
-  const handleEndGame = async () => {
-    if (!partida) return;
-    
-    try {
-      const response = await axios.post(`${API_URL}/partidas/${partida.id_partida}/end_game/`);
-      setPartida(response.data);
-    } catch (error) {
-      console.error('Error al finalizar partida:', error);
-    }
-  };
-
-  const handleGoBack = () => {
-    navigate('/');
-  };
-
   if (loading) {
     return (
       <div className="game-container">
@@ -171,30 +200,18 @@ function Game() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="game-container">
-        <div className="game-header">
-          <button className="back-button" onClick={handleGoBack}>
-            ← Volver al Inicio
-          </button>
-          <h1>CheckerIT</h1>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="game-container">
       <div className="game-layout">
         <aside className="turns-panel">
-          <h3>Turnos</h3>
+          <h3>Turno</h3>
+          <div className="turn-counter">Actual: {turnCount}</div>
           <div className="turns-list">
             {jugadoresConfig.length === 0 && (
               <p className="turns-empty">Sin datos de jugadores</p>
             )}
             {jugadoresConfig.map((jugador, idx) => {
-              const isCurrent = partida?.jugador_actual_nombre === jugador.nombre;
+              const isCurrent = idx === currentPlayerIndex;
               return (
                 <div
                   key={`${jugador.nombre || 'IA'}-${idx}`}
@@ -206,6 +223,7 @@ function Game() {
                   <div className="turn-info">
                     <div className="turn-color-dot" style={{ backgroundColor: PLAYER_COLORS[idx] }} />
                     <span className="turn-name">{jugador.nombre || `IA ${jugador.dificultad}`}</span>
+                    {isCurrent && <span className="turn-indicator">Turno actual</span>}
                   </div>
                 </div>
               );
@@ -225,18 +243,20 @@ function Game() {
           </div>
 
           <div className="board-container">
-            <Board jugadoresConfig={jugadoresConfig} />
+            <Board jugadoresConfig={jugadoresConfig} currentPlayerIndex={currentPlayerIndex} onMove={handleBoardMove} moveMade={moveMade} lockedPiecePos={lockedPiecePos} undoToken={undoToken} undoToOriginalToken={undoToOriginalToken} originalPiecePos={originalPiecePos} initialBoardState={initialBoardState} key={boardResetKey} />
           </div>
 
           <div className="game-controls">
             {partida?.estado === 'EN_CURSO' && (
               <>
-                <button className="control-button" onClick={handleEndTurn}>
-                  Finalizar Turno
-                </button>
-                <button className="control-button new-game-button" onClick={handleEndGame}>
-                  Finalizar Partida
-                </button>
+                {moveMade ? (
+                  <>
+                    <button className="control-button" onClick={continueTurn}>Continuar</button>
+                    <button className="control-button" onClick={undoMove}>Deshacer</button>
+                  </>
+                ) : (
+                  <button className="control-button" onClick={passTurn}>Pasar Turno</button>
+                )}
               </>
             )}
           </div>

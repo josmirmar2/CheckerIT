@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './Board.css';
 
-const Board = ({ jugadoresConfig }) => {
-  // Paleta previa
-  // Orden: 0 Blanco, 1 Azul, 2 Verde, 3 Negro, 4 Rojo, 5 Amarillo
+const Board = ({ jugadoresConfig, currentPlayerIndex = 0, onMove = null, moveMade = false, lockedPiecePos = null, undoToken = 0, undoToOriginalToken = 0, originalPiecePos = null, initialBoardState = null }) => {
   const BOARD_COLORS = ['#FFFFFF', '#0000ffff', '#00ff00ff', '#000000', '#ff0000ff', '#ffbf00ff'];
   const LIGHT_COLORS = ['#ffffffcf', '#8888ffaf', '#9af89aab', '#666666af', '#ffa2a2a1', '#ffe988b6'];
 
@@ -43,7 +41,6 @@ const Board = ({ jugadoresConfig }) => {
       [0],                       
     ];
 
-    
     const posicionAPunta = {
       // Punta 0 (Arriba)
       '0-0': 0, '1-1': 0, '0-3': 0, '1-3': 0, '2-3': 0,
@@ -95,6 +92,8 @@ const Board = ({ jugadoresConfig }) => {
   const [tablero, setTablero] = useState(() => generarTablero());
   const [boardPieces, setBoardPieces] = useState([]);
   const [selectedCell, setSelectedCell] = useState(null);
+  const [moveHistory, setMoveHistory] = useState([]);
+  const [turnStartBoardState, setTurnStartBoardState] = useState(null);
 
   const activePuntas = getActivePuntas(jugadoresConfig.length);
   const puntaToPlayerIndex = activePuntas.reduce((acc, puntaIdx, playerIdx) => {
@@ -116,7 +115,37 @@ const Board = ({ jugadoresConfig }) => {
 
     setBoardPieces(piezas);
     setSelectedCell(null);
-  }, [jugadoresConfig.length]);
+    setMoveHistory([]);
+    setTurnStartBoardState(piezas);
+  }, [jugadoresConfig.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (moveMade && !turnStartBoardState) {
+      return;
+    }
+    if (!moveMade) {
+      setTurnStartBoardState(null);
+    }
+  }, [moveMade]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (undoToken === 0 || moveHistory.length === 0) return;
+    const last = moveHistory[moveHistory.length - 1];
+    const { from, to } = last;
+    const next = boardPieces.map((r) => [...r]);
+    next[from.fila][from.col] = next[to.fila][to.col];
+    next[to.fila][to.col] = null;
+    setBoardPieces(next);
+    setSelectedCell({ fila: from.fila, col: from.col });
+    setMoveHistory((prev) => prev.slice(0, prev.length - 1));
+  }, [undoToken]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (undoToOriginalToken === 0 || !initialBoardState) return;
+    setBoardPieces(initialBoardState.map((row) => [...row]));
+    setSelectedCell(null);
+    setMoveHistory([]);
+  }, [undoToOriginalToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="chinese-checkers-board">
@@ -138,17 +167,46 @@ const Board = ({ jugadoresConfig }) => {
               const isSelected = selectedCell && selectedCell.fila === filaIdx && selectedCell.col === colIdx;
 
               const onClick = () => {
+                if (moveMade) {
+                  if (hasPlayer) {
+                    if (!lockedPiecePos || lockedPiecePos.fila !== filaIdx || lockedPiecePos.col !== colIdx) {
+                      return;
+                    }
+                  }
+                }
+
                 if (hasPlayer) {
-                  setSelectedCell({ fila: filaIdx, col: colIdx });
+                  const ownerPunta = boardPieces[filaIdx][colIdx];
+                  const ownerPlayerIndex = puntaToPlayerIndex[ownerPunta];
+                  if (ownerPlayerIndex === currentPlayerIndex) {
+                    setSelectedCell({ fila: filaIdx, col: colIdx });
+                  }
                 } else if (selectedCell) {
                   const { fila, col } = selectedCell;
-                  if (boardPieces[fila]?.[col] !== null) {
+                  const movingPunta = boardPieces[fila]?.[col];
+                  if (movingPunta !== null) {
+                    const ownerPlayerIndex = puntaToPlayerIndex[movingPunta];
+                    if (ownerPlayerIndex !== currentPlayerIndex) {
+                      setSelectedCell(null);
+                      return;
+                    }
                     const next = boardPieces.map((r) => [...r]);
                     next[filaIdx][colIdx] = next[fila][col];
                     next[fila][col] = null;
+                    
+                    if (!turnStartBoardState && !moveMade) {
+                      setTurnStartBoardState(boardPieces);
+                    }
+                    
                     setBoardPieces(next);
+                    setMoveHistory((prev) => [...prev, { from: { fila, col }, to: { fila: filaIdx, col: colIdx }, occupant: movingPunta }]);
+                    setSelectedCell({ fila: filaIdx, col: colIdx });
+                    if (onMove) {
+                      onMove({ from: { fila, col }, to: { fila: filaIdx, col: colIdx }, occupant: movingPunta, boardState: boardPieces });
+                    }
+                  } else {
+                    setSelectedCell(null);
                   }
-                  setSelectedCell(null);
                 }
               };
 
