@@ -18,7 +18,7 @@
 
 .game-title {
   font-size: 4rem;
-  font-weight: Bold;
+  font-weight: bold;
   color: #DEA357;
   margin-bottom: 10px;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
@@ -26,17 +26,11 @@
 
 .game-subtitle {
   font-size: 1.5rem;
-  font-weight: Black;
   color: #88591B;
   margin-bottom: 40px;
-}
-
-.game-text {
-  font-size: 1rem;
-  color: #624013;
-  margin-bottom: 50px;
   font-weight: 300;
 }
+
 
 .button-container {
   display: flex;
@@ -59,11 +53,12 @@
 .start-button {
   background: linear-gradient(135deg, #D58B2A 0%, #AF7223 100%);
   color: white;
+  box-shadow: 0 4px 15px rgba(213, 139, 42, 0.4);
 }
 
 .start-button:hover {
   transform: translateY(-3px);
-  box-shadow: 0 10px 25px rgba(209, 124, 13, 0.4);
+  box-shadow: 0 10px 25px rgba(213, 139, 42, 0.6);
 }
 
 .tutorial-button {
@@ -73,10 +68,10 @@
 }
 
 .tutorial-button:hover {
-  background: #D58B2A;
+  background: #AF7223;
   color: white;
   transform: translateY(-3px);
-  box-shadow: 0 10px 25px rgba(209, 124, 13, 0.3);
+  box-shadow: 0 10px 25px rgba(213, 139, 42, 0.3);
 }
 
 @media (max-width: 600px) {

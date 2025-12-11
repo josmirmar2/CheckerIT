@@ -33,7 +33,7 @@
 
 .back-button:hover {
   background: white;
-  color: #667eea;
+  color: #D58B2A;
   transform: translateY(-2px);
 }
 
@@ -60,7 +60,7 @@
 }
 
 .info-card h3 {
-  color: #667eea;
+  color: #DEA357;
   font-size: 1rem;
   margin-bottom: 10px;
   text-transform: uppercase;
@@ -74,7 +74,7 @@
 }
 
 .current-player {
-  color: #764ba2;
+  color: #88591B;
 }
 
 .board-container {
@@ -97,7 +97,7 @@
 .board-placeholder p:first-child {
   font-size: 2rem;
   font-weight: bold;
-  color: #667eea;
+  color: #DEA357;
   margin-bottom: 10px;
 }
 
@@ -119,7 +119,7 @@
   font-size: 1.1rem;
   font-weight: 600;
   background: white;
-  color: #667eea;
+  color: #D58B2A;
   border: 2px solid white;
   border-radius: 10px;
   cursor: pointer;
@@ -129,10 +129,10 @@
 }
 
 .control-button:hover {
-  background: #667eea;
+  background: #D58B2A;
   color: white;
   transform: translateY(-3px);
-  box-shadow: 0 8px 20px rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 20px rgba(213, 139, 42, 0.3);
 }
 
 .end-game-button {
@@ -148,14 +148,14 @@
 }
 
 .new-game-button {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #D58B2A 0%, #AF7223 100%);
   color: white;
   border: 2px solid transparent;
 }
 
 .new-game-button:hover {
   transform: translateY(-3px) scale(1.05);
-  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 10px 25px rgba(213, 139, 42, 0.4);
 }
 
 .loading {
@@ -188,7 +188,7 @@
 
 .board-info {
   font-size: 1.1rem;
-  color: #764ba2;
+  color: #88591B;
   margin-top: 10px;
   font-weight: 600;
 }
