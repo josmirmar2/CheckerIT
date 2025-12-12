@@ -32,24 +32,10 @@ class Partida(models.Model):
     fecha_fin = models.DateTimeField(null=True, blank=True)
     estado = models.CharField(max_length=20, choices=ESTADOS, default='EN_CURSO')
     numero_jugadores = models.IntegerField()
-    jugador_actual = models.ForeignKey(
-        Jugador, 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        blank=True,
-        related_name='partidas_actual'  # Jugador actual en una partida
-    )
     jugadores = models.ManyToManyField(
         Jugador,
         related_name='partidas',  # Relación: Jugador 2..6 --> 0..* Partida
-        through='ParticipacionPartida'
-    )
-    tablero = models.OneToOneField(
-        'Tablero',
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True,
-        related_name='partida'  # Composición: Tablero 1 --> 1 Partida
+        through='JugadorPartida'
     )
 
     class Meta:
@@ -63,7 +49,8 @@ class Pieza(models.Model):
     """
     Modelo para representar una pieza del juego
     Relación: Jugador 1 --> 1..* Pieza
-    Relación: Tablero 1 -- 0..* Pieza
+    Relación: IA 1 -- 0..* Pieza
+    Relación: Chatbot 1 -- 0..* Pieza
     """
     id_pieza = models.CharField(max_length=50, primary_key=True)
     tipo = models.CharField(max_length=50)
@@ -73,10 +60,17 @@ class Pieza(models.Model):
         on_delete=models.CASCADE, 
         related_name='piezas'  # Jugador 1 --> 1..* Pieza
     )
-    tablero = models.ForeignKey(
-        'Tablero',
+    ia = models.ForeignKey(
+        'IA',
         on_delete=models.CASCADE,
-        related_name='piezas',  # Tablero 1 -- 0..* Pieza
+        related_name='piezas',  # IA 1 -- 0..* Pieza
+        null=True,
+        blank=True
+    )
+    chatbot = models.ForeignKey(
+        'Chatbot',
+        on_delete=models.CASCADE,
+        related_name='piezas',  # ChatBot 1 -- 0..* Pieza
         null=True,
         blank=True
     )
@@ -88,23 +82,6 @@ class Pieza(models.Model):
         return f"{self.tipo} de {self.jugador}"
 
 
-class Tablero(models.Model):
-    """
-    Modelo para representar el tablero del juego
-    Relación: Tablero 1 --> 1 Partida (Composición)
-    Relación: Tablero 1 -- 0..* Pieza
-    Relación: IA 1 --> 1 Tablero (inversa)
-    """
-    id_tablero = models.CharField(max_length=50, primary_key=True)
-    dimension = models.CharField(max_length=50)  # puede ser "10x10", "Hexagonal", etc.
-    estado_casillas = models.JSONField()  # Mapa String-Pieza JSON
-    historial = models.JSONField(default=list)  # Lista de Strings
-
-    class Meta:
-        verbose_name_plural = "Tableros"
-
-    def __str__(self):
-        return f"Tablero {self.id_tablero}"
 
 
 class Turno(models.Model):
@@ -181,7 +158,7 @@ class IA(models.Model):
     """
     Modelo para representar la configuración de IA de un jugador
     Relación: Jugador 1 --> 0..1 IA
-    Relación: IA 1 --> 1 Tablero
+    Relación: IA 1 --> 1..* Pieza
     Relación: Chatbot 1 --> 1 IA (inversa)
     """
     jugador = models.OneToOneField(
@@ -191,13 +168,6 @@ class IA(models.Model):
         related_name='ia'  # Jugador 1 --> 0..1 IA
     )
     nivel = models.IntegerField()
-    tablero = models.OneToOneField(
-        Tablero,
-        on_delete=models.CASCADE,
-        related_name='ia',  # IA 1 --> 1 Tablero
-        null=True,
-        blank=True
-    )
 
     class Meta:
         verbose_name = "IA"
@@ -211,19 +181,11 @@ class Chatbot(models.Model):
     """
     Modelo para representar el chatbot de ayuda
     Relación: Chatbot 1 --> 1 IA
-    Relación: Chatbot 1 --> 1 Tablero
     """
     ia = models.OneToOneField(
         IA,
         on_delete=models.CASCADE,
         related_name='chatbot',  # Chatbot 1 --> 1 IA
-        null=True,
-        blank=True
-    )
-    tablero = models.OneToOneField(
-        Tablero,
-        on_delete=models.CASCADE,
-        related_name='chatbot',  # Chatbot 1 --> 1 Tablero
         null=True,
         blank=True
     )
@@ -237,7 +199,7 @@ class Chatbot(models.Model):
         return "Chatbot"
 
 
-class ParticipacionPartida(models.Model):
+class JugadorPartida(models.Model):
     """
     Modelo para representar la participación de jugadores en partidas
     Relación: Jugador 2..6 --> 0..* Partida (through)
@@ -245,7 +207,7 @@ class ParticipacionPartida(models.Model):
     jugador = models.ForeignKey(Jugador, on_delete=models.CASCADE)
     partida = models.ForeignKey(Partida, on_delete=models.CASCADE)
     fecha_union = models.DateTimeField(auto_now_add=True)
-    orden_participacion = models.IntegerField()  # Orden en que se unió
+    orden_participacion = models.IntegerField()
 
     class Meta:
         verbose_name_plural = "Participaciones en Partida"

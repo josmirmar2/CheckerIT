@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Jugador, Partida, Pieza, Tablero, Turno, Movimiento, IA, Chatbot, ParticipacionPartida
+from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida
 
 
 @admin.register(Jugador)
@@ -11,7 +11,7 @@ class JugadorAdmin(admin.ModelAdmin):
 
 @admin.register(Partida)
 class PartidaAdmin(admin.ModelAdmin):
-    list_display = ['id_partida', 'fecha_inicio', 'fecha_fin', 'estado', 'numero_jugadores', 'jugador_actual']
+    list_display = ['id_partida', 'fecha_inicio', 'fecha_fin', 'estado', 'numero_jugadores']
     list_filter = ['estado', 'numero_jugadores']
     search_fields = ['id_partida']
     date_hierarchy = 'fecha_inicio'
@@ -19,15 +19,9 @@ class PartidaAdmin(admin.ModelAdmin):
 
 @admin.register(Pieza)
 class PiezaAdmin(admin.ModelAdmin):
-    list_display = ['id_pieza', 'tipo', 'posicion', 'jugador', 'tablero']
+    list_display = ['id_pieza', 'tipo', 'posicion', 'jugador', 'ia', 'chatbot']
     list_filter = ['tipo', 'jugador']
     search_fields = ['id_pieza', 'posicion']
-
-
-@admin.register(Tablero)
-class TableroAdmin(admin.ModelAdmin):
-    list_display = ['id_tablero', 'dimension']
-    search_fields = ['id_tablero']
 
 
 @admin.register(Turno)
@@ -48,17 +42,17 @@ class MovimientoAdmin(admin.ModelAdmin):
 
 @admin.register(IA)
 class IAAdmin(admin.ModelAdmin):
-    list_display = ['jugador', 'nivel', 'tablero']
+    list_display = ['jugador', 'nivel']
     list_filter = ['nivel']
 
 
 @admin.register(Chatbot)
 class ChatbotAdmin(admin.ModelAdmin):
-    list_display = ['id', 'ia', 'tablero']
+    list_display = ['id', 'ia']
 
 
-@admin.register(ParticipacionPartida)
-class ParticipacionPartidaAdmin(admin.ModelAdmin):
+@admin.register(JugadorPartida)
+class JugadorPartidaAdmin(admin.ModelAdmin):
     list_display = ['jugador', 'partida', 'fecha_union', 'orden_participacion']
     list_filter = ['partida']
     search_fields = ['jugador__nombre']

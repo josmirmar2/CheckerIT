@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Jugador, Partida, Pieza, Tablero, Turno, Movimiento, IA, Chatbot, ParticipacionPartida
+from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida
 
 
 class JugadorSerializer(serializers.ModelSerializer):
@@ -8,29 +8,20 @@ class JugadorSerializer(serializers.ModelSerializer):
         fields = ['id_jugador', 'nombre', 'humano']
 
 
-class ParticipacionPartidaSerializer(serializers.ModelSerializer):
+class JugadorPartidaSerializer(serializers.ModelSerializer):
     jugador_nombre = serializers.CharField(source='jugador.nombre', read_only=True)
     
     class Meta:
-        model = ParticipacionPartida
+        model = JugadorPartida
         fields = ['id', 'jugador', 'jugador_nombre', 'partida', 'fecha_union', 'orden_participacion']
 
 
 class PiezaSerializer(serializers.ModelSerializer):
     jugador_nombre = serializers.CharField(source='jugador.nombre', read_only=True)
-    tablero_id = serializers.CharField(source='tablero.id_tablero', read_only=True)
     
     class Meta:
         model = Pieza
-        fields = ['id_pieza', 'tipo', 'posicion', 'jugador', 'jugador_nombre', 'tablero', 'tablero_id']
-
-
-class TableroSerializer(serializers.ModelSerializer):
-    piezas = PiezaSerializer(many=True, read_only=True)
-    
-    class Meta:
-        model = Tablero
-        fields = ['id_tablero', 'dimension', 'estado_casillas', 'historial', 'piezas']
+        fields = ['id_pieza', 'tipo', 'posicion', 'jugador', 'jugador_nombre', 'ia', 'chatbot']
 
 
 class MovimientoSerializer(serializers.ModelSerializer):
@@ -56,42 +47,36 @@ class TurnoSerializer(serializers.ModelSerializer):
 
 
 class PartidaSerializer(serializers.ModelSerializer):
-    jugador_actual_nombre = serializers.CharField(source='jugador_actual.nombre', read_only=True)
     turnos = TurnoSerializer(many=True, read_only=True)
     movimientos = MovimientoSerializer(many=True, read_only=True)
-    participantes = ParticipacionPartidaSerializer(source='participacionpartida_set', many=True, read_only=True)
+    participantes = JugadorPartidaSerializer(source='jugadorpartida_set', many=True, read_only=True)
     
     class Meta:
         model = Partida
         fields = ['id_partida', 'fecha_inicio', 'fecha_fin', 'estado', 
-                  'numero_jugadores', 'jugador_actual', 'jugador_actual_nombre', 
-                  'tablero', 'turnos', 'movimientos', 'participantes']
+                  'numero_jugadores', 'turnos', 'movimientos', 'participantes']
         read_only_fields = ['fecha_inicio']
 
 
 class PartidaListSerializer(serializers.ModelSerializer):
-    jugador_actual_nombre = serializers.CharField(source='jugador_actual.nombre', read_only=True)
-    
     class Meta:
         model = Partida
         fields = ['id_partida', 'fecha_inicio', 'fecha_fin', 'estado', 
-                  'numero_jugadores', 'jugador_actual', 'jugador_actual_nombre']
+                  'numero_jugadores']
         read_only_fields = ['fecha_inicio']
 
 
 class IASerializer(serializers.ModelSerializer):
     jugador_nombre = serializers.CharField(source='jugador.nombre', read_only=True)
-    tablero_id = serializers.CharField(source='tablero.id_tablero', read_only=True)
     
     class Meta:
         model = IA
-        fields = ['jugador', 'jugador_nombre', 'nivel', 'tablero', 'tablero_id']
+        fields = ['jugador', 'jugador_nombre', 'nivel']
 
 
 class ChatbotSerializer(serializers.ModelSerializer):
     ia_jugador = serializers.CharField(source='ia.jugador.nombre', read_only=True)
-    tablero_id = serializers.CharField(source='tablero.id_tablero', read_only=True)
     
     class Meta:
         model = Chatbot
-        fields = ['id', 'ia', 'ia_jugador', 'tablero', 'tablero_id', 'memoria', 'contexto']
+        fields = ['id', 'ia', 'ia_jugador', 'memoria', 'contexto']

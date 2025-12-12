@@ -223,9 +223,11 @@ const Board = ({ jugadoresConfig, currentPlayerIndex = 0, onMove = null, moveMad
                 >
                   {jugador && (
                     <div className="cell-content">
-                      <img 
-                        src={require(`./images/icons/${jugador.icono}`)} 
-                        alt={jugador.nombre || 'IA'} 
+                      <img
+                        src={jugador.icono === 'Robot-icon.jpg'
+                          ? require('./images/Robot-icon.jpg')
+                          : require(`./images/icons/${jugador.icono}`)}
+                        alt={jugador.nombre || 'IA'}
                         className="cell-icon"
                       />
                     </div>

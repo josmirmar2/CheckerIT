@@ -3,11 +3,11 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from datetime import datetime
-from .models import Jugador, Partida, Pieza, Tablero, Turno, Movimiento, IA, Chatbot, ParticipacionPartida
+from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida
 from .serializers import (
     JugadorSerializer, PartidaSerializer, PartidaListSerializer,
-    PiezaSerializer, TableroSerializer, TurnoSerializer, 
-    MovimientoSerializer, IASerializer, ChatbotSerializer, ParticipacionPartidaSerializer
+    PiezaSerializer, TurnoSerializer, 
+    MovimientoSerializer, IASerializer, ChatbotSerializer, JugadorPartidaSerializer
 )
 
 
@@ -34,54 +34,66 @@ class PartidaViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'])
     def start_game(self, request):
         """
-        Crea una nueva partida con jugadores y tablero inicializado
+        Crea una nueva partida con jugadores y piezas inicializadas.
+        
+        Datos esperados en request:
+        {
+            "numero_jugadores": 2,
+            "jugadores": [
+                {"nombre": "Juan", "icono": "icono1.jpg", "tipo": "humano", "dificultad": "Baja"},
+                {"nombre": "IA Difícil 2", "icono": "Robot-icon.jpg", "tipo": "ia", "dificultad": "Difícil"}
+            ]
+        }
         """
         numero_jugadores = request.data.get('numero_jugadores', 2)
-        nombre_jugador1 = request.data.get('nombre_jugador1', 'Jugador 1')
-        nombre_jugador2 = request.data.get('nombre_jugador2', 'Jugador 2')
+        jugadores_data = request.data.get('jugadores', [])
         
-        # Crear jugadores
-        jugador1 = Jugador.objects.create(
-            id_jugador=f"J1_{datetime.now().timestamp()}",
-            nombre=nombre_jugador1,
-            humano=True
-        )
-        
-        jugador2 = Jugador.objects.create(
-            id_jugador=f"J2_{datetime.now().timestamp()}",
-            nombre=nombre_jugador2,
-            humano=request.data.get('jugador2_ia', False)
-        )
-        
-        # Si jugador 2 es IA, crear configuración de IA
-        if not jugador2.humano:
-            IA.objects.create(
-                jugador=jugador2,
-                nivel=request.data.get('nivel_ia', 1)
+        if not jugadores_data or len(jugadores_data) == 0:
+            return Response(
+                {'error': 'Se requieren datos de jugadores'},
+                status=status.HTTP_400_BAD_REQUEST
             )
         
-        # Crear partida
+        jugadores_list = []
+        
+        for idx, jugador_data in enumerate(jugadores_data):
+            es_humano = jugador_data.get('tipo', 'humano') == 'humano'
+            nombre = jugador_data.get('nombre', f'Jugador {idx + 1}')
+            
+            jugador = Jugador.objects.create(
+                id_jugador=f"J{idx + 1}_{datetime.now().timestamp()}",
+                nombre=nombre,
+                humano=es_humano
+            )
+            
+            if not es_humano:
+                dificultad = jugador_data.get('dificultad', 'Fácil')
+                nivel = 2 if dificultad == 'Difícil' else 1
+                
+                IA.objects.create(
+                    jugador=jugador,
+                    nivel=nivel
+                )
+            
+            jugadores_list.append(jugador)
+        
         partida = Partida.objects.create(
             id_partida=f"P_{datetime.now().timestamp()}",
-            numero_jugadores=numero_jugadores,
-            jugador_actual=jugador1
+            numero_jugadores=numero_jugadores
         )
         
-        # Crear tablero
-        tablero = Tablero.objects.create(
-            id_tablero=f"T_{partida.id_partida}",
-            dimension="Hexagonal",
-            estado_casillas={},
-            historial=[]
-        )
+        for idx, jugador in enumerate(jugadores_list):
+            JugadorPartida.objects.create(
+                jugador=jugador,
+                partida=partida,
+                fecha_union=timezone.now(),
+                orden_participacion=idx + 1
+            )
+            self._initialize_pieces(jugador, partida)
         
-        # Inicializar piezas (ejemplo básico)
-        self._initialize_pieces(jugador1, jugador2, partida)
-        
-        # Crear primer turno
         Turno.objects.create(
             id_turno=f"T1_{partida.id_partida}",
-            jugador=jugador1,
+            jugador=jugadores_list[0],
             numero=1,
             partida=partida
         )
@@ -122,21 +134,18 @@ class PartidaViewSet(viewsets.ModelViewSet):
                     status=status.HTTP_400_BAD_REQUEST
                 )
             
-            # Crear el movimiento
             movimiento = Movimiento.objects.create(
                 id_movimiento=f"M_{datetime.now().timestamp()}",
-                jugador=partida.jugador_actual,
+                jugador=turno_actual.jugador,
                 pieza=pieza,
                 turno=turno_actual,
                 origen=origen,
                 destino=destino
             )
             
-            # Actualizar posición de la pieza
             pieza.posicion = destino
             pieza.save()
             
-            # Finalizar movimiento
             movimiento.fin = timezone.now()
             movimiento.save()
             
@@ -161,22 +170,17 @@ class PartidaViewSet(viewsets.ModelViewSet):
             turno_actual.fin = timezone.now()
             turno_actual.save()
             
-            # Cambiar jugador actual
             jugadores = Jugador.objects.filter(
                 piezas__isnull=False
             ).distinct()[:partida.numero_jugadores]
-            
+
             siguiente_jugador = None
             for i, jugador in enumerate(jugadores):
-                if jugador == partida.jugador_actual:
+                if jugador == turno_actual.jugador:
                     siguiente_jugador = jugadores[(i + 1) % len(jugadores)]
                     break
-            
+
             if siguiente_jugador:
-                partida.jugador_actual = siguiente_jugador
-                partida.save()
-                
-                # Crear siguiente turno
                 Turno.objects.create(
                     id_turno=f"T{turno_actual.numero + 1}_{partida.id_partida}",
                     jugador=siguiente_jugador,
@@ -197,7 +201,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
         partida.fecha_fin = timezone.now()
         partida.save()
         
-        # Finalizar turno actual si existe
         turno_actual = partida.turnos.filter(fin__isnull=True).first()
         if turno_actual:
             turno_actual.fin = timezone.now()
@@ -206,24 +209,58 @@ class PartidaViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(partida)
         return Response(serializer.data)
     
-    def _initialize_pieces(self, jugador1, jugador2, partida):
+    def _initialize_pieces(self, jugador, partida):
         """
-        Inicializa las piezas para los jugadores
+        Inicializa las piezas para los jugadores en sus posiciones iniciales (puntas).
+        
+        Mapeo de puntas:
+        - Punta 0 (Arriba): filas 0-3
+        - Punta 1 (Izquierda-Arriba): filas 4-7
+        - Punta 2 (Derecha-Arriba): filas 4-7
+        - Punta 3 (Abajo): filas 13-16
+        - Punta 4 (Izquierda-Abajo): filas 9-12
+        - Punta 5 (Derecha-Abajo): filas 9-12
         """
-        # Ejemplo básico - deberás implementar la disposición real de damas chinas
-        for i in range(10):
+        posiciones_por_punta = {
+            0: ['0-0', '1-0', '1-1', '2-0', '2-1', '2-2', '3-0', '3-1', '3-2', '3-3'],
+            1: ['0-4', '0-5', '1-4', '1-5', '1-6', '2-4', '2-5', '3-4', '0-6', '0-7'],
+            2: ['12-4', '12-5', '11-4', '11-5', '11-6', '10-4', '10-5', '9-4', '12-6', '12-7'],
+            3: ['3-13', '2-13', '2-14', '1-13', '1-14', '1-15', '0-13', '0-14', '0-15', '0-16'],
+            4: ['0-9', '0-10', '1-9', '1-10', '1-11', '2-10', '2-11', '3-11', '0-11', '0-12'],
+            5: ['9-9', '9-10', '10-9', '10-10', '10-11', '11-10', '11-11', '12-11', '9-11', '9-12'],
+        }
+
+        colores_por_punta = {
+            0: 'Blanco',   
+            1: 'Azul', 
+            2: 'Verde', 
+            3: 'Negro',   
+            4: 'Rojo', 
+            5: 'Amarillo', 
+        }
+
+        participacion = JugadorPartida.objects.get(jugador=jugador, partida=partida)
+        punta_index = participacion.orden_participacion - 1
+        
+        puntas_activas_map = {
+            2: [0, 3],
+            3: [0, 4, 5],
+            4: [1, 2, 4, 5],
+            6: [0, 1, 2, 3, 4, 5],
+        }
+        
+        puntas_activas = puntas_activas_map.get(partida.numero_jugadores, [0, 3])
+        punta_asignada = puntas_activas[punta_index]
+        color_asignado = colores_por_punta.get(punta_asignada, '')
+        
+        posiciones = posiciones_por_punta.get(punta_asignada, posiciones_por_punta[0])
+        
+        for i, pos in enumerate(posiciones[:10]): 
             Pieza.objects.create(
-                id_pieza=f"P1_{i}_{partida.id_partida}",
-                tipo="Ficha",
-                posicion=f"A{i}",
-                jugador=jugador1
-            )
-            
-            Pieza.objects.create(
-                id_pieza=f"P2_{i}_{partida.id_partida}",
-                tipo="Ficha",
-                posicion=f"Z{i}",
-                jugador=jugador2
+                id_pieza=f"P_{jugador.id_jugador}_{i}_{partida.id_partida}",
+                tipo=f"{punta_asignada}-{color_asignado}", 
+                posicion=pos, 
+                jugador=jugador
             )
 
 
@@ -233,15 +270,6 @@ class PiezaViewSet(viewsets.ModelViewSet):
     """
     queryset = Pieza.objects.all()
     serializer_class = PiezaSerializer
-
-
-class TableroViewSet(viewsets.ModelViewSet):
-    """
-    ViewSet para gestionar tableros
-    """
-    queryset = Tablero.objects.all()
-    serializer_class = TableroSerializer
-
 
 class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
     """
@@ -296,10 +324,8 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         chatbot = self.get_object()
         mensaje = request.data.get('mensaje', '')
         
-        # Aquí implementarías la lógica del chatbot
         respuesta = f"Respuesta del chatbot a: {mensaje}"
         
-        # Actualizar memoria/contexto si es necesario
         if 'conversaciones' not in chatbot.memoria:
             chatbot.memoria['conversaciones'] = []
         
@@ -313,12 +339,12 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         return Response({'respuesta': respuesta})
 
 
-class ParticipacionPartidaViewSet(viewsets.ModelViewSet):
+class JugadorPartidaViewSet(viewsets.ModelViewSet):
     """
     ViewSet para gestionar la participación de jugadores en partidas
     """
-    queryset = ParticipacionPartida.objects.all()
-    serializer_class = ParticipacionPartidaSerializer
+    queryset = JugadorPartida.objects.all()
+    serializer_class = JugadorPartidaSerializer
     
     def get_queryset(self):
         queryset = super().get_queryset()

@@ -46,23 +46,23 @@ function Players() {
           nombre: '',
           icono: ICONOS_DISPONIBLES[index % ICONOS_DISPONIBLES.length],
           tipo: 'humano',
-          dificultad: 'Media'
+          dificultad: ''
         };
       });
       setJugadores(newJugadores);
     }
   };
 
-  const handleJugadorChange = (index, campo, valor) => {
+  const handleJugadorChange = (posicion, campo, valor) => {
     const newJugadores = [...jugadores];
-    newJugadores[index] = { ...newJugadores[index], [campo]: valor };
+    newJugadores[posicion] = { ...newJugadores[posicion], [campo]: valor };
     
     if (campo === 'tipo' && valor === 'ia') {
-      newJugadores[index].icono = 'Robot-icon.jpg';
-      newJugadores[index].nombre = '';
+      newJugadores[posicion].icono = 'Robot-icon.jpg';
+      newJugadores[posicion].nombre = '';
     }
-    if (campo === 'tipo' && valor === 'humano' && newJugadores[index].icono === 'Robot-icon.jpg') {
-      newJugadores[index].icono = ICONOS_DISPONIBLES[index % ICONOS_DISPONIBLES.length];
+    if (campo === 'tipo' && valor === 'humano' && newJugadores[posicion].icono === 'Robot-icon.jpg') {
+      newJugadores[posicion].icono = ICONOS_DISPONIBLES[posicion % ICONOS_DISPONIBLES.length];
     }
     
     setJugadores(newJugadores);
@@ -105,7 +105,12 @@ function Players() {
         }
       });
 
-      const response = await axios.post(`${API_URL}/partidas/start_game/`, datos);
+      const request = {
+        jugadores: jugadores,
+        numero_jugadores: numeroJugadores,
+      };
+
+      const response = await axios.post(`${API_URL}/partidas/start_game/`, request);
       
       navigate('/game', { state: { partidaInicial: response.data, jugadoresConfig: jugadores } });
     } catch (err) {
