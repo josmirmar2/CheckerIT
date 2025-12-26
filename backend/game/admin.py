@@ -34,10 +34,9 @@ class TurnoAdmin(admin.ModelAdmin):
 
 @admin.register(Movimiento)
 class MovimientoAdmin(admin.ModelAdmin):
-    list_display = ['id_movimiento', 'jugador', 'pieza', 'turno', 'partida', 'origen', 'destino', 'inicio', 'fin']
+    list_display = ['id_movimiento', 'jugador', 'pieza', 'turno', 'partida', 'origen', 'destino']
     list_filter = ['jugador', 'partida']
     search_fields = ['id_movimiento', 'origen', 'destino']
-    date_hierarchy = 'inicio'
 
 
 @admin.register(IA)

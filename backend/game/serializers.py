@@ -5,7 +5,7 @@ from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, Jug
 class JugadorSerializer(serializers.ModelSerializer):
     class Meta:
         model = Jugador
-        fields = ['id_jugador', 'nombre', 'humano']
+        fields = ['id_jugador', 'nombre', 'humano', 'numero']
 
 
 class JugadorPartidaSerializer(serializers.ModelSerializer):
@@ -21,7 +21,7 @@ class PiezaSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Pieza
-        fields = ['id_pieza', 'tipo', 'posicion', 'jugador', 'jugador_nombre', 'ia', 'chatbot']
+        fields = ['id_pieza', 'tipo', 'posicion', 'jugador', 'jugador_nombre', 'ia', 'chatbot', 'partida']
 
 
 class MovimientoSerializer(serializers.ModelSerializer):
@@ -31,8 +31,7 @@ class MovimientoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Movimiento
         fields = ['id_movimiento', 'jugador', 'jugador_nombre', 'pieza', 'pieza_tipo', 
-                  'turno', 'partida', 'origen', 'destino', 'inicio', 'fin']
-        read_only_fields = ['inicio']
+                  'turno', 'partida', 'origen', 'destino']
 
 
 class TurnoSerializer(serializers.ModelSerializer):

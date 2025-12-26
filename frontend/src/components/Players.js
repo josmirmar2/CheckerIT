@@ -93,26 +93,17 @@ function Players() {
     setError('');
 
     try {
-      const datos = {
-        numero_jugadores: numeroJugadores,
-      };
-
-      jugadores.forEach((jugador, index) => {
-        if (jugador.tipo === 'humano') {
-          datos[`nombre_jugador${index + 1}`] = jugador.nombre;
-        } else {
-          datos[`nombre_jugador${index + 1}`] = `IA ${jugador.dificultad} ${index + 1}`;
-        }
-      });
-
       const request = {
-        jugadores: jugadores,
+        jugadores: jugadores.map((jugador, idx) => ({
+          ...jugador,
+          numero: idx + 1
+        })),
         numero_jugadores: numeroJugadores,
       };
 
       const response = await axios.post(`${API_URL}/partidas/start_game/`, request);
       
-      navigate('/game', { state: { partidaInicial: response.data, jugadoresConfig: jugadores } });
+      navigate('/game', { state: { partidaInicial: response.data, jugadoresConfig: jugadores.map((j, idx) => ({ ...j, numero: idx + 1 })) } });
     } catch (err) {
       console.error('Error al crear partida:', err);
       setError('Error al crear la partida. Verifica que el servidor esté activo.');

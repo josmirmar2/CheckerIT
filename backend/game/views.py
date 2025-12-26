@@ -25,6 +25,8 @@ class PartidaViewSet(viewsets.ModelViewSet):
     """
     queryset = Partida.objects.all()
     serializer_class = PartidaSerializer
+    lookup_field = 'id_partida'
+    lookup_value_regex = '[^/]+'
     
     def get_serializer_class(self):
         if self.action == 'list':
@@ -59,11 +61,13 @@ class PartidaViewSet(viewsets.ModelViewSet):
         for idx, jugador_data in enumerate(jugadores_data):
             es_humano = jugador_data.get('tipo', 'humano') == 'humano'
             nombre = jugador_data.get('nombre', f'Jugador {idx + 1}')
+            numero = jugador_data.get('numero', idx + 1)
             
             jugador = Jugador.objects.create(
                 id_jugador=f"J{idx + 1}_{datetime.now().timestamp()}",
                 nombre=nombre,
-                humano=es_humano
+                humano=es_humano,
+                numero=numero
             )
             
             if not es_humano:
@@ -100,99 +104,140 @@ class PartidaViewSet(viewsets.ModelViewSet):
         
         serializer = self.get_serializer(partida)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
-    
+
     @action(detail=True, methods=['post'])
-    def make_move(self, request, pk=None):
+    def registrar_movimientos(self, request, id_partida=None):
         """
-        Registra un movimiento en la partida
+        Registra una lista de movimientos para la partida indicada.
         """
         partida = self.get_object()
-        
-        if partida.estado != 'EN_CURSO':
-            return Response(
-                {'error': 'La partida no está en curso'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        pieza_id = request.data.get('pieza_id')
-        origen = request.data.get('origen')
-        destino = request.data.get('destino')
-        
-        if not all([pieza_id, origen, destino]):
-            return Response(
-                {'error': 'Datos incompletos para el movimiento'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
+        movimientos_data = request.data.get('movimientos', [])
+        if not isinstance(movimientos_data, list) or len(movimientos_data) == 0:
+            return Response({ 'error': 'No hay movimientos para registrar' }, status=status.HTTP_400_BAD_REQUEST)
+
+        created = []
+        for idx, m in enumerate(movimientos_data, start=1):
+            try:
+                jugador_id = m.get('jugador_id')
+                turno_id = m.get('turno_id')
+                pieza_id = m.get('pieza_id')
+                origen = m.get('origen')
+                destino = m.get('destino')
+
+                if not all([jugador_id, turno_id, pieza_id, origen, destino]):
+                    return Response({ 'error': f'Movimiento incompleto en índice {idx-1}' }, status=status.HTTP_400_BAD_REQUEST)
+
+                jugador = Jugador.objects.get(id_jugador=jugador_id)
+                turno = Turno.objects.get(id_turno=turno_id)
+                pieza = Pieza.objects.get(id_pieza=pieza_id)
+
+                mov = Movimiento.objects.create(
+                    id_movimiento=f"M_{turno.id_turno}_{idx}_{datetime.now().timestamp()}",
+                    jugador=jugador,
+                    pieza=pieza,
+                    turno=turno,
+                    partida=partida,
+                    origen=origen,
+                    destino=destino,
+                )
+                created.append(mov)
+            except Jugador.DoesNotExist:
+                return Response({ 'error': f'Jugador no encontrado: {jugador_id}' }, status=status.HTTP_400_BAD_REQUEST)
+            except Turno.DoesNotExist:
+                return Response({ 'error': f'Turno no encontrado: {turno_id}' }, status=status.HTTP_400_BAD_REQUEST)
+            except Pieza.DoesNotExist:
+                return Response({ 'error': f'Pieza no encontrada: {pieza_id}' }, status=status.HTTP_400_BAD_REQUEST)
+            except Exception as e:
+                return Response({ 'error': str(e) }, status=status.HTTP_400_BAD_REQUEST)
+
+        serializer = MovimientoSerializer(created, many=True)
+        return Response({ 'registrados': serializer.data }, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['post'])
+    def avanzar_turno(self, request, id_partida=None):
+        """
+        Actualiza el turno actual con los datos proporcionados y crea el nuevo turno con los datos de entrada.
+        """
+        partida = self.get_object()
+        old_turn_data = request.data.get('oldTurn')
+        new_turn_data = request.data.get('newTurnCreated')
+
+        if not new_turn_data:
+            return Response({ 'error': 'newTurnCreated es requerido' }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Actualizar el turno actual si se proporciona oldTurn
+        updated_turn = None
+        if old_turn_data:
+            turno_actual = partida.turnos.filter(fin__isnull=True).order_by('numero').first()
+            if turno_actual:
+                # Opcionalmente validar coincidencia de numero/jugador
+                final_val = old_turn_data.get('final')
+                inicio_val = old_turn_data.get('inicio')
+                try:
+                    if inicio_val:
+                        # Permite establecer inicio explícito si llega en payload
+                        if isinstance(inicio_val, (int, float)):
+                            turno_actual.inicio = datetime.fromtimestamp(inicio_val / 1000.0, tz=timezone.get_current_timezone())
+                        else:
+                            turno_actual.inicio = datetime.fromisoformat(str(inicio_val))
+                    if final_val:
+                        if isinstance(final_val, (int, float)):
+                            turno_actual.fin = datetime.fromtimestamp(final_val / 1000.0, tz=timezone.get_current_timezone())
+                        else:
+                            turno_actual.fin = datetime.fromisoformat(str(final_val))
+                    else:
+                        turno_actual.fin = timezone.now()
+                except Exception:
+                    # Si el formato no es válido, usar now para fin y mantener inicio existente
+                    turno_actual.fin = timezone.now()
+                turno_actual.save()
+                updated_turn = turno_actual
+
+        # Crear el nuevo turno con los datos proporcionados
+        numero_nuevo = new_turn_data.get('numero')
+        inicio_nuevo = new_turn_data.get('inicio')
+        jugador_id_nuevo = new_turn_data.get('jugador_id')
+
+        if not all([numero_nuevo, jugador_id_nuevo]):
+            return Response({ 'error': 'Faltan campos en newTurnCreated: numero y jugador_id son obligatorios' }, status=status.HTTP_400_BAD_REQUEST)
+
         try:
-            pieza = Pieza.objects.get(id_pieza=pieza_id)
-            turno_actual = partida.turnos.filter(fin__isnull=True).first()
-            
-            if not turno_actual:
-                return Response(
-                    {'error': 'No hay turno activo'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            
-            movimiento = Movimiento.objects.create(
-                id_movimiento=f"M_{datetime.now().timestamp()}",
-                jugador=turno_actual.jugador,
-                pieza=pieza,
-                turno=turno_actual,
-                origen=origen,
-                destino=destino
-            )
-            
-            pieza.posicion = destino
-            pieza.save()
-            
-            movimiento.fin = timezone.now()
-            movimiento.save()
-            
-            serializer = self.get_serializer(partida)
-            return Response(serializer.data)
-            
-        except Pieza.DoesNotExist:
-            return Response(
-                {'error': 'Pieza no encontrada'},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            jugador_nuevo = Jugador.objects.get(id_jugador=jugador_id_nuevo)
+        except Jugador.DoesNotExist:
+            return Response({ 'error': f'Jugador no encontrado: {jugador_id_nuevo}' }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Construir id_turno determinístico con numero e id_partida
+        new_turn_id = f"T{numero_nuevo}_{partida.id_partida}"
+
+        nuevo_turno = Turno(
+            id_turno=new_turn_id,
+            jugador=jugador_nuevo,
+            numero=numero_nuevo,
+            partida=partida
+        )
+        # Establecer inicio si llega, respetando formatos timestamp ms o iso
+        if inicio_nuevo:
+            try:
+                if isinstance(inicio_nuevo, (int, float)):
+                    nuevo_turno.inicio = datetime.fromtimestamp(inicio_nuevo / 1000.0, tz=timezone.get_current_timezone())
+                else:
+                    nuevo_turno.inicio = datetime.fromisoformat(str(inicio_nuevo))
+            except Exception:
+                # Si falla, usar now
+                nuevo_turno.inicio = timezone.now()
+        # Guardar
+        nuevo_turno.save()
+
+        response_data = {
+            'nuevo_turno': TurnoSerializer(nuevo_turno).data
+        }
+        if updated_turn:
+            response_data['turno_actualizado'] = TurnoSerializer(updated_turn).data
+
+        return Response(response_data, status=status.HTTP_201_CREATED)
     
     @action(detail=True, methods=['post'])
-    def end_turn(self, request, pk=None):
-        """
-        Finaliza el turno actual y crea el siguiente
-        """
-        partida = self.get_object()
-        turno_actual = partida.turnos.filter(fin__isnull=True).first()
-        
-        if turno_actual:
-            turno_actual.fin = timezone.now()
-            turno_actual.save()
-            
-            jugadores = Jugador.objects.filter(
-                piezas__isnull=False
-            ).distinct()[:partida.numero_jugadores]
-
-            siguiente_jugador = None
-            for i, jugador in enumerate(jugadores):
-                if jugador == turno_actual.jugador:
-                    siguiente_jugador = jugadores[(i + 1) % len(jugadores)]
-                    break
-
-            if siguiente_jugador:
-                Turno.objects.create(
-                    id_turno=f"T{turno_actual.numero + 1}_{partida.id_partida}",
-                    jugador=siguiente_jugador,
-                    numero=turno_actual.numero + 1,
-                    partida=partida
-                )
-        
-        serializer = self.get_serializer(partida)
-        return Response(serializer.data)
-    
-    @action(detail=True, methods=['post'])
-    def end_game(self, request, pk=None):
+    def end_game(self, request, id_partida=None):
         """
         Finaliza una partida
         """
@@ -260,7 +305,8 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 id_pieza=f"P_{jugador.id_jugador}_{i}_{partida.id_partida}",
                 tipo=f"{punta_asignada}-{color_asignado}", 
                 posicion=pos, 
-                jugador=jugador
+                jugador=jugador,
+                partida=partida
             )
 
 
@@ -270,10 +316,22 @@ class PiezaViewSet(viewsets.ModelViewSet):
     """
     queryset = Pieza.objects.all()
     serializer_class = PiezaSerializer
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        partida_id = self.request.query_params.get('partida_id')
+        jugador_id = self.request.query_params.get('jugador_id')
+        
+        if partida_id:
+            queryset = queryset.filter(partida_id=partida_id)
+        if jugador_id:
+            queryset = queryset.filter(jugador_id=jugador_id)
+            
+        return queryset
 
-class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
+class TurnoViewSet(viewsets.ModelViewSet):
     """
-    ViewSet de solo lectura para turnos
+    ViewSet para gestionar turnos
     """
     queryset = Turno.objects.all()
     serializer_class = TurnoSerializer
@@ -286,9 +344,9 @@ class TurnoViewSet(viewsets.ReadOnlyModelViewSet):
         return queryset
 
 
-class MovimientoViewSet(viewsets.ReadOnlyModelViewSet):
+class MovimientoViewSet(viewsets.ModelViewSet):
     """
-    ViewSet de solo lectura para movimientos
+    ViewSet para gestionar movimientos
     """
     queryset = Movimiento.objects.all()
     serializer_class = MovimientoSerializer

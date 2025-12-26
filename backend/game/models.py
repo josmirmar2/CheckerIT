@@ -8,6 +8,7 @@ class Jugador(models.Model):
     id_jugador = models.CharField(max_length=50, primary_key=True)
     nombre = models.CharField(max_length=100)
     humano = models.BooleanField(default=True)
+    numero = models.IntegerField(null=True, blank=True)
 
     class Meta:
         verbose_name_plural = "Jugadores"
@@ -71,6 +72,13 @@ class Pieza(models.Model):
         'Chatbot',
         on_delete=models.CASCADE,
         related_name='piezas',  # ChatBot 1 -- 0..* Pieza
+        null=True,
+        blank=True
+    )
+    partida = models.ForeignKey(
+        Partida,
+        on_delete=models.CASCADE,
+        related_name='piezas',  # Partida 1 --> 1..* Pieza
         null=True,
         blank=True
     )
@@ -144,8 +152,6 @@ class Movimiento(models.Model):
     )
     origen = models.CharField(max_length=10)
     destino = models.CharField(max_length=10)
-    inicio = models.DateTimeField(auto_now_add=True)
-    fin = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name_plural = "Movimientos"

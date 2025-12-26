@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import './Game.css';
 import { MUSIC_LIST, getRandomMusicIndex } from './musicList';
@@ -16,25 +16,53 @@ function Game() {
   const [isPlayingMusic, setIsPlayingMusic] = useState(false);
   const [currentMusicIndex, setCurrentMusicIndex] = useState(-1);
   const audioRef = useRef(null);
-  const [currentPlayerIndex, setCurrentPlayerIndex] = useState(0);
+  const [currentPlayerIndex, setCurrentPlayerIndex] = useState(null);
   const [moveMade, setMoveMade] = useState(false);
-  // eslint-disable-next-line no-unused-vars
-  const [lastMove, setLastMove] = useState(null);
+  // const [lastMove, setLastMove] = useState(null);
   const [lockedPiecePos, setLockedPiecePos] = useState(null);
   const [originalPiecePos, setOriginalPiecePos] = useState(null);
   const [undoToOriginalToken, setUndoToOriginalToken] = useState(0);
-  // eslint-disable-next-line no-unused-vars
-  const [boardResetKey, setBoardResetKey] = useState(0);
-  // eslint-disable-next-line no-unused-vars
-  const [undoToken, setUndoToken] = useState(0);
+  // const [boardResetKey, setBoardResetKey] = useState(0);
+  // const [undoToken, setUndoToken] = useState(0);
   const [initialBoardState, setInitialBoardState] = useState(null);
   const [turnCount, setTurnCount] = useState(1);
+  const [moveHistory, setMoveHistory] = useState([]);
+  const [actualTurn, setActualTurn] = useState(null);
+  const [pieceByPos, setPieceByPos] = useState(new Map());
+  const [dbJugadores, setDbJugadores] = useState([]);
 
-  const jugadoresConfig = location.state?.jugadoresConfig || [];
+  const jugadoresConfig = useMemo(() => location.state?.jugadoresConfig || [], [location.state]);
 
   const handleGoBack = () => {
     navigate('/');
   };
+
+  useEffect(() => {
+    if (partida?.id_partida) {
+      fetchJugadoresPartida(partida.id_partida).then(dbJugadores => {
+      setDbJugadores(dbJugadores);
+        if (dbJugadores.length > 0) {
+          const primerJugador = dbJugadores.find(j => j.numero === 1);
+          if (primerJugador) {
+            const idx = dbJugadores.findIndex(j => j.id_jugador === primerJugador.id_jugador);
+            if (idx >= 0) {
+              setCurrentPlayerIndex(idx);
+            }
+          }
+        }
+      });
+      
+      const embedded = Array.isArray(partida.turnos) ? partida.turnos : [];
+      const current = embedded.find(t => !t.fin) || embedded[0] || null;
+      if (current?.id_turno) {
+        setActualTurn({ id_turno: current.id_turno, numero: current.numero });
+      } else {
+        fetchPrimerTurno(partida.id_partida).then(turno => {
+          if (turno?.id_turno) setActualTurn({ id_turno: turno.id_turno, numero: turno.numero });
+        });
+      }
+    }
+  }, [partida]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (location.state?.partidaInicial) {
@@ -115,7 +143,6 @@ function Game() {
     }
   };
 
-
   const stopMusic = () => {
     if (audioRef.current) {
       try {
@@ -140,8 +167,125 @@ function Game() {
     }
   };
 
+  const fetchPrimerTurno = async (partidaId) => {
+    const res = await fetch(`http://localhost:8000/api/turnos/?partida_id=${partidaId}`);
+    const data = await res.json();
+    if (!Array.isArray(data) || data.length === 0) return null;
+    const current = data.find(t => !t.fin);
+    const first = current || data.sort((a,b) => (a.numero||0) - (b.numero||0))[0];
+    return first || null;
+  };
+
+  const fetchJugadoresPartida = async (partidaId) => {
+    try {
+      const res = await fetch(`http://localhost:8000/api/participaciones/?partida_id=${partidaId}`);
+      const data = await res.json();
+      if (!Array.isArray(data) || data.length === 0) return [];
+      const jugadores = data
+        .sort((a, b) => (a.orden_participacion || 0) - (b.orden_participacion || 0))
+        .map(p => ({
+          id_jugador: p.jugador,
+          numero: p.orden_participacion,
+          nombre: p.jugador_nombre || 'Desconocido'
+        }));
+      return jugadores;
+    } catch (e) {
+      console.error('Error fetching jugadores:', e);
+      return [];
+    }
+  };
+
+  useEffect(() => {
+    const loadPieces = async () => {
+      try {
+        const res = await fetch('http://localhost:8000/api/piezas/');
+        const data = await res.json();
+        const todasLasPiezas = Array.isArray(data) ? data : [];
+        const map = new Map();
+        todasLasPiezas.forEach(p => map.set(p.posicion, p.id_pieza));
+        setPieceByPos(map);
+      } catch (e) {
+        console.error('Error cargando piezas:', e);
+      }
+    };
+    if (partida?.id_partida) loadPieces();
+  }, [partida]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveTurnToDatabase = async () => {
+    try {
+      const url = `http://localhost:8000/api/partidas/${partida.id_partida}/avanzar_turno/`;
+      const currentJugadorId = dbJugadores[currentPlayerIndex]?.id_jugador;
+      
+      const currentJugadorNumero = dbJugadores[currentPlayerIndex]?.numero || 1;
+      const maxNumero = Math.max(...dbJugadores.map(j => j.numero || 1));
+      const nextNumero = currentJugadorNumero >= maxNumero ? 1 : currentJugadorNumero + 1;
+      const nextJugador = dbJugadores.find(j => j.numero === nextNumero);
+      const nextJugadorId = nextJugador?.id_jugador || dbJugadores[0]?.id_jugador;
+      
+      const oldTurn = {
+        numero: actualTurn?.numero || 0,
+        inicio: actualTurn?.inicio,
+        final: new Date().toISOString(),
+        jugador_id: currentJugadorId,
+        partida_id: partida.id_partida,
+      };
+      const newTurnCreated = {
+        numero: (actualTurn?.numero || 0) + 1,
+        inicio: new Date().toISOString(),
+        jugador_id: nextJugadorId,
+        partida_id: partida.id_partida,
+      };
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ oldTurn, newTurnCreated })
+      });
+      if (!res.ok) {
+        console.error('Error al avanzar turno:', res.status);
+        return null;
+      }
+      const data = await res.json();
+      const nuevoTurno = data?.nuevo_turno || data;
+      if (nuevoTurno?.id_turno) {
+        setActualTurn({ id_turno: nuevoTurno.id_turno, numero: nuevoTurno.numero, inicio: nuevoTurno.inicio });
+        const nextPlayerIdx = dbJugadores.findIndex(j => j.numero === nextNumero);
+        if (nextPlayerIdx >= 0) setCurrentPlayerIndex(nextPlayerIdx);
+      }
+      return nuevoTurno;
+    } catch (error) {
+      console.error('Error en saveTurnToDatabase:', error);
+      return null;
+    }
+  };
+
+  const saveMoveToDatabase = async (moves) => {
+    try {
+      const jugadorId = dbJugadores[currentPlayerIndex]?.id_jugador;
+      const turnoId = actualTurn?.id_turno;
+      const movimientos = moves.map(m => ({
+        origen: `${m.from.col}-${m.from.fila}`,
+        destino: `${m.to.col}-${m.to.fila}`,
+        partida_id: partida.id_partida,
+        jugador_id: jugadorId,
+        turno_id: turnoId,
+        pieza_id: m.pieza_id,
+      }));
+      const url = `http://localhost:8000/api/partidas/${partida.id_partida}/registrar_movimientos/`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ movimientos })
+      });
+      if (!response.ok) {
+        console.error('Error al guardar movimientos:', response.status);
+      }
+    } catch (error) {
+      console.error('Error en saveMoveToDatabase:', error);
+    }
+  };
+
   const handleBoardMove = (move) => {
-    setLastMove(move);
+    // setLastMove(move);
     setMoveMade(true);
     setLockedPiecePos(move.to);
     if (!originalPiecePos) {
@@ -150,35 +294,56 @@ function Game() {
     if (!initialBoardState && move.boardState) {
       setInitialBoardState(move.boardState);
     }
+    const origenKey = `${move.from.col}-${move.from.fila}`;
+    const piezaId = pieceByPos.get(origenKey);
+    if (piezaId) {
+      const nextMap = new Map(pieceByPos);
+      nextMap.delete(origenKey);
+      nextMap.set(`${move.to.col}-${move.to.fila}`, piezaId);
+      setPieceByPos(nextMap);
+    }
+    setMoveHistory((prev) => [...prev, {
+      from: move.from,
+      to: move.to,
+      occupant: move.occupant,
+      pieza_id: piezaId,
+    }]);
   };
 
   const undoMove = () => {
     if (!moveMade) return;
     setUndoToOriginalToken((prev) => prev + 1);
-    setLastMove(null);
+    // setLastMove(null);
     setMoveMade(false);
     setLockedPiecePos(null);
     setOriginalPiecePos(null);
+    setMoveHistory([]);  
   };
 
-  const continueTurn = () => {
+  const continueTurn = async () => {
     if (!moveMade) return;
-    setCurrentPlayerIndex((prev) => (prev + 1) % jugadoresConfig.length);
+    if (moveHistory.length > 0) {
+      await saveMoveToDatabase(moveHistory);
+    }
+    await saveTurnToDatabase();
     setTurnCount((prev) => prev + 1);
-    setLastMove(null);
+    // setLastMove(null);
     setMoveMade(false);
     setLockedPiecePos(null);
     setOriginalPiecePos(null);
     setInitialBoardState(null);
+    setMoveHistory([]); 
   };
-  const passTurn = () => {
-    setCurrentPlayerIndex((prev) => (prev + 1) % jugadoresConfig.length);
+
+  const passTurn = async () => {
+    await saveTurnToDatabase();
     setTurnCount((prev) => prev + 1);
-    setLastMove(null);
+    // setLastMove(null);
     setMoveMade(false);
     setLockedPiecePos(null);
     setOriginalPiecePos(null);
     setInitialBoardState(null);
+    setMoveHistory([]); 
   };
 
   const getIconSrc = (iconName) => {
@@ -243,7 +408,19 @@ function Game() {
           </div>
 
           <div className="board-container">
-            <Board jugadoresConfig={jugadoresConfig} currentPlayerIndex={currentPlayerIndex} onMove={handleBoardMove} moveMade={moveMade} lockedPiecePos={lockedPiecePos} undoToken={undoToken} undoToOriginalToken={undoToOriginalToken} originalPiecePos={originalPiecePos} initialBoardState={initialBoardState} key={boardResetKey} />
+            <Board
+              jugadoresConfig={jugadoresConfig}
+              dbJugadores={dbJugadores}
+              currentPlayerIndex={currentPlayerIndex}
+              partidaId={partida?.id_partida}
+              onMove={handleBoardMove}
+              moveMade={moveMade}
+              lockedPiecePos={lockedPiecePos}
+              undoToOriginalToken={undoToOriginalToken}
+              originalPiecePos={originalPiecePos}
+              initialBoardState={initialBoardState}
+              pieceByPos={pieceByPos}
+            />
           </div>
 
           <div className="game-controls">

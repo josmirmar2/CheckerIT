@@ -1,9 +1,33 @@
 import React, { useState, useEffect } from 'react';
 import './Board.css';
+import { set } from 'mongoose';
 
-const Board = ({ jugadoresConfig, currentPlayerIndex = 0, onMove = null, moveMade = false, lockedPiecePos = null, undoToken = 0, undoToOriginalToken = 0, originalPiecePos = null, initialBoardState = null }) => {
+const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, partidaId = null, onMove = null, moveMade = false, lockedPiecePos = null, undoToken = 0, undoToOriginalToken = 0, originalPiecePos = null, initialBoardState = null, pieceByPos = new Map() }) => {
   const BOARD_COLORS = ['#FFFFFF', '#0000ffff', '#00ff00ff', '#000000', '#ff0000ff', '#ffbf00ff'];
   const LIGHT_COLORS = ['#ffffffcf', '#8888ffaf', '#9af89aab', '#666666af', '#ffa2a2a1', '#ffe988b6'];
+
+  const [pieceMapLocal, setPieceMapLocal] = useState(new Map());
+  const [selectedPieceId, setSelectedPieceId] = useState(null);
+
+  useEffect(() => {
+    const loadPieces = async () => {
+      try {
+        if (!partidaId) return;
+        const res = await fetch(`http://localhost:8000/api/piezas/?partida_id=${partidaId}`);
+        const data = await res.json();
+        const map = new Map();
+        (Array.isArray(data) ? data : []).forEach(p => {
+          if (p.partida !== partidaId) return;
+          if (!p.posicion) return;
+          map.set(p.posicion, p.id_pieza);
+        });
+        setPieceMapLocal(map);
+      } catch (e) {
+        console.error('Error cargando piezas en Board:', e);
+      }
+    };
+    loadPieces();
+  }, [jugadoresConfig, partidaId]);
 
   const getActivePuntas = (numJugadores) => {
     switch (numJugadores) {
@@ -136,16 +160,42 @@ const Board = ({ jugadoresConfig, currentPlayerIndex = 0, onMove = null, moveMad
     next[from.fila][from.col] = next[to.fila][to.col];
     next[to.fila][to.col] = null;
     setBoardPieces(next);
+    console.log('↩️ Movimiento deshecho:', last);
+    console.log('🔙 Estado del tablero después de deshacer:', next);
     setSelectedCell({ fila: from.fila, col: from.col });
     setMoveHistory((prev) => prev.slice(0, prev.length - 1));
+    setSelectedPieceId(null);
   }, [undoToken]); // eslint-disable-line react-hooks/exhaustive-deps
-
   useEffect(() => {
     if (undoToOriginalToken === 0 || !initialBoardState) return;
     setBoardPieces(initialBoardState.map((row) => [...row]));
     setSelectedCell(null);
     setMoveHistory([]);
+    setSelectedPieceId(null);
   }, [undoToOriginalToken]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (moveMade && selectedPieceId !== null && moveHistory.length > 0) {
+      const lastMove = moveHistory[moveHistory.length - 1];
+      const { to } = lastMove;
+      const newKey = `${to.col}-${to.fila}`;
+      
+      setPieceMapLocal((prevMap) => {
+        const newMap = new Map(prevMap);
+        for (const [key, id] of prevMap.entries()) {
+          if (id === selectedPieceId) {
+            newMap.delete(key);
+            break;
+          }
+        }
+        newMap.set(newKey, selectedPieceId);
+        console.log('🔄 pieceMapLocal actualizado:', { piezaId: selectedPieceId, nuevaPosicion: newKey});
+        return newMap;
+      });
+      
+      setSelectedPieceId(null);
+    }
+  }, [moveMade, selectedPieceId, moveHistory]);
 
   return (
     <div className="chinese-checkers-board">
@@ -180,6 +230,33 @@ const Board = ({ jugadoresConfig, currentPlayerIndex = 0, onMove = null, moveMad
                   const ownerPlayerIndex = puntaToPlayerIndex[ownerPunta];
                   if (ownerPlayerIndex === currentPlayerIndex) {
                     setSelectedCell({ fila: filaIdx, col: colIdx });
+                    const key = `${filaIdx}-${colIdx}`;
+                    const fetchPieceId = async () => {
+                      try {
+                        const jugadorDb = dbJugadores[ownerPlayerIndex];
+                        if (!jugadorDb?.id_jugador) {
+                          console.warn('No se pudo obtener id_jugador para jugador en índice:', ownerPlayerIndex);
+                          return;
+                        }
+                        
+                        const res = await fetch(`http://localhost:8000/api/piezas/?partida_id=${partidaId}&jugador_id=${jugadorDb.id_jugador}`);
+                        const piezas = await res.json();
+                        
+                        const pieza = piezas.find(p => p.posicion === key);
+                        if (pieza) {
+                          setSelectedPieceId(pieza.id_pieza);
+                          console.log('🎯 Pieza seleccionada:', { posicion: key, piezaId: pieza.id_pieza, jugador: jugadorDb.id_jugador });
+                        } else {
+                          console.warn('No se encontró pieza en posición:', key, 'piezas disponibles:', piezas.map(p => p.posicion));
+                          setSelectedPieceId(null);
+                        }
+                      } catch (error) {
+                        console.error('Error al obtener ID de pieza:', error);
+                        setSelectedPieceId(null);
+                      }
+                    };
+                    
+                    fetchPieceId();
                   }
                 } else if (selectedCell) {
                   const { fila, col } = selectedCell;
@@ -202,7 +279,11 @@ const Board = ({ jugadoresConfig, currentPlayerIndex = 0, onMove = null, moveMad
                     setMoveHistory((prev) => [...prev, { from: { fila, col }, to: { fila: filaIdx, col: colIdx }, occupant: movingPunta }]);
                     setSelectedCell({ fila: filaIdx, col: colIdx });
                     if (onMove) {
-                      onMove({ from: { fila, col }, to: { fila: filaIdx, col: colIdx }, occupant: movingPunta, boardState: boardPieces });
+                      const key = `${col}-${fila}`;
+                      const piezaId = selectedPieceId ?? pieceMapLocal.get(key) ?? pieceByPos.get(key);
+                      console.log('➡️ Movimiento realizado desde Board:', { from: { fila, col }, to: { fila: filaIdx, col: colIdx }, occupant: movingPunta, boardState: next, pieza_id: piezaId });
+                      setSelectedPieceId(piezaId);
+                      onMove({ from: { fila, col }, to: { fila: filaIdx, col: colIdx }, occupant: movingPunta, boardState: boardPieces, pieza_id: piezaId });
                     }
                   } else {
                     setSelectedCell(null);
