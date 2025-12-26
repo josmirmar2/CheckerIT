@@ -270,7 +270,7 @@ function Game() {
         turno_id: turnoId,
         pieza_id: m.pieza_id,
       }));
-      const url = `http://localhost:8000/api/partidas/${partida.id_partida}/registrar_movimientos/`;
+      const url = `http://localhost:8000/api/partidas/${partida.id_partida}/registrar_movimientos/`; //TODO
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

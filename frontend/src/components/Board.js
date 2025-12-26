@@ -162,9 +162,24 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
     setBoardPieces(next);
     console.log('↩️ Movimiento deshecho:', last);
     console.log('🔙 Estado del tablero después de deshacer:', next);
+    
+    // Actualizar pieceMapLocal: mover la pieza de vuelta a su posición original
+    if (selectedPieceId !== null) {
+      const oldKey = `${to.col}-${to.fila}`;
+      const newKey = `${from.col}-${from.fila}`;
+      
+      setPieceMapLocal((prevMap) => {
+        const newMap = new Map(prevMap);
+        newMap.delete(oldKey);
+        newMap.set(newKey, selectedPieceId);
+        console.log('🔄 pieceMapLocal actualizado al deshacer:', { piezaId: selectedPieceId, vuelveA: newKey, desdePos: oldKey });
+        return newMap;
+      });
+    }
+    
     setSelectedCell({ fila: from.fila, col: from.col });
     setMoveHistory((prev) => prev.slice(0, prev.length - 1));
-    setSelectedPieceId(null);
+    // No resetear selectedPieceId aquí, se mantiene para el siguiente movimiento
   }, [undoToken]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (undoToOriginalToken === 0 || !initialBoardState) return;
@@ -229,8 +244,8 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                   const ownerPunta = boardPieces[filaIdx][colIdx];
                   const ownerPlayerIndex = puntaToPlayerIndex[ownerPunta];
                   if (ownerPlayerIndex === currentPlayerIndex) {
-                    setSelectedCell({ fila: filaIdx, col: colIdx });
-                    const key = `${filaIdx}-${colIdx}`;
+                    setSelectedCell({ fila: filaIdx, col: colIdx }); //TODO
+                    const key = `${colIdx}-${filaIdx}`;
                     const fetchPieceId = async () => {
                       try {
                         const jugadorDb = dbJugadores[ownerPlayerIndex];
