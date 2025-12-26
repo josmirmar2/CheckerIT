@@ -133,10 +133,10 @@ class Movimiento(models.Model):
         on_delete=models.CASCADE,
         related_name='movimientos'
     )
-    pieza = models.OneToOneField(
+    pieza = models.ForeignKey(
         Pieza, 
         on_delete=models.CASCADE,
-        related_name='movimiento'  # Pieza 1 --> 1 Movimiento
+        related_name='movimientos'  # Pieza 1 --> 0..* Movimiento
     )
     turno = models.ForeignKey(
         Turno, 

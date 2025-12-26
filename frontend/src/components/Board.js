@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import './Board.css';
-import { set } from 'mongoose';
 
 const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, partidaId = null, onMove = null, moveMade = false, lockedPiecePos = null, undoToken = 0, undoToOriginalToken = 0, originalPiecePos = null, initialBoardState = null, pieceByPos = new Map() }) => {
   const BOARD_COLORS = ['#FFFFFF', '#0000ffff', '#00ff00ff', '#000000', '#ff0000ff', '#ffbf00ff'];
@@ -8,6 +7,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
 
   const [pieceMapLocal, setPieceMapLocal] = useState(new Map());
   const [selectedPieceId, setSelectedPieceId] = useState(null);
+  const [positionsList, setPositionsList] = useState([]); 
 
   useEffect(() => {
     const loadPieces = async () => {
@@ -22,6 +22,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
           map.set(p.posicion, p.id_pieza);
         });
         setPieceMapLocal(map);
+        setPositionsList(Array.from(map.keys()));
       } catch (e) {
         console.error('Error cargando piezas en Board:', e);
       }
@@ -175,11 +176,12 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
         console.log('🔄 pieceMapLocal actualizado al deshacer:', { piezaId: selectedPieceId, vuelveA: newKey, desdePos: oldKey });
         return newMap;
       });
+
+      setPositionsList((prev) => prev.map((pos) => (pos === oldKey ? newKey : pos)));
     }
     
     setSelectedCell({ fila: from.fila, col: from.col });
     setMoveHistory((prev) => prev.slice(0, prev.length - 1));
-    // No resetear selectedPieceId aquí, se mantiene para el siguiente movimiento
   }, [undoToken]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (undoToOriginalToken === 0 || !initialBoardState) return;
@@ -190,27 +192,33 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
   }, [undoToOriginalToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (moveMade && selectedPieceId !== null && moveHistory.length > 0) {
-      const lastMove = moveHistory[moveHistory.length - 1];
-      const { to } = lastMove;
-      const newKey = `${to.col}-${to.fila}`;
-      
+    if (!moveMade || moveHistory.length === 0) return;
+    const lastMove = moveHistory[moveHistory.length - 1];
+    const { from, to } = lastMove;
+    const newKey = `${to.col}-${to.fila}`;
+    const originKey = `${from.col}-${from.fila}`;
+
+    setPositionsList((prev) => prev.map((pos) => (pos === originKey ? newKey : pos)));
+
+    if (selectedPieceId !== null) {
       setPieceMapLocal((prevMap) => {
+        let oldKeyFound = null;
         const newMap = new Map(prevMap);
         for (const [key, id] of prevMap.entries()) {
           if (id === selectedPieceId) {
+            oldKeyFound = key;
             newMap.delete(key);
             break;
           }
         }
         newMap.set(newKey, selectedPieceId);
-        console.log('🔄 pieceMapLocal actualizado:', { piezaId: selectedPieceId, nuevaPosicion: newKey});
+        console.log('🔄 pieceMapLocal actualizado:', { piezaId: selectedPieceId, nuevaPosicion: newKey, reemplazaDesde: oldKeyFound});
         return newMap;
       });
-      
+
       setSelectedPieceId(null);
     }
-  }, [moveMade, selectedPieceId, moveHistory]);
+  }, [moveMade, moveHistory, selectedPieceId]);
 
   return (
     <div className="chinese-checkers-board">
@@ -244,7 +252,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                   const ownerPunta = boardPieces[filaIdx][colIdx];
                   const ownerPlayerIndex = puntaToPlayerIndex[ownerPunta];
                   if (ownerPlayerIndex === currentPlayerIndex) {
-                    setSelectedCell({ fila: filaIdx, col: colIdx }); //TODO
+                    setSelectedCell({ fila: filaIdx, col: colIdx });
                     const key = `${colIdx}-${filaIdx}`;
                     const fetchPieceId = async () => {
                       try {
@@ -262,8 +270,26 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                           setSelectedPieceId(pieza.id_pieza);
                           console.log('🎯 Pieza seleccionada:', { posicion: key, piezaId: pieza.id_pieza, jugador: jugadorDb.id_jugador });
                         } else {
-                          console.warn('No se encontró pieza en posición:', key, 'piezas disponibles:', piezas.map(p => p.posicion));
-                          setSelectedPieceId(null);
+                          const altKey = `${filaIdx}-${colIdx}`;
+                          let resolvedId = null;
+
+                          const piezaAlt = (Array.isArray(piezas) ? piezas : []).find(p => p.posicion === altKey);
+                          if (piezaAlt) {
+                            resolvedId = piezaAlt.id_pieza;
+                            console.info('✅ Pieza resuelta con clave alternativa (fila-col):', { posicion: altKey, piezaId: resolvedId });
+                          }
+
+                          if (!resolvedId) {
+                            resolvedId = pieceMapLocal.get(key) ?? pieceMapLocal.get(altKey) ?? pieceByPos.get(key) ?? pieceByPos.get(altKey) ?? null;
+                          }
+
+                          if (resolvedId) {
+                            setSelectedPieceId(resolvedId);
+                            console.info('✅ Pieza resuelta por mapas locales:', { key, altKey, piezaId: resolvedId });
+                          } else {
+                            console.warn('No se encontró pieza en posición:', key, 'piezas disponibles:', positionsList);
+                            setSelectedPieceId(null);
+                          }
                         }
                       } catch (error) {
                         console.error('Error al obtener ID de pieza:', error);

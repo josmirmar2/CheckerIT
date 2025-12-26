@@ -18,12 +18,9 @@ function Game() {
   const audioRef = useRef(null);
   const [currentPlayerIndex, setCurrentPlayerIndex] = useState(null);
   const [moveMade, setMoveMade] = useState(false);
-  // const [lastMove, setLastMove] = useState(null);
   const [lockedPiecePos, setLockedPiecePos] = useState(null);
   const [originalPiecePos, setOriginalPiecePos] = useState(null);
   const [undoToOriginalToken, setUndoToOriginalToken] = useState(0);
-  // const [boardResetKey, setBoardResetKey] = useState(0);
-  // const [undoToken, setUndoToken] = useState(0);
   const [initialBoardState, setInitialBoardState] = useState(null);
   const [turnCount, setTurnCount] = useState(1);
   const [moveHistory, setMoveHistory] = useState([]);
@@ -262,14 +259,28 @@ function Game() {
     try {
       const jugadorId = dbJugadores[currentPlayerIndex]?.id_jugador;
       const turnoId = actualTurn?.id_turno;
-      const movimientos = moves.map(m => ({
-        origen: `${m.from.col}-${m.from.fila}`,
-        destino: `${m.to.col}-${m.to.fila}`,
-        partida_id: partida.id_partida,
-        jugador_id: jugadorId,
-        turno_id: turnoId,
-        pieza_id: m.pieza_id,
-      }));
+      const movimientos = moves
+        .map(m => ({
+          origen: `${m.from.col}-${m.from.fila}`,
+          destino: `${m.to.col}-${m.to.fila}`,
+          partida_id: partida.id_partida,
+          jugador_id: jugadorId,
+          turno_id: turnoId,
+          pieza_id: m.pieza_id,
+        }))
+        .filter((m, idx) => {
+          const completo = m.origen && m.destino && m.partida_id && m.jugador_id && m.turno_id && m.pieza_id;
+          if (!completo) {
+            console.warn('Movimiento incompleto, no se enviará', { idx, m });
+          }
+          return completo;
+        });
+
+      if (movimientos.length === 0) {
+        console.warn('No hay movimientos completos para registrar');
+        return;
+      }
+      console.log('Guardando movimientos IMP:', movimientos);
       const url = `http://localhost:8000/api/partidas/${partida.id_partida}/registrar_movimientos/`; //TODO
       const response = await fetch(url, {
         method: 'POST',
@@ -277,7 +288,8 @@ function Game() {
         body: JSON.stringify({ movimientos })
       });
       if (!response.ok) {
-        console.error('Error al guardar movimientos:', response.status);
+        const text = await response.text();
+        console.error('Error al guardar movimientos:', response.status, text);
       }
     } catch (error) {
       console.error('Error en saveMoveToDatabase:', error);
@@ -295,8 +307,11 @@ function Game() {
       setInitialBoardState(move.boardState);
     }
     const origenKey = `${move.from.col}-${move.from.fila}`;
-    const piezaId = pieceByPos.get(origenKey);
-    if (piezaId) {
+    const piezaId = move.pieza_id ?? pieceByPos.get(origenKey) ?? null;
+
+    if (!piezaId) {
+      console.warn('Movimiento sin pieza_id; se omite registro de movimiento', { move, origenKey });
+    } else {
       const nextMap = new Map(pieceByPos);
       nextMap.delete(origenKey);
       nextMap.set(`${move.to.col}-${move.to.fila}`, piezaId);

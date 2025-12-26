@@ -120,12 +120,16 @@ class PartidaViewSet(viewsets.ModelViewSet):
             try:
                 jugador_id = m.get('jugador_id')
                 turno_id = m.get('turno_id')
+                partida_id = m.get('partida_id')
                 pieza_id = m.get('pieza_id')
                 origen = m.get('origen')
                 destino = m.get('destino')
 
-                if not all([jugador_id, turno_id, pieza_id, origen, destino]):
+                if not all([jugador_id, turno_id, pieza_id, origen, destino, partida_id]):
                     return Response({ 'error': f'Movimiento incompleto en índice {idx-1}' }, status=status.HTTP_400_BAD_REQUEST)
+
+                if str(partida_id) != str(partida.id_partida):
+                    return Response({ 'error': f'partida_id no coincide con la partida de la ruta: {partida_id} != {partida.id_partida}' }, status=status.HTTP_400_BAD_REQUEST)
 
                 jugador = Jugador.objects.get(id_jugador=jugador_id)
                 turno = Turno.objects.get(id_turno=turno_id)
