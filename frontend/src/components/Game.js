@@ -26,6 +26,7 @@ function Game() {
   const [moveHistory, setMoveHistory] = useState([]);
   const [actualTurn, setActualTurn] = useState(null);
   const [pieceByPos, setPieceByPos] = useState(new Map());
+  const [turnStartPieceByPos, setTurnStartPieceByPos] = useState(null);
   const [dbJugadores, setDbJugadores] = useState([]);
 
   const jugadoresConfig = useMemo(() => location.state?.jugadoresConfig || [], [location.state]);
@@ -306,6 +307,11 @@ function Game() {
     if (!initialBoardState && move.boardState) {
       setInitialBoardState(move.boardState);
     }
+    // Guardar snapshot de pieceByPos al inicio del turno
+    if (!turnStartPieceByPos) {
+      setTurnStartPieceByPos(new Map(pieceByPos));
+      console.log('📸 Snapshot de pieceByPos guardado en Game.js:', pieceByPos);
+    }
     const origenKey = `${move.from.col}-${move.from.fila}`;
     const piezaId = move.pieza_id ?? pieceByPos.get(origenKey) ?? null;
 
@@ -332,7 +338,13 @@ function Game() {
     setMoveMade(false);
     setLockedPiecePos(null);
     setOriginalPiecePos(null);
-    setMoveHistory([]);  
+    setMoveHistory([]);
+    
+    // Restaurar pieceByPos desde snapshot
+    if (turnStartPieceByPos) {
+      setPieceByPos(new Map(turnStartPieceByPos));
+      console.log('🔄 pieceByPos restaurado desde snapshot en Game.js:', turnStartPieceByPos);
+    }
   };
 
   const continueTurn = async () => {
@@ -347,7 +359,8 @@ function Game() {
     setLockedPiecePos(null);
     setOriginalPiecePos(null);
     setInitialBoardState(null);
-    setMoveHistory([]); 
+    setMoveHistory([]);
+    setTurnStartPieceByPos(null);
   };
 
   const passTurn = async () => {
@@ -358,7 +371,8 @@ function Game() {
     setLockedPiecePos(null);
     setOriginalPiecePos(null);
     setInitialBoardState(null);
-    setMoveHistory([]); 
+    setMoveHistory([]);
+    setTurnStartPieceByPos(null);
   };
 
   const getIconSrc = (iconName) => {
