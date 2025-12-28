@@ -27,15 +27,34 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
   ];
 
   const POSITION_TO_CARTESIAN = new Map();
+  const CARTESIAN_TO_POSITION = new Map();
   CARTESIAN_COORD_ROWS.forEach((row, filaIdx) => {
     row.forEach((coord, colIdx) => {
-      POSITION_TO_CARTESIAN.set(`${colIdx}-${filaIdx}`, coord);
+      const key = `${colIdx}-${filaIdx}`;
+      POSITION_TO_CARTESIAN.set(key, coord);
+      CARTESIAN_TO_POSITION.set(`${coord.q},${coord.r}`, key);
     });
   });
 
+  const AXIAL_DIRECTIONS = [
+    { dq: 1, dr: 0 },   
+    { dq: -1, dr: 0 },  
+    { dq: 0, dr: 1 },   
+    { dq: 0, dr: -1 },  
+    { dq: 1, dr: -1 }, 
+    { dq: -1, dr: 1 },  
+  ];
+
+  const makeKey = (col, fila) => `${col}-${fila}`;
+  const coordFromKey = (key) => POSITION_TO_CARTESIAN.get(key) || null;
+  const keyFromCoord = (coord) => CARTESIAN_TO_POSITION.get(`${coord.q},${coord.r}`) || null;
+
   const [pieceMapLocal, setPieceMapLocal] = useState(new Map());
   const [selectedPieceId, setSelectedPieceId] = useState(null);
-  const [positionsList, setPositionsList] = useState([]); 
+  const [positionsList, setPositionsList] = useState([]);
+  const [validMoves, setValidMoves] = useState([]);
+  const [warning, setWarning] = useState(null);
+  const [selectedPieceColor, setSelectedPieceColor] = useState(null); 
 
   useEffect(() => {
     const loadPieces = async () => {
@@ -142,6 +161,66 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
     return tablero;
   };
 
+  const getOccupantAtKey = (key, state) => {
+    const boardState = state || boardPieces;
+    const [col, fila] = key.split('-').map(Number);
+    const row = boardState?.[fila];
+    if (!row) return null;
+    const value = row[col];
+    return value === undefined ? null : value;
+  };
+
+  const isEmptyAtKey = (key, state) => getOccupantAtKey(key, state) === null;
+
+  const computeSimpleMoves = (originKey, state) => {
+    const originCoord = coordFromKey(originKey);
+    if (!originCoord) return [];
+
+    const moves = [];
+    AXIAL_DIRECTIONS.forEach(({ dq, dr }) => {
+      const neighborCoord = { q: originCoord.q + dq, r: originCoord.r + dr };
+      const neighborKey = keyFromCoord(neighborCoord);
+      if (neighborKey && isEmptyAtKey(neighborKey, state)) {
+        moves.push(neighborKey);
+      }
+    });
+    return moves;
+  };
+
+  const computeJumpMoves = (originKey, state) => {
+    const originCoord = coordFromKey(originKey);
+    if (!originCoord) return [];
+
+    const landings = new Set();
+
+    const dfs = (coord) => {
+      AXIAL_DIRECTIONS.forEach(({ dq, dr }) => {
+        const middleCoord = { q: coord.q + dq, r: coord.r + dr };
+        const landingCoord = { q: coord.q + 2 * dq, r: coord.r + 2 * dr };
+        const middleKey = keyFromCoord(middleCoord);
+        const landingKey = keyFromCoord(landingCoord);
+
+        if (!middleKey || !landingKey) return;
+        if (isEmptyAtKey(middleKey, state)) return; 
+        if (!isEmptyAtKey(landingKey, state)) return; 
+
+        if (!landings.has(landingKey)) {
+          landings.add(landingKey);
+          dfs(landingCoord); 
+        }
+      });
+    };
+
+    dfs(originCoord);
+    return Array.from(landings);
+  };
+
+  const getValidMovesFrom = (originKey, state) => {
+    const simple = computeSimpleMoves(originKey, state);
+    const jumps = computeJumpMoves(originKey, state);
+    return Array.from(new Set([...simple, ...jumps]));
+  };
+
   const [tablero, setTablero] = useState(() => generarTablero());
   const [boardPieces, setBoardPieces] = useState([]);
   const [selectedCell, setSelectedCell] = useState(null);
@@ -176,11 +255,12 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
 
   useEffect(() => {
     if (!moveMade) {
-      // Solo limpiar snapshots cuando el turno termina (moveMade = false)
-      // Esto asegura que el snapshot esté disponible para undo
       setTurnStartBoardState(null);
       setTurnStartPieceMap(null);
       setTurnStartPositionsList(null);
+      setValidMoves([]);
+      setWarning(null);
+      setSelectedPieceColor(null);
     }
   }, [moveMade]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -195,7 +275,6 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
     console.log('↩️ Movimiento deshecho:', last);
     console.log('🔙 Estado del tablero después de deshacer:', next);
     
-    // Actualizar pieceMapLocal: mover la pieza de vuelta a su posición original
     const oldKey = `${to.col}-${to.fila}`;
     const newKey = `${from.col}-${from.fila}`;
     const piezaIdToRestore = lastPiezaId ?? pieceMapLocal.get(oldKey) ?? selectedPieceId;
@@ -216,11 +295,13 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
     
     setSelectedCell({ fila: from.fila, col: from.col });
     setMoveHistory((prev) => prev.slice(0, prev.length - 1));
+    setValidMoves([]);
+    setWarning(null);
+    setSelectedPieceColor(null);
   }, [undoToken]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (undoToOriginalToken === 0) return;
     
-    // Restaurar el mapa de piezas al estado original del turno (prioritario)
     if (turnStartPieceMap) {
       setPieceMapLocal(new Map(turnStartPieceMap));
       console.log('🔄 pieceMapLocal restaurado desde snapshot del turno:', turnStartPieceMap);
@@ -230,7 +311,6 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
       console.log('🔄 positionsList restaurado desde snapshot del turno:', turnStartPositionsList);
     }
     
-    // Restaurar el tablero si hay initialBoardState
     if (initialBoardState) {
       setBoardPieces(initialBoardState.map((row) => [...row]));
     }
@@ -238,6 +318,9 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
     setSelectedCell(null);
     setMoveHistory([]);
     setSelectedPieceId(null);
+    setValidMoves([]);
+    setWarning(null);
+    setSelectedPieceColor(null);
   }, [undoToOriginalToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -249,12 +332,10 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
 
     setPositionsList((prev) => prev.map((pos) => (pos === originKey ? newKey : pos)));
 
-    // Actualizar pieceMapLocal preferentemente con lastPiezaId
     const idToMove = lastPiezaId ?? selectedPieceId ?? null;
     if (idToMove !== null) {
       setPieceMapLocal((prevMap) => {
         const newMap = new Map(prevMap);
-        // Intentar eliminar por clave de origen; si no, por ID
         if (newMap.has(originKey)) {
           newMap.delete(originKey);
         } else {
@@ -275,6 +356,9 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
 
   return (
     <div className="chinese-checkers-board">
+      {warning && (
+        <div className="move-warning">{warning}</div>
+      )}
       <div className="board-grid">
         {tablero.map((fila, filaIdx) => (
           <div key={filaIdx} className="board-row" style={{ justifyContent: 'center' }}>
@@ -291,8 +375,13 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
               const backgroundColor = hasPlayer ? BOARD_COLORS[occupant] : (punta !== null ? lightColor : '#f4ebd6ff');
               const borderColor = hasPlayer ? BOARD_COLORS[occupant] : (punta !== null ? lightColor : '#e6dcc9');
               const isSelected = selectedCell && selectedCell.fila === filaIdx && selectedCell.col === colIdx;
+              
+              const cellKey = makeKey(colIdx, filaIdx);
+              const isValidMove = validMoves.includes(cellKey);
 
               const onClick = () => {
+                setWarning(null);
+                
                 if (moveMade) {
                   if (hasPlayer) {
                     if (!lockedPiecePos || lockedPiecePos.fila !== filaIdx || lockedPiecePos.col !== colIdx) {
@@ -307,6 +396,12 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                   if (ownerPlayerIndex === currentPlayerIndex) {
                     setSelectedCell({ fila: filaIdx, col: colIdx });
                     const key = `${colIdx}-${filaIdx}`;
+                    
+                    const possibleMoves = getValidMovesFrom(key, boardPieces);
+                    setValidMoves(possibleMoves);
+                    setSelectedPieceColor(BOARD_COLORS[ownerPunta]);
+                    console.log('🎯 Movimientos válidos desde', key, ':', possibleMoves);
+                    
                     const fetchPieceId = async () => {
                       try {
                         const jugadorDb = dbJugadores[ownerPlayerIndex];
@@ -336,7 +431,6 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                             resolvedId = pieceMapLocal.get(key) ?? pieceMapLocal.get(altKey) ?? pieceByPos.get(key) ?? pieceByPos.get(altKey) ?? null;
                           }
 
-                          // Fallback adicional: buscar en histórico de movimientos
                           if (!resolvedId && moveHistory.length > 0) {
                             const currentCellKey = `${colIdx}-${filaIdx}`;
                             for (let i = moveHistory.length - 1; i >= 0; i--) {
@@ -366,6 +460,10 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                     };
                     
                     fetchPieceId();
+                  } else {
+                    setSelectedCell(null);
+                    setValidMoves([]);
+                    setSelectedPieceColor(null);
                   }
                 } else if (selectedCell) {
                   const { fila, col } = selectedCell;
@@ -374,8 +472,17 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                     const ownerPlayerIndex = puntaToPlayerIndex[movingPunta];
                     if (ownerPlayerIndex !== currentPlayerIndex) {
                       setSelectedCell(null);
+                      setValidMoves([]);
                       return;
                     }
+                    
+                    const destinationKey = `${colIdx}-${filaIdx}`;
+                    
+                    if (!validMoves.includes(destinationKey)) {
+                      setWarning('Movimiento no válido: debe mover a un vecino vacío o saltar sobre una pieza a un espacio vacío');
+                      return;
+                    }
+                    
                     const originKey = `${col}-${fila}`;
                     const originKeyAlt = `${fila}-${col}`;
                     const piezaId = selectedPieceId ?? pieceMapLocal.get(originKey) ?? pieceMapLocal.get(originKeyAlt) ?? pieceByPos.get(originKey) ?? pieceByPos.get(originKeyAlt) ?? null;
@@ -386,7 +493,6 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                     
                     if (!turnStartBoardState && !moveMade) {
                       setTurnStartBoardState(boardPieces);
-                      // Guardar snapshot del mapa de piezas al inicio del turno
                       setTurnStartPieceMap(new Map(pieceMapLocal));
                       setTurnStartPositionsList([...positionsList]);
                       console.log('📸 Snapshot guardado al inicio del turno:', { pieceMapLocal, positionsList });
@@ -395,6 +501,11 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                     setBoardPieces(next);
                     setMoveHistory((prev) => [...prev, { from: { fila, col }, to: { fila: filaIdx, col: colIdx }, occupant: movingPunta, piezaId }]);
                     setSelectedCell({ fila: filaIdx, col: colIdx });
+                    
+                    const newPossibleMoves = getValidMovesFrom(destinationKey, next);
+                    setValidMoves(newPossibleMoves);
+                    console.log('🎯 Movimientos válidos actualizados desde', destinationKey, ':', newPossibleMoves);
+                    
                     if (onMove) {
                       console.log('➡️ Movimiento realizado desde Board:', { from: { fila, col }, to: { fila: filaIdx, col: colIdx }, occupant: movingPunta, boardState: next, pieza_id: piezaId });
                       setSelectedPieceId(piezaId);
@@ -402,6 +513,8 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                     }
                   } else {
                     setSelectedCell(null);
+                    setValidMoves([]);
+                    setSelectedPieceColor(null);
                   }
                 }
               };
@@ -409,10 +522,13 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
               return (
                 <div
                   key={hueco.id}
-                  className={`board-cell${isSelected ? ' selected' : ''}`}
+                  className={`board-cell${isSelected ? ' selected' : ''}${isValidMove ? ' valid-move' : ''}`}
                   style={{
                     backgroundColor,
                     borderColor,
+                    ...(isValidMove && selectedPieceColor && {
+                      '--valid-move-color': selectedPieceColor,
+                    }),
                   }}
                   title={jugador ? `${jugador.nombre || 'IA'}` : 'Vacío'}
                   onClick={onClick}
