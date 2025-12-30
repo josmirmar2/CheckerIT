@@ -126,18 +126,9 @@ def validate_move(origin_key, destination_key, occupied_positions, allow_simple=
     """
     Valida si un movimiento de origen a destino es válido.
     Retorna (es_válido: bool, mensaje_error: str)
+    VALIDACIONES DESHABILITADAS - Acepta cualquier movimiento
     """
-    if origin_key == destination_key:
-        return False, "El origen y destino son la misma posición"
-    
-    if destination_key in occupied_positions:
-        return False, "El destino está ocupado"
-    
-    valid_moves = get_valid_moves_from(origin_key, occupied_positions, allow_simple)
-    
-    if destination_key not in valid_moves:
-        return False, "Movimiento no válido: debe mover a un vecino vacío o saltar sobre una pieza a un espacio vacío"
-    
+    # Validaciones deshabilitadas - acepta todos los movimientos
     return True, ""
 
 
