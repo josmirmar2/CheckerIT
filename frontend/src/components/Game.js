@@ -307,7 +307,6 @@ function Game() {
     if (!initialBoardState && move.boardState) {
       setInitialBoardState(move.boardState);
     }
-    // Guardar snapshot de pieceByPos al inicio del turno
     if (!turnStartPieceByPos) {
       setTurnStartPieceByPos(new Map(pieceByPos));
       console.log('📸 Snapshot de pieceByPos guardado en Game.js:', pieceByPos);
@@ -340,7 +339,6 @@ function Game() {
     setOriginalPiecePos(null);
     setMoveHistory([]);
     
-    // Restaurar pieceByPos desde snapshot
     if (turnStartPieceByPos) {
       setPieceByPos(new Map(turnStartPieceByPos));
       console.log('🔄 pieceByPos restaurado desde snapshot en Game.js:', turnStartPieceByPos);
@@ -354,7 +352,6 @@ function Game() {
     }
     await saveTurnToDatabase();
     setTurnCount((prev) => prev + 1);
-    // setLastMove(null);
     setMoveMade(false);
     setLockedPiecePos(null);
     setOriginalPiecePos(null);
@@ -366,7 +363,6 @@ function Game() {
   const passTurn = async () => {
     await saveTurnToDatabase();
     setTurnCount((prev) => prev + 1);
-    // setLastMove(null);
     setMoveMade(false);
     setLockedPiecePos(null);
     setOriginalPiecePos(null);

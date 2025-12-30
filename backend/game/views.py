@@ -10,6 +10,138 @@ from .serializers import (
     MovimientoSerializer, IASerializer, ChatbotSerializer, JugadorPartidaSerializer
 )
 
+CARTESIAN_COORD_ROWS = [
+    [{"q": 0, "r": 0}],
+    [{"q": -1, "r": 1}, {"q": 0, "r": 1}],
+    [{"q": -2, "r": 2}, {"q": -1, "r": 2}, {"q": 0, "r": 2}],
+    [{"q": -3, "r": 3}, {"q": -2, "r": 3}, {"q": -1, "r": 3}, {"q": 0, "r": 3}],
+    [{"q": -8, "r": 4}, {"q": -7, "r": 4}, {"q": -6, "r": 4}, {"q": -5, "r": 4}, {"q": -4, "r": 4}, {"q": -3, "r": 4}, {"q": -2, "r": 4}, {"q": -1, "r": 4}, {"q": 0, "r": 4}, {"q": 1, "r": 4}, {"q": 2, "r": 4}, {"q": 3, "r": 4}, {"q": 4, "r": 4}],
+    [{"q": -8, "r": 5}, {"q": -7, "r": 5}, {"q": -6, "r": 5}, {"q": -5, "r": 5}, {"q": -4, "r": 5}, {"q": -3, "r": 5}, {"q": -2, "r": 5}, {"q": -1, "r": 5}, {"q": 0, "r": 5}, {"q": 1, "r": 5}, {"q": 2, "r": 5}, {"q": 3, "r": 5}],
+    [{"q": -8, "r": 6}, {"q": -7, "r": 6}, {"q": -6, "r": 6}, {"q": -5, "r": 6}, {"q": -4, "r": 6}, {"q": -3, "r": 6}, {"q": -2, "r": 6}, {"q": -1, "r": 6}, {"q": 0, "r": 6}, {"q": 1, "r": 6}, {"q": 2, "r": 6}],
+    [{"q": -8, "r": 7}, {"q": -7, "r": 7}, {"q": -6, "r": 7}, {"q": -5, "r": 7}, {"q": -4, "r": 7}, {"q": -3, "r": 7}, {"q": -2, "r": 7}, {"q": -1, "r": 7}, {"q": 0, "r": 7}, {"q": 1, "r": 7}],
+    [{"q": -8, "r": 8}, {"q": -7, "r": 8}, {"q": -6, "r": 8}, {"q": -5, "r": 8}, {"q": -4, "r": 8}, {"q": -3, "r": 8}, {"q": -2, "r": 8}, {"q": -1, "r": 8}, {"q": 0, "r": 8}],
+    [{"q": -9, "r": 9}, {"q": -8, "r": 9}, {"q": -7, "r": 9}, {"q": -6, "r": 9}, {"q": -5, "r": 9}, {"q": -4, "r": 9}, {"q": -3, "r": 9}, {"q": -2, "r": 9}, {"q": -1, "r": 9}, {"q": 0, "r": 9}],
+    [{"q": -10, "r": 10}, {"q": -9, "r": 10}, {"q": -8, "r": 10}, {"q": -7, "r": 10}, {"q": -6, "r": 10}, {"q": -5, "r": 10}, {"q": -4, "r": 10}, {"q": -3, "r": 10}, {"q": -2, "r": 10}, {"q": -1, "r": 10}, {"q": 0, "r": 10}],
+    [{"q": -11, "r": 11}, {"q": -10, "r": 11}, {"q": -9, "r": 11}, {"q": -8, "r": 11}, {"q": -7, "r": 11}, {"q": -6, "r": 11}, {"q": -5, "r": 11}, {"q": -4, "r": 11}, {"q": -3, "r": 11}, {"q": -2, "r": 11}, {"q": -1, "r": 11}, {"q": 0, "r": 11}],
+    [{"q": -12, "r": 12}, {"q": -11, "r": 12}, {"q": -10, "r": 12}, {"q": -9, "r": 12}, {"q": -8, "r": 12}, {"q": -7, "r": 12}, {"q": -6, "r": 12}, {"q": -5, "r": 12}, {"q": -4, "r": 12}, {"q": -3, "r": 12}, {"q": -2, "r": 12}, {"q": -1, "r": 12}, {"q": 0, "r": 12}],
+    [{"q": -8, "r": 13}, {"q": -7, "r": 13}, {"q": -6, "r": 13}, {"q": -5, "r": 13}],
+    [{"q": -8, "r": 14}, {"q": -7, "r": 14}, {"q": -6, "r": 14}],
+    [{"q": -8, "r": 15}, {"q": -7, "r": 15}],
+    [{"q": -8, "r": 16}],
+]
+
+POSITION_TO_CARTESIAN = {}
+CARTESIAN_TO_POSITION = {}
+for fila_idx, row in enumerate(CARTESIAN_COORD_ROWS):
+    for col_idx, coord in enumerate(row):
+        key = f"{col_idx}-{fila_idx}"
+        POSITION_TO_CARTESIAN[key] = coord
+        CARTESIAN_TO_POSITION[f"{coord['q']},{coord['r']}"] = key
+
+AXIAL_DIRECTIONS = [
+    {"dq": 1, "dr": 0},
+    {"dq": -1, "dr": 0},
+    {"dq": 0, "dr": 1},
+    {"dq": 0, "dr": -1},
+    {"dq": 1, "dr": -1},
+    {"dq": -1, "dr": 1},
+]
+
+
+def get_occupied_positions(partida_id):
+    """Obtiene todas las posiciones ocupadas en una partida."""
+    piezas = Pieza.objects.filter(partida_id=partida_id)
+    return {pieza.posicion for pieza in piezas if pieza.posicion}
+
+
+def coord_from_key(key):
+    """Convierte posición col-fila a coordenadas axiales."""
+    return POSITION_TO_CARTESIAN.get(key)
+
+
+def key_from_coord(q, r):
+    """Convierte coordenadas axiales a posición col-fila."""
+    return CARTESIAN_TO_POSITION.get(f"{q},{r}")
+
+
+def compute_simple_moves(origin_key, occupied_positions):
+    """Calcula movimientos simples (vecinos vacíos)."""
+    origin_coord = coord_from_key(origin_key)
+    if not origin_coord:
+        return []
+    
+    moves = []
+    for direction in AXIAL_DIRECTIONS:
+        neighbor_q = origin_coord["q"] + direction["dq"]
+        neighbor_r = origin_coord["r"] + direction["dr"]
+        neighbor_key = key_from_coord(neighbor_q, neighbor_r)
+        
+        if neighbor_key and neighbor_key not in occupied_positions:
+            moves.append(neighbor_key)
+    
+    return moves
+
+
+def compute_jump_moves(origin_key, occupied_positions):
+    """Calcula saltos con encadenamiento (DFS)."""
+    origin_coord = coord_from_key(origin_key)
+    if not origin_coord:
+        return []
+    
+    landings = set()
+    
+    def dfs(coord):
+        for direction in AXIAL_DIRECTIONS:
+            middle_q = coord["q"] + direction["dq"]
+            middle_r = coord["r"] + direction["dr"]
+            landing_q = coord["q"] + 2 * direction["dq"]
+            landing_r = coord["r"] + 2 * direction["dr"]
+            
+            middle_key = key_from_coord(middle_q, middle_r)
+            landing_key = key_from_coord(landing_q, landing_r)
+            
+            if not middle_key or not landing_key:
+                continue
+            if middle_key not in occupied_positions: 
+                continue
+            if landing_key in occupied_positions:
+                continue
+            
+            if landing_key not in landings:
+                landings.add(landing_key)
+                dfs({"q": landing_q, "r": landing_r})
+    
+    dfs(origin_coord)
+    return list(landings)
+
+
+def get_valid_moves_from(origin_key, occupied_positions):
+    """Obtiene todos los movimientos válidos desde una posición."""
+    simple = compute_simple_moves(origin_key, occupied_positions)
+    jumps = compute_jump_moves(origin_key, occupied_positions)
+    return list(set(simple + jumps))
+
+
+def validate_move(origin_key, destination_key, occupied_positions):
+    """
+    Valida si un movimiento de origen a destino es válido.
+    Retorna (es_válido: bool, mensaje_error: str)
+    """
+    if origin_key == destination_key:
+        return False, "El origen y destino son la misma posición"
+    
+    if destination_key in occupied_positions:
+        return False, "El destino está ocupado"
+    
+    valid_moves = get_valid_moves_from(origin_key, occupied_positions)
+    
+    if destination_key not in valid_moves:
+        return False, "Movimiento no válido: debe mover a un vecino vacío o saltar sobre una pieza a un espacio vacío"
+    
+    return True, ""
+
+
+
 
 class JugadorViewSet(viewsets.ModelViewSet):
     """
@@ -109,11 +241,14 @@ class PartidaViewSet(viewsets.ModelViewSet):
     def registrar_movimientos(self, request, id_partida=None):
         """
         Registra una lista de movimientos para la partida indicada.
+        Valida cada movimiento según las reglas del juego.
         """
         partida = self.get_object()
         movimientos_data = request.data.get('movimientos', [])
         if not isinstance(movimientos_data, list) or len(movimientos_data) == 0:
             return Response({ 'error': 'No hay movimientos para registrar' }, status=status.HTTP_400_BAD_REQUEST)
+
+        occupied_positions = get_occupied_positions(partida.id_partida)
 
         created = []
         for idx, m in enumerate(movimientos_data, start=1):
@@ -134,6 +269,17 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 jugador = Jugador.objects.get(id_jugador=jugador_id)
                 turno = Turno.objects.get(id_turno=turno_id)
                 pieza = Pieza.objects.get(id_pieza=pieza_id)
+
+                es_valido, mensaje_error = validate_move(origen, destino, occupied_positions)
+                if not es_valido:
+                    return Response({ 
+                        'error': f'Movimiento {idx} inválido: {mensaje_error}',
+                        'origen': origen,
+                        'destino': destino
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                occupied_positions.discard(origen)
+                occupied_positions.add(destino)
 
                 mov = Movimiento.objects.create(
                     id_movimiento=f"M_{turno.id_turno}_{idx}_{datetime.now().timestamp()}",
