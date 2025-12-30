@@ -444,6 +444,26 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 partida=partida
             )
 
+    def destroy(self, request, *args, **kwargs):
+        """
+        Elimina la partida y todos los jugadores asociados creados para ella.
+        También elimina en cascada: piezas, movimientos, turnos, IAs y chatbots.
+        """
+        partida = self.get_object()
+        
+        # Obtener todos los jugadores de esta partida
+        jugadores_partida = JugadorPartida.objects.filter(partida=partida)
+        jugadores_ids = [jp.jugador.id_jugador for jp in jugadores_partida]
+        
+        # Eliminar la partida (esto eliminará en cascada: turnos, movimientos, piezas, JugadorPartida)
+        partida.delete()
+        
+        # Eliminar los jugadores que fueron creados para esta partida
+        # (esto eliminará en cascada sus IAs y Chatbots asociados)
+        Jugador.objects.filter(id_jugador__in=jugadores_ids).delete()
+        
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
 
 class PiezaViewSet(viewsets.ModelViewSet):
     """

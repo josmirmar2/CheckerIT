@@ -447,3 +447,207 @@
     
   }
 }
+
+/* Pause Overlay */
+.pause-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  backdrop-filter: blur(5px);
+}
+
+.pause-dialog {
+  background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+  border: 3px solid #D58B2A;
+  border-radius: 20px;
+  padding: 40px 50px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  text-align: center;
+  min-width: 350px;
+}
+
+.pause-dialog h2 {
+  color: #ffffff;
+  font-size: 2rem;
+  margin-bottom: 30px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.pause-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.pause-button {
+  padding: 15px 30px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.pause-button i {
+  font-size: 1.3rem;
+}
+
+.pause-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.pause-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.resume-button {
+  background: linear-gradient(135deg, #27ae60 0%, #229954 100%);
+  color: white;
+}
+
+.resume-button:hover {
+  background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+}
+
+.end-button {
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  color: white;
+}
+
+.end-button:hover {
+  background: linear-gradient(135deg, #ec7063 0%, #e74c3c 100%);
+}
+
+/* Confirm Dialog */
+.confirm-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  backdrop-filter: blur(8px);
+}
+
+.confirm-dialog {
+  background: linear-gradient(135deg, #34495e 0%, #2c3e50 100%);
+  border: 3px solid #e74c3c;
+  border-radius: 20px;
+  padding: 40px 50px;
+  box-shadow: 0 15px 50px rgba(0, 0, 0, 0.7);
+  text-align: center;
+  min-width: 380px;
+  max-width: 500px;
+}
+
+.confirm-dialog h2 {
+  color: #ffffff;
+  font-size: 1.8rem;
+  margin-bottom: 20px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.confirm-message {
+  color: #ecf0f1;
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 30px;
+  padding: 15px 20px;
+  background: rgba(231, 76, 60, 0.1);
+  border-left: 4px solid #e74c3c;
+  border-radius: 5px;
+  text-align: left;
+}
+
+.confirm-question {
+  color: #ecf0f1;
+  font-size: 1.15rem;
+  font-weight: 500;
+  margin-bottom: 20px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.confirm-warning {
+  color: #ecf0f1;
+  font-size: 1rem;
+  line-height: 1.6;
+  margin-bottom: 30px;
+  padding: 15px 20px;
+  background: rgba(231, 76, 60, 0.1);
+  border-left: 4px solid #e74c3c;
+  border-radius: 5px;
+  text-align: left;
+}
+
+.confirm-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.confirm-button {
+  padding: 14px 28px;
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.confirm-button i {
+  font-size: 1.2rem;
+}
+
+.confirm-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.confirm-button:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.cancel-button {
+  background: linear-gradient(135deg, #95a5a6 0%, #7f8c8d 100%);
+  color: white;
+}
+
+.cancel-button:hover {
+  background: linear-gradient(135deg, #bdc3c7 0%, #95a5a6 100%);
+}
+
+.confirm-end-button {
+  background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+  color: white;
+}
+
+.confirm-end-button:hover {
+  background: linear-gradient(135deg, #ec7063 0%, #e74c3c 100%);
+}

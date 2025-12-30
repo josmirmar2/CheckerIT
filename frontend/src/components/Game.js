@@ -43,11 +43,68 @@ function Game() {
   const [pieceByPos, setPieceByPos] = useState(new Map());
   const [turnStartPieceByPos, setTurnStartPieceByPos] = useState(null);
   const [dbJugadores, setDbJugadores] = useState([]);
+  const [isPaused, setIsPaused] = useState(false);
+  const [showEndConfirm, setShowEndConfirm] = useState(false);
 
   const jugadoresConfig = useMemo(() => location.state?.jugadoresConfig || [], [location.state]);
 
+  const handlePause = () => {
+    setIsPaused(true);
+    if (isPlayingMusic && audioRef.current) {
+      audioRef.current.pause();
+    }
+  };
+
   const handleGoBack = () => {
     navigate('/');
+  };
+
+  const handleResume = () => {
+    setIsPaused(false);
+    if (isPlayingMusic && audioRef.current) {
+      audioRef.current.play();
+    }
+  };
+
+  const handleShowEndConfirm = () => {
+    setShowEndConfirm(true);
+  };
+
+  const handleCancelEnd = () => {
+    setShowEndConfirm(false);
+  };
+
+  const handleEndGame = async () => {
+    try {
+      setIsPlayingMusic(false);
+      setCurrentMusicIndex(-1);
+      
+      if (audioRef.current) {
+        try {
+          audioRef.current.onerror = null; // Remover el listener de error
+          audioRef.current.pause();
+          audioRef.current.loop = false;
+          audioRef.current.currentTime = 0;
+          audioRef.current.removeAttribute('src');
+        } catch {}
+        audioRef.current = null;
+      }
+
+      const deleteUrl = `http://localhost:8000/api/partidas/${partida.id_partida}/`;
+      const response = await fetch(deleteUrl, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        console.error('Error al eliminar partida:', response.status);
+      }
+
+      navigate('/');
+    } catch (error) {
+      console.error('Error en handleEndGame:', error);
+      navigate('/');
+    }
   };
 
   useEffect(() => {
@@ -87,11 +144,12 @@ function Game() {
   }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (isPaused) return;
     const timerId = setInterval(() => {
       setElapsed((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(timerId);
-  }, []);
+  }, [isPaused]);
 
   useEffect(() => {
     return () => {
@@ -443,7 +501,7 @@ function Game() {
               <i className={`fas ${isPlayingMusic ? 'fa-volume-high' : 'fa-volume-xmark'}`}></i>
             </button>
             <div className="timer">⏱ {formatTime(elapsed)}</div>
-            <button className="compact-button" onClick={handleGoBack}>
+            <button className="compact-button" onClick={handlePause}>
               <i className="fas fa-home"></i>
             </button>
           </div>
@@ -493,6 +551,46 @@ function Game() {
           )}
         </aside>
       </div>
+
+      {isPaused && (
+        <div className="pause-overlay">
+          <div className="pause-dialog">
+            <h2>Juego Pausado</h2>
+            <div className="pause-buttons">
+              <button className="pause-button resume-button" onClick={handleResume}>
+                <i className="fas fa-play"></i>
+                Reanudar
+              </button>
+              <button className="pause-button end-button" onClick={handleShowEndConfirm}>
+                <i className="fas fa-stop"></i>
+                Finalizar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showEndConfirm && (
+        <div className="confirm-overlay">
+          <div className="confirm-dialog">
+            <h2>Finalizar Partida</h2>
+            <p className="confirm-question">
+              ¿Seguro que quieres finalizarla antes de tiempo?
+            </p>
+            <p className="confirm-warning">
+              Esta acción no se podrá deshacer. Perderás el progreso que has conseguido en la partida
+            </p>
+            <div className="confirm-buttons">
+              <button className="confirm-button cancel-button" onClick={handleCancelEnd}>
+                Cancelar
+              </button>
+              <button className="confirm-button confirm-end-button" onClick={handleEndGame}>
+                Volver al inicio
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
