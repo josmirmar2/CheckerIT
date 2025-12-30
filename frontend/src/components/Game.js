@@ -6,6 +6,21 @@ import Board from './Board';
 
 const PLAYER_COLORS = ['#FFFFFF', '#4444FF', '#44DD44', '#000000', '#FF4444', '#FFDD44'];
 
+const getActivePuntas = (numJugadores) => {
+  switch (numJugadores) {
+    case 2:
+      return [0, 3];
+    case 3:
+      return [0, 4, 5];
+    case 4:
+      return [1, 2, 4, 5];
+    case 6:
+      return [0, 1, 2, 3, 4, 5];
+    default:
+      return [];
+  }
+};
+
 function Game() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -400,6 +415,9 @@ function Game() {
             )}
             {jugadoresConfig.map((jugador, idx) => {
               const isCurrent = idx === currentPlayerIndex;
+              const activePuntas = getActivePuntas(jugadoresConfig.length);
+              const punta = activePuntas[idx];
+              const colorHex = PLAYER_COLORS[punta];
               return (
                 <div
                   key={`${jugador.nombre || 'IA'}-${idx}`}
@@ -409,7 +427,7 @@ function Game() {
                     <img src={getIconSrc(jugador.icono)} alt={jugador.nombre || 'IA'} />
                   </div>
                   <div className="turn-info">
-                    <div className="turn-color-dot" style={{ backgroundColor: PLAYER_COLORS[idx] }} />
+                    <div className="turn-color-dot" style={{ backgroundColor: colorHex }} />
                     <span className="turn-name">{jugador.nombre || `IA ${jugador.dificultad}`}</span>
                     {isCurrent && <span className="turn-indicator">Turno actual</span>}
                   </div>
