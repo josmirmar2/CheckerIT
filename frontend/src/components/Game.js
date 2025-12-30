@@ -298,7 +298,6 @@ function Game() {
   };
 
   const handleBoardMove = (move) => {
-    // setLastMove(move);
     setMoveMade(true);
     setLockedPiecePos(move.to);
     if (!originalPiecePos) {
@@ -333,7 +332,6 @@ function Game() {
   const undoMove = () => {
     if (!moveMade) return;
     setUndoToOriginalToken((prev) => prev + 1);
-    // setLastMove(null);
     setMoveMade(false);
     setLockedPiecePos(null);
     setOriginalPiecePos(null);

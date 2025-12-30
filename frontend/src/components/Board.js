@@ -5,7 +5,6 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
   const BOARD_COLORS = ['#FFFFFF', '#0000ffff', '#00ff00ff', '#000000', '#ff0000ff', '#ffbf00ff'];
   const LIGHT_COLORS = ['#ffffffcf', '#8888ffaf', '#9af89aab', '#666666af', '#ffa2a2a1', '#ffe988b6'];
 
-  // Mapa de coordenadas cartesianas (q, r) por posición col-fila
   const CARTESIAN_COORD_ROWS = [
     [{ q: 0, r: 0 }],
     [{ q: -1, r: 1 }, { q: 0, r: 1 }],
@@ -215,8 +214,8 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
     return Array.from(landings);
   };
 
-  const getValidMovesFrom = (originKey, state) => {
-    const simple = computeSimpleMoves(originKey, state);
+  const getValidMovesFrom = (originKey, state, allowSimple = true) => {
+    const simple = allowSimple ? computeSimpleMoves(originKey, state) : [];
     const jumps = computeJumpMoves(originKey, state);
     return Array.from(new Set([...simple, ...jumps]));
   };
@@ -228,6 +227,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
   const [turnStartBoardState, setTurnStartBoardState] = useState(null);
   const [turnStartPieceMap, setTurnStartPieceMap] = useState(null);
   const [turnStartPositionsList, setTurnStartPositionsList] = useState(null);
+  const [firstMoveWasSimple, setFirstMoveWasSimple] = useState(false);
 
   const activePuntas = getActivePuntas(jugadoresConfig.length);
   const puntaToPlayerIndex = activePuntas.reduce((acc, puntaIdx, playerIdx) => {
@@ -261,6 +261,10 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
       setValidMoves([]);
       setWarning(null);
       setSelectedPieceColor(null);
+      setMoveHistory([]);
+      setSelectedCell(null);
+      setSelectedPieceId(null);
+      setFirstMoveWasSimple(false);
     }
   }, [moveMade]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -397,7 +401,8 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                     setSelectedCell({ fila: filaIdx, col: colIdx });
                     const key = `${colIdx}-${filaIdx}`;
                     
-                    const possibleMoves = getValidMovesFrom(key, boardPieces);
+                    const allowSimple = moveHistory.length === 0;
+                    const possibleMoves = getValidMovesFrom(key, boardPieces, allowSimple);
                     setValidMoves(possibleMoves);
                     setSelectedPieceColor(BOARD_COLORS[ownerPunta]);
                     console.log('🎯 Movimientos válidos desde', key, ':', possibleMoves);
@@ -502,9 +507,17 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                     setMoveHistory((prev) => [...prev, { from: { fila, col }, to: { fila: filaIdx, col: colIdx }, occupant: movingPunta, piezaId }]);
                     setSelectedCell({ fila: filaIdx, col: colIdx });
                     
-                    const newPossibleMoves = getValidMovesFrom(destinationKey, next);
-                    setValidMoves(newPossibleMoves);
-                    console.log('🎯 Movimientos válidos actualizados desde', destinationKey, ':', newPossibleMoves);
+                    const wasSimpleMove = computeSimpleMoves(originKey, boardPieces).includes(destinationKey);
+                    
+                    if (moveHistory.length === 0 && wasSimpleMove) {
+                      setFirstMoveWasSimple(true);
+                      setValidMoves([]);
+                      console.log('⛔ Primer movimiento fue simple, no se permiten más movimientos');
+                    } else {
+                      const newPossibleMoves = getValidMovesFrom(destinationKey, next, false);
+                      setValidMoves(newPossibleMoves);
+                      console.log('🎯 Movimientos válidos actualizados desde', destinationKey, ':', newPossibleMoves);
+                    }
                     
                     if (onMove) {
                       console.log('➡️ Movimiento realizado desde Board:', { from: { fila, col }, to: { fila: filaIdx, col: colIdx }, occupant: movingPunta, boardState: next, pieza_id: piezaId });

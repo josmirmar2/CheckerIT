@@ -115,14 +115,14 @@ def compute_jump_moves(origin_key, occupied_positions):
     return list(landings)
 
 
-def get_valid_moves_from(origin_key, occupied_positions):
+def get_valid_moves_from(origin_key, occupied_positions, allow_simple=True):
     """Obtiene todos los movimientos válidos desde una posición."""
-    simple = compute_simple_moves(origin_key, occupied_positions)
+    simple = compute_simple_moves(origin_key, occupied_positions) if allow_simple else []
     jumps = compute_jump_moves(origin_key, occupied_positions)
     return list(set(simple + jumps))
 
 
-def validate_move(origin_key, destination_key, occupied_positions):
+def validate_move(origin_key, destination_key, occupied_positions, allow_simple=True):
     """
     Valida si un movimiento de origen a destino es válido.
     Retorna (es_válido: bool, mensaje_error: str)
@@ -133,7 +133,7 @@ def validate_move(origin_key, destination_key, occupied_positions):
     if destination_key in occupied_positions:
         return False, "El destino está ocupado"
     
-    valid_moves = get_valid_moves_from(origin_key, occupied_positions)
+    valid_moves = get_valid_moves_from(origin_key, occupied_positions, allow_simple)
     
     if destination_key not in valid_moves:
         return False, "Movimiento no válido: debe mover a un vecino vacío o saltar sobre una pieza a un espacio vacío"
@@ -251,6 +251,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
         occupied_positions = get_occupied_positions(partida.id_partida)
 
         created = []
+
         for idx, m in enumerate(movimientos_data, start=1):
             try:
                 jugador_id = m.get('jugador_id')
@@ -270,7 +271,8 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 turno = Turno.objects.get(id_turno=turno_id)
                 pieza = Pieza.objects.get(id_pieza=pieza_id)
 
-                es_valido, mensaje_error = validate_move(origen, destino, occupied_positions)
+                allow_simple = (idx == 1)
+                es_valido, mensaje_error = validate_move(origen, destino, occupied_positions, allow_simple)
                 if not es_valido:
                     return Response({ 
                         'error': f'Movimiento {idx} inválido: {mensaje_error}',
@@ -291,6 +293,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
                     destino=destino,
                 )
                 created.append(mov)
+                
             except Jugador.DoesNotExist:
                 return Response({ 'error': f'Jugador no encontrado: {jugador_id}' }, status=status.HTTP_400_BAD_REQUEST)
             except Turno.DoesNotExist:
@@ -315,17 +318,14 @@ class PartidaViewSet(viewsets.ModelViewSet):
         if not new_turn_data:
             return Response({ 'error': 'newTurnCreated es requerido' }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Actualizar el turno actual si se proporciona oldTurn
         updated_turn = None
         if old_turn_data:
             turno_actual = partida.turnos.filter(fin__isnull=True).order_by('numero').first()
             if turno_actual:
-                # Opcionalmente validar coincidencia de numero/jugador
                 final_val = old_turn_data.get('final')
                 inicio_val = old_turn_data.get('inicio')
                 try:
                     if inicio_val:
-                        # Permite establecer inicio explícito si llega en payload
                         if isinstance(inicio_val, (int, float)):
                             turno_actual.inicio = datetime.fromtimestamp(inicio_val / 1000.0, tz=timezone.get_current_timezone())
                         else:
@@ -338,12 +338,10 @@ class PartidaViewSet(viewsets.ModelViewSet):
                     else:
                         turno_actual.fin = timezone.now()
                 except Exception:
-                    # Si el formato no es válido, usar now para fin y mantener inicio existente
                     turno_actual.fin = timezone.now()
                 turno_actual.save()
                 updated_turn = turno_actual
 
-        # Crear el nuevo turno con los datos proporcionados
         numero_nuevo = new_turn_data.get('numero')
         inicio_nuevo = new_turn_data.get('inicio')
         jugador_id_nuevo = new_turn_data.get('jugador_id')
@@ -356,7 +354,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
         except Jugador.DoesNotExist:
             return Response({ 'error': f'Jugador no encontrado: {jugador_id_nuevo}' }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Construir id_turno determinístico con numero e id_partida
         new_turn_id = f"T{numero_nuevo}_{partida.id_partida}"
 
         nuevo_turno = Turno(
@@ -365,7 +362,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
             numero=numero_nuevo,
             partida=partida
         )
-        # Establecer inicio si llega, respetando formatos timestamp ms o iso
         if inicio_nuevo:
             try:
                 if isinstance(inicio_nuevo, (int, float)):
@@ -373,9 +369,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 else:
                     nuevo_turno.inicio = datetime.fromisoformat(str(inicio_nuevo))
             except Exception:
-                # Si falla, usar now
                 nuevo_turno.inicio = timezone.now()
-        # Guardar
         nuevo_turno.save()
 
         response_data = {
