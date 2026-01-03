@@ -4,6 +4,7 @@ from rest_framework.response import Response
 from django.utils import timezone
 from datetime import datetime
 from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida
+from .ai.max_agent import MaxHeuristicAgent
 from .serializers import (
     JugadorSerializer, PartidaSerializer, PartidaListSerializer,
     PiezaSerializer, TurnoSerializer, 
@@ -580,6 +581,37 @@ class IAViewSet(viewsets.ModelViewSet):
     """
     queryset = IA.objects.all()
     serializer_class = IASerializer
+    lookup_field = 'pk'
+    lookup_value_regex = '[^/]+'
+
+    @action(detail=True, methods=['post'])
+    def sugerir_movimiento(self, request, pk=None):
+        """
+        Retorna un movimiento sugerido para la IA usando heuristica Max.
+
+        Datos de entrada:
+        - partida_id: id de la partida
+        - permitir_simples (opcional, bool): si True incluye movimientos simples en el primer salto
+        """
+        ia_obj = self.get_object()  # asegura que la IA exista
+        partida_id = request.data.get('partida_id')
+        permitir_simples_raw = request.data.get('permitir_simples', True)
+
+        allow_simple = bool(permitir_simples_raw) if isinstance(permitir_simples_raw, bool) else str(permitir_simples_raw).lower() != 'false'
+
+        agent = MaxHeuristicAgent()
+        try:
+            sugerencia = agent.suggest_move(
+                partida_id=partida_id,
+                jugador_id=ia_obj.jugador_id,
+                allow_simple=allow_simple,
+            )
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:  # pragma: no cover - fallback de seguridad
+            return Response({'error': f'No se pudo calcular la jugada: {exc}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(sugerencia, status=status.HTTP_200_OK)
 
 
 class ChatbotViewSet(viewsets.ModelViewSet):
