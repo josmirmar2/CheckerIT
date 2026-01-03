@@ -50,6 +50,10 @@ function Game() {
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showVictory, setShowVictory] = useState(false);
   const [victoryData, setVictoryData] = useState(null);
+  const [aiMoveCmd, setAiMoveCmd] = useState(null);
+  const [aiThinking, setAiThinking] = useState(false);
+  const [aiAutoFinishToken, setAiAutoFinishToken] = useState(null);
+  const [aiError, setAiError] = useState(null);
 
   useEffect(() => {
     if (actualTurn?.numero) {
@@ -58,6 +62,7 @@ function Game() {
   }, [actualTurn?.numero]);
 
   const jugadoresConfig = useMemo(() => location.state?.jugadoresConfig || [], [location.state]);
+  const isAITurn = useMemo(() => jugadoresConfig[currentPlayerIndex]?.tipo === 'ia', [jugadoresConfig, currentPlayerIndex]);
 
   const handlePause = () => {
     setIsPaused(true);
@@ -439,6 +444,52 @@ function Game() {
     if (partida?.id_partida) loadPieces();
   }, [partida]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const requestAiMove = async () => {
+    const jugadorDb = dbJugadores[currentPlayerIndex];
+    if (!jugadorDb?.id_jugador || !partida?.id_partida) return;
+
+    setAiThinking(true);
+    setAiError(null);
+    try {
+      const res = await fetch(`http://localhost:8000/api/ia/${jugadorDb.id_jugador}/sugerir_movimiento/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ partida_id: partida.id_partida, permitir_simples: true })
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Estado ${res.status}: ${text}`);
+      }
+
+      const data = await res.json();
+      if (!data?.origen || !data?.destino) {
+        throw new Error('Respuesta de IA sin origen/destino');
+      }
+
+      const token = Date.now();
+      setAiMoveCmd({ token, fromKey: data.origen, toKey: data.destino, piezaId: data.pieza_id || data.pieza });
+      setAiAutoFinishToken(token);
+    } catch (error) {
+      console.error('Error al solicitar jugada IA:', error);
+      setAiError(error.message || 'Fallo al calcular jugada de IA');
+      setAiMoveCmd(null);
+      setAiAutoFinishToken(null);
+    } finally {
+      setAiThinking(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!isAITurn) return;
+    if (showVictory || moveMade || aiThinking) return;
+    if (!partida?.id_partida) return;
+    if (!dbJugadores[currentPlayerIndex]?.id_jugador) return;
+    if (aiMoveCmd) return;
+
+    requestAiMove();
+  }, [isAITurn, showVictory, moveMade, aiThinking, partida?.id_partida, currentPlayerIndex, dbJugadores, aiMoveCmd]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const saveTurnToDatabase = async () => {
     try {
       const url = `http://localhost:8000/api/partidas/${partida.id_partida}/avanzar_turno/`;
@@ -600,7 +651,29 @@ function Game() {
     setInitialBoardState(null);
     setMoveHistory([]);
     setTurnStartPieceByPos(null);
+    setAiMoveCmd(null);
+    setAiAutoFinishToken(null);
   };
+
+  useEffect(() => {
+    if (!aiAutoFinishToken) return;
+    if (!moveMade) return;
+
+    const finishTurn = async () => {
+      await continueTurn();
+    };
+
+    finishTurn();
+  }, [aiAutoFinishToken, moveMade]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!isAITurn) return;
+    if (aiThinking) return;
+    if (moveMade) return;
+    if (aiMoveCmd) return;
+    if (!partida?.id_partida) return;
+    requestAiMove();
+  }, [isAITurn, aiThinking, moveMade, aiMoveCmd, partida?.id_partida, currentPlayerIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const passTurn = async () => {
     await saveTurnToDatabase();
@@ -610,6 +683,8 @@ function Game() {
     setInitialBoardState(null);
     setMoveHistory([]);
     setTurnStartPieceByPos(null);
+    setAiMoveCmd(null);
+    setAiAutoFinishToken(null);
   };
 
   const getIconSrc = (iconName) => {
@@ -674,6 +749,11 @@ function Game() {
             <button className="compact-button" onClick={handlePause}>
               <i className="fas fa-home"></i>
             </button>
+            {isAITurn && (
+              <div className="ai-status">
+                {aiThinking ? 'IA pensando…' : aiError ? 'IA sin jugada' : 'IA listo'}
+              </div>
+            )}
           </div>
 
           <div className="board-container">
@@ -689,6 +769,8 @@ function Game() {
               originalPiecePos={originalPiecePos}
               initialBoardState={initialBoardState}
               pieceByPos={pieceByPos}
+              aiMove={aiMoveCmd}
+              disablePlayerActions={isAITurn || aiThinking}
             />
           </div>
 
@@ -697,11 +779,11 @@ function Game() {
               <>
                 {moveMade ? (
                   <>
-                    <button className="control-button" onClick={continueTurn}>Continuar</button>
-                    <button className="control-button" onClick={undoMove}>Deshacer</button>
+                    <button className="control-button" onClick={continueTurn} disabled={isAITurn || aiThinking}>Continuar</button>
+                    <button className="control-button" onClick={undoMove} disabled={isAITurn || aiThinking}>Deshacer</button>
                   </>
                 ) : (
-                  <button className="control-button" onClick={passTurn}>Pasar Turno</button>
+                  <button className="control-button" onClick={passTurn} disabled={isAITurn || aiThinking}>Pasar Turno</button>
                 )}
               </>
             )}

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './Board.css';
 
-const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, partidaId = null, onMove = null, moveMade = false, lockedPiecePos = null, undoToken = 0, undoToOriginalToken = 0, originalPiecePos = null, initialBoardState = null, pieceByPos = new Map() }) => {
+const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, partidaId = null, onMove = null, moveMade = false, lockedPiecePos = null, undoToken = 0, undoToOriginalToken = 0, originalPiecePos = null, initialBoardState = null, pieceByPos = new Map(), aiMove = null, disablePlayerActions = false }) => {
   const BOARD_COLORS = ['#FFFFFF', '#0000ffff', '#00ff00ff', '#000000', '#ff0000ff', '#ffbf00ff'];
   const LIGHT_COLORS = ['#ffffffcf', '#8888ffaf', '#9af89aab', '#666666af', '#ffa2a2a1', '#ffe988b6'];
 
@@ -328,6 +328,67 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
   }, [undoToOriginalToken]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
+    if (!aiMove || !aiMove.token) return;
+
+    const { fromKey, toKey, piezaId = null } = aiMove;
+    const [fromCol, fromFila] = String(fromKey || '').split('-').map(Number);
+    const [toCol, toFila] = String(toKey || '').split('-').map(Number);
+
+    if ([fromCol, fromFila, toCol, toFila].some(Number.isNaN)) {
+      console.warn('AI move inválido: claves mal formadas', aiMove);
+      return;
+    }
+
+    const occupant = boardPieces[fromFila]?.[fromCol];
+    if (occupant === undefined || occupant === null) {
+      console.warn('AI move inválido: origen vacío', aiMove);
+      return;
+    }
+
+    const next = boardPieces.map((r) => [...r]);
+    next[toFila][toCol] = next[fromFila][fromCol];
+    next[fromFila][fromCol] = null;
+
+    const originKey = `${fromCol}-${fromFila}`;
+    const destKey = `${toCol}-${toFila}`;
+    const resolvedId = piezaId ?? pieceMapLocal.get(originKey) ?? pieceByPos.get(originKey) ?? null;
+
+    if (!turnStartBoardState && !moveMade) {
+      setTurnStartBoardState(boardPieces);
+      setTurnStartPieceMap(new Map(pieceMapLocal));
+      setTurnStartPositionsList([...positionsList]);
+    }
+
+    setBoardPieces(next);
+    setMoveHistory((prev) => [...prev, { from: { fila: fromFila, col: fromCol }, to: { fila: toFila, col: toCol }, occupant, piezaId: resolvedId }]);
+    setSelectedCell({ fila: toFila, col: toCol });
+    setValidMoves([]);
+    setWarning(null);
+    setSelectedPieceColor(null);
+
+    setPieceMapLocal((prev) => {
+      const map = new Map(prev);
+      if (resolvedId) {
+        map.delete(originKey);
+        map.set(destKey, resolvedId);
+      }
+      return map;
+    });
+
+    setPositionsList((prev) => prev.map((pos) => (pos === originKey ? destKey : pos)));
+
+    if (onMove) {
+      onMove({
+        from: { fila: fromFila, col: fromCol },
+        to: { fila: toFila, col: toCol },
+        occupant,
+        boardState: boardPieces,
+        pieza_id: resolvedId,
+      });
+    }
+  }, [aiMove]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     if (!moveMade || moveHistory.length === 0) return;
     const lastMove = moveHistory[moveHistory.length - 1];
     const { from, to, piezaId: lastPiezaId = null } = lastMove;
@@ -384,6 +445,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
               const isValidMove = validMoves.includes(cellKey);
 
               const onClick = () => {
+                if (disablePlayerActions) return;
                 setWarning(null);
                 
                 if (moveMade) {
