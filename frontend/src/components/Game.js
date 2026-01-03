@@ -216,8 +216,24 @@ function Game() {
 
   useEffect(() => {
     if (location.state?.partidaInicial) {
-      setPartida(location.state.partidaInicial);
+      const partidaData = location.state.partidaInicial;
+      setPartida(partidaData);
       setLoading(false);
+      
+      // Actualizar las posiciones de las piezas a sus posiciones iniciales
+      if (partidaData?.id_partida) {
+        fetch(`http://localhost:8000/api/partidas/${partidaData.id_partida}/actualizar_posiciones_iniciales/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        })
+        .then(res => res.json())
+        .then(data => {
+          console.log('Posiciones iniciales actualizadas:', data);
+        })
+        .catch(error => {
+          console.error('Error actualizando posiciones iniciales:', error);
+        });
+      }
     } else {
       handleGoBack();
     }

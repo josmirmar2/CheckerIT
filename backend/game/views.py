@@ -229,6 +229,57 @@ class PartidaViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
+    def actualizar_posiciones_iniciales(self, request, id_partida=None):
+        """
+        Actualiza las posiciones de todas las piezas de la partida a sus posiciones iniciales
+        según la punta asignada a cada jugador.
+        """
+        partida = self.get_object()
+        
+        posiciones_por_punta = {
+            0: ['0-0', '0-1', '1-1', '0-2', '1-2', '2-2', '0-3', '1-3', '2-3', '3-3'],
+            1: ['0-4', '0-5', '1-4', '1-5', '1-6', '2-4', '2-5', '3-4', '0-6', '0-7'],
+            2: ['12-4', '9-6', '11-4', '11-5', '10-6', '10-4', '10-5', '9-5', '9-4', '9-7'],
+            3: ['3-13', '2-13', '2-14', '1-13', '1-14', '1-15', '0-13', '0-14', '0-15', '0-16'],
+            4: ['0-9', '0-10', '2-12', '1-10', '1-11', '3-12', '2-11', '1-12', '0-11', '0-12'],
+            5: ['9-9', '9-10', '11-11', '10-10', '10-11', '10-12', '12-12', '11-12', '9-11', '9-12'],
+        }
+        
+        puntas_activas_map = {
+            2: [0, 3],
+            3: [0, 4, 5],
+            4: [1, 2, 4, 5],
+            6: [0, 1, 2, 3, 4, 5],
+        }
+        
+        puntas_activas = puntas_activas_map.get(partida.numero_jugadores, [0, 3])
+        
+        # Obtener todas las participaciones de la partida ordenadas
+        participaciones = JugadorPartida.objects.filter(partida=partida).order_by('orden_participacion')
+        
+        piezas_actualizadas = 0
+        
+        for participacion in participaciones:
+            punta_index = participacion.orden_participacion - 1
+            punta_asignada = puntas_activas[punta_index]
+            posiciones = posiciones_por_punta.get(punta_asignada, posiciones_por_punta[0])
+            
+            # Obtener las piezas del jugador en esta partida
+            piezas = Pieza.objects.filter(jugador=participacion.jugador, partida=partida).order_by('id_pieza')
+            
+            # Actualizar cada pieza con su posición inicial
+            for i, pieza in enumerate(piezas[:10]):
+                if i < len(posiciones):
+                    pieza.posicion = posiciones[i]
+                    pieza.save()
+                    piezas_actualizadas += 1
+        
+        return Response({
+            'mensaje': 'Posiciones actualizadas correctamente',
+            'piezas_actualizadas': piezas_actualizadas
+        }, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['post'])
     def registrar_movimientos(self, request, id_partida=None):
         """
         Registra una lista de movimientos para la partida indicada.
@@ -242,6 +293,8 @@ class PartidaViewSet(viewsets.ModelViewSet):
         occupied_positions = get_occupied_positions(partida.id_partida)
 
         created = []
+        ultima_pieza = None
+        ultimo_destino = None
 
         for idx, m in enumerate(movimientos_data, start=1):
             try:
@@ -285,6 +338,9 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 )
                 created.append(mov)
                 
+                ultima_pieza = pieza
+                ultimo_destino = destino
+                
             except Jugador.DoesNotExist:
                 return Response({ 'error': f'Jugador no encontrado: {jugador_id}' }, status=status.HTTP_400_BAD_REQUEST)
             except Turno.DoesNotExist:
@@ -293,6 +349,10 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 return Response({ 'error': f'Pieza no encontrada: {pieza_id}' }, status=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
                 return Response({ 'error': str(e) }, status=status.HTTP_400_BAD_REQUEST)
+
+        if ultima_pieza and ultimo_destino:
+            ultima_pieza.posicion = ultimo_destino
+            ultima_pieza.save()
 
         serializer = MovimientoSerializer(created, many=True)
         return Response({ 'registrados': serializer.data }, status=status.HTTP_201_CREATED)
