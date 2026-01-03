@@ -53,7 +53,7 @@ class PartidaSerializer(serializers.ModelSerializer):
     class Meta:
         model = Partida
         fields = ['id_partida', 'fecha_inicio', 'fecha_fin', 'estado', 
-                  'numero_jugadores', 'turnos', 'movimientos', 'participantes']
+                  'numero_jugadores', 'tiempo_sobrante', 'turnos', 'movimientos', 'participantes']
         read_only_fields = ['fecha_inicio']
 
 
@@ -61,7 +61,7 @@ class PartidaListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Partida
         fields = ['id_partida', 'fecha_inicio', 'fecha_fin', 'estado', 
-                  'numero_jugadores']
+                  'numero_jugadores', 'tiempo_sobrante']
         read_only_fields = ['fecha_inicio']
 
 

@@ -45,11 +45,12 @@ function Game() {
   const [turnStartPieceByPos, setTurnStartPieceByPos] = useState(null);
   const [dbJugadores, setDbJugadores] = useState([]);
   const [isPaused, setIsPaused] = useState(false);
+  const [pausedAccumMs, setPausedAccumMs] = useState(0); // tiempo total en pausa
+  const [pauseStartedAt, setPauseStartedAt] = useState(null); // marca de inicio de pausa
   const [showEndConfirm, setShowEndConfirm] = useState(false);
   const [showVictory, setShowVictory] = useState(false);
   const [victoryData, setVictoryData] = useState(null);
 
-  // Sincronizar turnCount con actualTurn.numero
   useEffect(() => {
     if (actualTurn?.numero) {
       setTurnCount(actualTurn.numero);
@@ -60,6 +61,7 @@ function Game() {
 
   const handlePause = () => {
     setIsPaused(true);
+    setPauseStartedAt(Date.now());
     if (isPlayingMusic && audioRef.current) {
       audioRef.current.pause();
     }
@@ -70,6 +72,28 @@ function Game() {
   };
 
   const handleResume = () => {
+    if (pauseStartedAt) {
+      const newTotal = pausedAccumMs + (Date.now() - pauseStartedAt);
+      setPausedAccumMs(newTotal);
+      if (partida?.id_partida) {
+        const url = `http://localhost:8000/api/partidas/${partida.id_partida}/`;
+        fetch(url)
+          .then(res => res.json())
+          .then(remote => {
+            const prev = Number(remote?.tiempo_sobrante || 0);
+            const mergedSeconds = prev + Math.floor((Date.now() - pauseStartedAt) / 1000);
+               // actualizar estado local con el valor merged
+               setPartida((p) => p ? { ...p, tiempo_sobrante: mergedSeconds } : p);
+               return fetch(url, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tiempo_sobrante: mergedSeconds })
+            });
+          })
+          .catch(err => console.error('Error actualizando tiempo_sobrante:', err));
+      }
+      setPauseStartedAt(null);
+    }
     setIsPaused(false);
     if (isPlayingMusic && audioRef.current) {
       audioRef.current.play();
@@ -91,7 +115,7 @@ function Game() {
       
       if (audioRef.current) {
         try {
-          audioRef.current.onerror = null; // Remover el listener de error
+          audioRef.current.onerror = null;
           audioRef.current.pause();
           audioRef.current.loop = false;
           audioRef.current.currentTime = 0;
@@ -119,13 +143,11 @@ function Game() {
 
   const checkVictory = async () => {
     try {
-      // Obtener todas las piezas de la partida
       const res = await fetch(`http://localhost:8000/api/piezas/?partida_id=${partida.id_partida}`);
       const piezas = await res.json();
 
       if (!Array.isArray(piezas)) return;
 
-      // Posiciones objetivo por punta (las de la punta contraria)
       const posicionesObjetivo = {
         0: ['3-13', '1-13', '0-14', '2-14', '1-15', '2-13', '0-13', '1-14', '0-15', '0-16'], // Punta 3
         1: ['9-9', '9-11', '10-11', '10-12', '12-12', '9-10', '10-10', '11-11', '9-12', '11-12'], // Punta 5
@@ -137,24 +159,20 @@ function Game() {
 
       const activePuntas = getActivePuntas(jugadoresConfig.length);
 
-      // Verificar cada jugador
       for (let i = 0; i < jugadoresConfig.length; i++) {
         const punta = activePuntas[i];
         const posicionesObjetivoJugador = posicionesObjetivo[punta];
 
-        // Obtener todas las piezas de este jugador
         const piezasJugador = piezas.filter(p => {
           const tipoPartes = p.tipo.split('-');
           return tipoPartes.length > 0 && parseInt(tipoPartes[0]) === punta;
         });
 
-        // Verificar si todas las piezas del jugador están en la punta contraria
         const todasEnObjetivo = piezasJugador.every(pieza => 
           posicionesObjetivoJugador.includes(pieza.posicion)
         );
 
         if (todasEnObjetivo && piezasJugador.length === 10) {
-          // ¡Este jugador ha ganado!
           const ganador = {
             ...jugadoresConfig[i],
             punta: punta
@@ -175,10 +193,18 @@ function Game() {
             totalJugadores: jugadoresConfig.length
           });
 
-          setShowVictory(true);
-          setIsPaused(true); // Pausar la partida
+          if (partida?.id_partida) {
+            const url = `http://localhost:8000/api/partidas/${partida.id_partida}/`;
+            fetch(url, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fecha_fin: new Date().toISOString(), estado: 'FINALIZADA' })
+            }).catch(err => console.error('Error marcando partida finalizada:', err));
+          }
 
-          // Pausar música
+          setShowVictory(true);
+          setIsPaused(true);
+
           if (isPlayingMusic && audioRef.current) {
             audioRef.current.pause();
           }
@@ -199,14 +225,12 @@ function Game() {
       fetchJugadoresPartida(partida.id_partida).then(dbJugadores => {
         setDbJugadores(dbJugadores);
         
-        // Obtener el último turno y establecer el jugador correspondiente
         fetchPrimerTurno(partida.id_partida).then(turno => {
           if (turno?.id_turno) {
             setActualTurn({ id_turno: turno.id_turno, numero: turno.numero, inicio: turno.inicio });
             const turnoJugadorId = turno.jugador_id || turno.jugador?.id_jugador || turno.jugador;
             console.log(`📍 Turno cargado: numero=${turno.numero}, jugador=${turnoJugadorId}`);
 
-            // Establecer el jugador actual basado en el turno
             if (turnoJugadorId && dbJugadores.length > 0) {
               const jugadorDelTurno = dbJugadores.find(j => j.id_jugador === turnoJugadorId);
               if (jugadorDelTurno) {
@@ -217,7 +241,6 @@ function Game() {
                 }
               }
             }
-            // Si no se encontró jugador por ID, no forzar al jugador 1; dejamos el índice como esté
           }
         });
       });
@@ -230,7 +253,6 @@ function Game() {
       setPartida(partidaData);
       setLoading(false);
       
-      // Actualizar las posiciones de las piezas a sus posiciones iniciales
       if (partidaData?.id_partida) {
         fetch(`http://localhost:8000/api/partidas/${partidaData.id_partida}/actualizar_posiciones_iniciales/`, {
           method: 'POST',
@@ -250,12 +272,40 @@ function Game() {
   }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (isPaused) return;
-    const timerId = setInterval(() => {
-      setElapsed((prev) => prev + 1);
-    }, 1000);
+    const loadPartida = async () => {
+      if (!partida?.id_partida) return;
+      try {
+        const res = await fetch(`http://localhost:8000/api/partidas/${partida.id_partida}/`);
+        if (!res.ok) return;
+        const data = await res.json();
+        setPartida((prev) => prev ? { ...prev, tiempo_sobrante: data.tiempo_sobrante } : prev);
+        setPausedAccumMs(Number(data.tiempo_sobrante || 0) * 1000);
+        setPauseStartedAt(null);
+      } catch (e) {
+        console.error('Error refrescando partida:', e);
+      }
+    };
+    loadPartida();
+  }, [partida?.id_partida]);
+
+  useEffect(() => {
+    const startDate = partida?.fecha_inicio ? new Date(partida.fecha_inicio) : null;
+    if (!startDate) return; 
+
+    const computeElapsed = () => {
+      const now = Date.now();
+      const pausedMs = pausedAccumMs + (pauseStartedAt ? now - pauseStartedAt : 0);
+      const diffSeconds = Math.max(0, Math.floor((now - startDate.getTime() - pausedMs) / 1000));
+      setElapsed(diffSeconds);
+    };
+
+    computeElapsed();
+
+    if (isPaused) return; 
+
+    const timerId = setInterval(computeElapsed, 1000);
     return () => clearInterval(timerId);
-  }, [isPaused]);
+  }, [isPaused, partida?.fecha_inicio, partida?.tiempo_sobrante, pausedAccumMs, pauseStartedAt]);
 
   useEffect(() => {
     return () => {

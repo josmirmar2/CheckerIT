@@ -31,6 +31,7 @@ class Partida(models.Model):
     id_partida = models.CharField(max_length=50, primary_key=True)
     fecha_inicio = models.DateTimeField(auto_now_add=True)
     fecha_fin = models.DateTimeField(null=True, blank=True)
+    tiempo_sobrante = models.IntegerField(default=0) 
     estado = models.CharField(max_length=20, choices=ESTADOS, default='EN_CURSO')
     numero_jugadores = models.IntegerField()
     jugadores = models.ManyToManyField(
