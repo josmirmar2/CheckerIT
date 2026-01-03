@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import './Game.css';
 import { MUSIC_LIST, getRandomMusicIndex } from './musicList';
 import Board from './Board';
+import Victory from './Victory';
 
 const PLAYER_COLORS = ['#FFFFFF', '#4444FF', '#44DD44', '#000000', '#FF4444', '#FFDD44'];
 
@@ -45,6 +46,8 @@ function Game() {
   const [dbJugadores, setDbJugadores] = useState([]);
   const [isPaused, setIsPaused] = useState(false);
   const [showEndConfirm, setShowEndConfirm] = useState(false);
+  const [showVictory, setShowVictory] = useState(false);
+  const [victoryData, setVictoryData] = useState(null);
 
   const jugadoresConfig = useMemo(() => location.state?.jugadoresConfig || [], [location.state]);
 
@@ -104,6 +107,83 @@ function Game() {
     } catch (error) {
       console.error('Error en handleEndGame:', error);
       navigate('/');
+    }
+  };
+
+  const checkVictory = async () => {
+    try {
+      // Obtener todas las piezas de la partida
+      const res = await fetch(`http://localhost:8000/api/piezas/?partida_id=${partida.id_partida}`);
+      const piezas = await res.json();
+
+      if (!Array.isArray(piezas)) return;
+
+      // Posiciones objetivo por punta (las de la punta contraria)
+      const posicionesObjetivo = {
+        0: ['3-13', '1-13', '0-14', '2-14', '1-15', '2-13', '0-13', '1-14', '0-15', '0-16'], // Punta 3
+        1: ['9-9', '9-11', '10-11', '10-12', '12-12', '9-10', '10-10', '11-11', '9-12', '11-12'], // Punta 5
+        2: ['0-9', '0-11', '1-11', '0-12', '2-12', '0-10', '1-10', '2-11', '1-12', '3-12'], // Punta 4
+        3: ['0-0', '1-1', '0-3', '1-3', '2-3', '0-1', '0-2', '1-2', '2-2', '3-3'], // Punta 0
+        4: ['12-4', '10-4', '11-5', '9-5', '9-6', '11-4', '9-4', '10-5', '10-6', '9-7'], // Punta 2
+        5: ['0-4', '2-4', '0-5', '2-5', '1-6', '1-4', '3-4', '1-5', '0-6', '0-7'] // Punta 1
+      };
+
+      const activePuntas = getActivePuntas(jugadoresConfig.length);
+
+      // Verificar cada jugador
+      for (let i = 0; i < jugadoresConfig.length; i++) {
+        const punta = activePuntas[i];
+        const posicionesObjetivoJugador = posicionesObjetivo[punta];
+
+        // Obtener todas las piezas de este jugador
+        const piezasJugador = piezas.filter(p => {
+          const tipoPartes = p.tipo.split('-');
+          return tipoPartes.length > 0 && parseInt(tipoPartes[0]) === punta;
+        });
+
+        // Verificar si todas las piezas del jugador están en la punta contraria
+        const todasEnObjetivo = piezasJugador.every(pieza => 
+          posicionesObjetivoJugador.includes(pieza.posicion)
+        );
+
+        if (todasEnObjetivo && piezasJugador.length === 10) {
+          // ¡Este jugador ha ganado!
+          const ganador = {
+            ...jugadoresConfig[i],
+            punta: punta
+          };
+
+          const perdedores = jugadoresConfig
+            .filter((_, idx) => idx !== i)
+            .map((j, idx) => ({
+              ...j,
+              punta: activePuntas[idx < i ? idx : idx + 1]
+            }));
+
+          setVictoryData({
+            ganador,
+            perdedores,
+            turnos: turnCount,
+            tiempo: elapsed,
+            totalJugadores: jugadoresConfig.length
+          });
+
+          setShowVictory(true);
+          setIsPaused(true); // Pausar la partida
+
+          // Pausar música
+          if (isPlayingMusic && audioRef.current) {
+            audioRef.current.pause();
+          }
+
+          return true;
+        }
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error verificando victoria:', error);
+      return false;
     }
   };
 
@@ -421,6 +501,13 @@ function Game() {
     if (moveHistory.length > 0) {
       await saveMoveToDatabase(moveHistory);
     }
+    
+    // Verificar victoria después de guardar los movimientos
+    const hasWinner = await checkVictory();
+    if (hasWinner) {
+      return; // Si hay ganador, detener el flujo
+    }
+
     await saveTurnToDatabase();
     setTurnCount((prev) => prev + 1);
     setMoveMade(false);
@@ -590,6 +677,17 @@ function Game() {
             </div>
           </div>
         </div>
+      )}
+
+      {showVictory && victoryData && (
+        <Victory
+          ganador={victoryData.ganador}
+          perdedores={victoryData.perdedores}
+          turnos={victoryData.turnos}
+          tiempo={victoryData.tiempo}
+          totalJugadores={victoryData.totalJugadores}
+          onVolverInicio={handleEndGame}
+        />
       )}
     </div>
   );
