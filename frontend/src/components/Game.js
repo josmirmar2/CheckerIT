@@ -49,6 +49,13 @@ function Game() {
   const [showVictory, setShowVictory] = useState(false);
   const [victoryData, setVictoryData] = useState(null);
 
+  // Sincronizar turnCount con actualTurn.numero
+  useEffect(() => {
+    if (actualTurn?.numero) {
+      setTurnCount(actualTurn.numero);
+    }
+  }, [actualTurn?.numero]);
+
   const jugadoresConfig = useMemo(() => location.state?.jugadoresConfig || [], [location.state]);
 
   const handlePause = () => {
@@ -190,27 +197,30 @@ function Game() {
   useEffect(() => {
     if (partida?.id_partida) {
       fetchJugadoresPartida(partida.id_partida).then(dbJugadores => {
-      setDbJugadores(dbJugadores);
-        if (dbJugadores.length > 0) {
-          const primerJugador = dbJugadores.find(j => j.numero === 1);
-          if (primerJugador) {
-            const idx = dbJugadores.findIndex(j => j.id_jugador === primerJugador.id_jugador);
-            if (idx >= 0) {
-              setCurrentPlayerIndex(idx);
-            }
-          }
-        }
-      });
-      
-      const embedded = Array.isArray(partida.turnos) ? partida.turnos : [];
-      const current = embedded.find(t => !t.fin) || embedded[0] || null;
-      if (current?.id_turno) {
-        setActualTurn({ id_turno: current.id_turno, numero: current.numero });
-      } else {
+        setDbJugadores(dbJugadores);
+        
+        // Obtener el último turno y establecer el jugador correspondiente
         fetchPrimerTurno(partida.id_partida).then(turno => {
-          if (turno?.id_turno) setActualTurn({ id_turno: turno.id_turno, numero: turno.numero });
+          if (turno?.id_turno) {
+            setActualTurn({ id_turno: turno.id_turno, numero: turno.numero, inicio: turno.inicio });
+            const turnoJugadorId = turno.jugador_id || turno.jugador?.id_jugador || turno.jugador;
+            console.log(`📍 Turno cargado: numero=${turno.numero}, jugador=${turnoJugadorId}`);
+
+            // Establecer el jugador actual basado en el turno
+            if (turnoJugadorId && dbJugadores.length > 0) {
+              const jugadorDelTurno = dbJugadores.find(j => j.id_jugador === turnoJugadorId);
+              if (jugadorDelTurno) {
+                const idx = dbJugadores.findIndex(j => j.id_jugador === jugadorDelTurno.id_jugador);
+                if (idx >= 0) {
+                  setCurrentPlayerIndex(idx);
+                  console.log(`👤 Jugador establecido al jugador ${jugadorDelTurno.numero}`);
+                }
+              }
+            }
+            // Si no se encontró jugador por ID, no forzar al jugador 1; dejamos el índice como esté
+          }
         });
-      }
+      });
     }
   }, [partida]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -339,8 +349,9 @@ function Game() {
     const data = await res.json();
     if (!Array.isArray(data) || data.length === 0) return null;
     const current = data.find(t => !t.fin);
-    const first = current || data.sort((a,b) => (a.numero||0) - (b.numero||0))[0];
-    return first || null;
+    if (current) return current;
+    const sorted = data.sort((a, b) => (b.numero || 0) - (a.numero || 0));
+    return sorted[0] || null;
   };
 
   const fetchJugadoresPartida = async (partidaId) => {
@@ -389,6 +400,11 @@ function Game() {
       const nextJugador = dbJugadores.find(j => j.numero === nextNumero);
       const nextJugadorId = nextJugador?.id_jugador || dbJugadores[0]?.id_jugador;
       
+      // Incrementar turno solo cuando vuelve al jugador 1
+      const shouldIncrementTurn = nextNumero === 1;
+      
+      console.log(`🔄 saveTurnToDatabase: Jugador actual ${currentJugadorNumero}, Siguiente ${nextNumero}, Incrementar: ${shouldIncrementTurn}, TurnoActual: ${actualTurn?.numero}`);
+      
       const oldTurn = {
         numero: actualTurn?.numero || 0,
         inicio: actualTurn?.inicio,
@@ -397,11 +413,14 @@ function Game() {
         partida_id: partida.id_partida,
       };
       const newTurnCreated = {
-        numero: (actualTurn?.numero || 0) + 1,
+        numero: shouldIncrementTurn ? (actualTurn?.numero || 0) + 1 : actualTurn?.numero || 0,
         inicio: new Date().toISOString(),
         jugador_id: nextJugadorId,
         partida_id: partida.id_partida,
       };
+      
+      console.log(`📊 Nuevo turno a crear: numero=${newTurnCreated.numero}`);
+      
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -413,6 +432,7 @@ function Game() {
       }
       const data = await res.json();
       const nuevoTurno = data?.nuevo_turno || data;
+      console.log(`✅ Turno actualizado en servidor: numero=${nuevoTurno?.numero}`);
       if (nuevoTurno?.id_turno) {
         setActualTurn({ id_turno: nuevoTurno.id_turno, numero: nuevoTurno.numero, inicio: nuevoTurno.inicio });
         const nextPlayerIdx = dbJugadores.findIndex(j => j.numero === nextNumero);
@@ -518,14 +538,12 @@ function Game() {
       await saveMoveToDatabase(moveHistory);
     }
     
-    // Verificar victoria después de guardar los movimientos
     const hasWinner = await checkVictory();
     if (hasWinner) {
-      return; // Si hay ganador, detener el flujo
+      return; 
     }
 
     await saveTurnToDatabase();
-    setTurnCount((prev) => prev + 1);
     setMoveMade(false);
     setLockedPiecePos(null);
     setOriginalPiecePos(null);
@@ -536,7 +554,6 @@ function Game() {
 
   const passTurn = async () => {
     await saveTurnToDatabase();
-    setTurnCount((prev) => prev + 1);
     setMoveMade(false);
     setLockedPiecePos(null);
     setOriginalPiecePos(null);
