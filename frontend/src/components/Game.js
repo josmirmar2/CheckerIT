@@ -259,17 +259,29 @@ function Game() {
       setLoading(false);
       
       if (partidaData?.id_partida) {
-        fetch(`http://localhost:8000/api/partidas/${partidaData.id_partida}/actualizar_posiciones_iniciales/`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' }
-        })
-        .then(res => res.json())
-        .then(data => {
-          console.log('Posiciones iniciales actualizadas:', data);
-        })
-        .catch(error => {
-          console.error('Error actualizando posiciones iniciales:', error);
-        });
+        // Verificar si la partida ya tiene turnos; si no, inicializar posiciones
+        fetch(`http://localhost:8000/api/turnos/?partida_id=${partidaData.id_partida}`)
+          .then(res => res.json())
+          .then(turnos => {
+            const esPrimeraVez = !Array.isArray(turnos) || turnos.length === 0;
+            
+            if (esPrimeraVez) {
+              // Solo actualizar posiciones iniciales si es la primera vez
+              return fetch(`http://localhost:8000/api/partidas/${partidaData.id_partida}/actualizar_posiciones_iniciales/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+              })
+              .then(res => res.json())
+              .then(data => {
+                console.log('Posiciones iniciales actualizadas:', data);
+              });
+            } else {
+              console.log('Partida ya tiene turnos, no se resetean posiciones');
+            }
+          })
+          .catch(error => {
+            console.error('Error verificando turnos:', error);
+          });
       }
     } else {
       handleGoBack();
@@ -665,6 +677,20 @@ function Game() {
 
     finishTurn();
   }, [aiAutoFinishToken, moveMade]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!isAITurn) return;
+    if (!moveMade) return;
+    if (!moveHistory || moveHistory.length === 0) return;
+
+    const autoAdvance = async () => {
+      console.log('🤖 Auto-avanzando turno de IA...');
+      await continueTurn();
+    };
+
+    const timer = setTimeout(autoAdvance, 500);
+    return () => clearTimeout(timer);
+  }, [isAITurn, moveMade, moveHistory]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!isAITurn) return;

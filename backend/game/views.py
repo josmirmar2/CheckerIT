@@ -294,8 +294,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
         occupied_positions = get_occupied_positions(partida.id_partida)
 
         created = []
-        ultima_pieza = None
-        ultimo_destino = None
+        piece_positions = {}  # Mapeo pieza_id -> último destino
 
         for idx, m in enumerate(movimientos_data, start=1):
             try:
@@ -339,8 +338,8 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 )
                 created.append(mov)
                 
-                ultima_pieza = pieza
-                ultimo_destino = destino
+                # Guardar el último destino de esta pieza (en caso de movimientos encadenados)
+                piece_positions[pieza_id] = (pieza, destino)
                 
             except Jugador.DoesNotExist:
                 return Response({ 'error': f'Jugador no encontrado: {jugador_id}' }, status=status.HTTP_400_BAD_REQUEST)
@@ -351,9 +350,10 @@ class PartidaViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 return Response({ 'error': str(e) }, status=status.HTTP_400_BAD_REQUEST)
 
-        if ultima_pieza and ultimo_destino:
-            ultima_pieza.posicion = ultimo_destino
-            ultima_pieza.save()
+        # Guardar posiciones finales de TODAS las piezas movidas
+        for pieza, destino in piece_positions.values():
+            pieza.posicion = destino
+            pieza.save()
 
         serializer = MovimientoSerializer(created, many=True)
         return Response({ 'registrados': serializer.data }, status=status.HTTP_201_CREATED)

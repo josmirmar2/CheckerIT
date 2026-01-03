@@ -79,6 +79,20 @@ def _hex_distance(a: Tuple[int, int], b: Tuple[int, int]) -> int:
     return max(abs(dq), abs(dr), abs(ds))
 
 
+def _distance_to_goal(pos_key: Optional[str], target_punta: int) -> Optional[int]:
+    if not pos_key:
+        return None
+    axial = _axial_from_key(pos_key)
+    if not axial:
+        return None
+    goals = GOAL_POSITIONS.get(target_punta, [])
+    goal_coords = [_axial_from_key(g) for g in goals]
+    goal_coords = [c for c in goal_coords if c]
+    if not goal_coords:
+        return None
+    return min(_hex_distance(axial, g) for g in goal_coords)
+
+
 def _parse_punta(tipo: str) -> Optional[int]:
     try:
         return int(str(tipo).split('-')[0])
@@ -139,15 +153,39 @@ class MaxHeuristicAgent:
                     piezas=piezas,
                     target_punta=target,
                 )
+                delta = score - base_score
+                is_jump = destino not in self._compute_simple_moves(pieza.posicion, occupied)
+                detail["delta"] = delta
+                detail["salto"] = is_jump
                 # Solo aceptar movimientos que mejoren la heuristica; si ninguno mejora, aceptar el "menos malo" para evitar bloqueo
                 if score <= base_score and best is not None and best.score > base_score:
                     continue
-                if best is None or score > best.score:
+                if best is None:
                     best = MoveCandidate(
                         pieza_id=pieza.id_pieza,
                         origen=pieza.posicion,
                         destino=destino,
-                        score=score,
+                        score=score + (0.1 if is_jump else 0.0),
+                        detail=detail,
+                    )
+                    continue
+
+                # Preferir: (1) mejor score, (2) salto, (3) mayor delta de mejora
+                current_score = score + (0.1 if is_jump else 0.0)
+                best_is_jump = best.detail.get("salto", False)
+                best_score = best.score
+                best_delta = best.detail.get("delta", 0.0)
+
+                if (
+                    current_score > best_score
+                    or (current_score == best_score and is_jump and not best_is_jump)
+                    or (current_score == best_score and is_jump == best_is_jump and delta > best_delta)
+                ):
+                    best = MoveCandidate(
+                        pieza_id=pieza.id_pieza,
+                        origen=pieza.posicion,
+                        destino=destino,
+                        score=current_score,
                         detail=detail,
                     )
 
@@ -179,7 +217,27 @@ class MaxHeuristicAgent:
             piezas_actualizadas.append((p.id_pieza, str(p.jugador_id), p.tipo, pos))
 
         score = self._evaluate_state(piezas_actualizadas, jugador_id, target_punta)
-        detail = {"dist_total": -score}
+
+        # Bonus/penalización por progreso individual de la pieza movida
+        # Avanzar recibe bono moderado; retroceder recibe fuerte penalización
+        dist_before = _distance_to_goal(origen, target_punta)
+        dist_after = _distance_to_goal(destino, target_punta)
+        piece_progress = 0.0
+        if dist_before is not None and dist_after is not None:
+            piece_progress = float(dist_before - dist_after)
+            if piece_progress >= 0:
+                # Bonus por avanzar
+                score += 0.3 * piece_progress
+            else:
+                # Fuerte penalización por retroceder
+                score += 0.8 * piece_progress
+
+        detail = {
+            "dist_total": -(score - 0.2 * piece_progress),
+            "dist_before": dist_before,
+            "dist_after": dist_after,
+            "progreso_pieza": piece_progress,
+        }
         return score, detail
 
     def _evaluate_state(
@@ -195,6 +253,7 @@ class MaxHeuristicAgent:
             return float("-inf")
 
         total_distance = 0
+        min_distance = None
         piezas_count = 0
 
         for _, jug_id, tipo, pos in piezas:
@@ -210,13 +269,17 @@ class MaxHeuristicAgent:
                 continue
             min_dist = min(_hex_distance(axial, goal) for goal in goal_coords)
             total_distance += min_dist
+            if min_distance is None or min_dist < min_distance:
+                min_distance = min_dist
             piezas_count += 1
 
         if piezas_count == 0:
             return float("-inf")
 
-        # Heuristica Max: minimizar distancia, por eso se devuelve negativo para maximizar
-        return -float(total_distance)
+        # Heuristica Max: minimizar distancia total y también premiar tener una pieza muy adelantada
+        # score = -(dist_total) - 0.5*(dist_min)
+        min_distance = min_distance if min_distance is not None else 0
+        return -float(total_distance) - 0.5 * float(min_distance)
 
     def _get_valid_moves(
         self,

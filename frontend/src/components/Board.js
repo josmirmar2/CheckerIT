@@ -62,11 +62,30 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
         const res = await fetch(`http://localhost:8000/api/piezas/?partida_id=${partidaId}`);
         const data = await res.json();
         const map = new Map();
-        (Array.isArray(data) ? data : []).forEach(p => {
+        const piezasArray = Array.isArray(data) ? data : [];
+
+        // Construir estado del tablero desde BD
+        const baseLayout = generarTablero();
+        const tableroVacio = baseLayout.map(fila => fila.map(() => null));
+
+        piezasArray.forEach(p => {
           if (p.partida !== partidaId) return;
           if (!p.posicion) return;
           map.set(p.posicion, p.id_pieza);
+
+          const [colStr, filaStr] = String(p.posicion).split('-');
+          const col = Number(colStr);
+          const fila = Number(filaStr);
+          if (Number.isNaN(col) || Number.isNaN(fila)) return;
+          if (!tableroVacio[fila] || tableroVacio[fila][col] === undefined) return;
+
+          const punta = parseInt(String(p.tipo).split('-')[0], 10);
+          if (!Number.isNaN(punta)) {
+            tableroVacio[fila][col] = punta;
+          }
         });
+
+        setBoardPieces(tableroVacio);
         setPieceMapLocal(map);
         setPositionsList(Array.from(map.keys()));
       } catch (e) {
