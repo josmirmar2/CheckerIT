@@ -14,6 +14,12 @@ W_NOJUMP_PENALTY = 0.2       # Penalización por mover simple cuando existen sal
 W_CHAIN_LEN_BONUS = 0.15     # Bono extra por cada salto en cadena
 W_REVERSE_PENALTY = 2.0      # Penaliza deshacer la última jugada (A->B seguido de B->A)
 W_SAME_PIECE_PENALTY = 0.2   # Penaliza repetir con la misma pieza en turnos consecutivos
+W_FAR_DESTINATION = 0.5      # Penaliza terminar lejos de la punta objetivo
+W_HOME_PENALTY = 0.6         # Penaliza piezas estacionadas en su punta inicial
+W_GOAL_MOVE_PENALTY = 1.2    # Penaliza mover piezas ya asentadas en la punta destino
+W_WIN_MOVE_BONUS = 200.0     # Prioriza el movimiento que completa la victoria
+W_GOAL_LANDING_PENALTY = 40.0  # Desincentiva ocupar la punta destino antes de cerrar la partida
+W_LONE_PIECE_BONUS = 50.0      # Incentiva mover la única pieza fuera de la punta destino
 
 CARTESIAN_COORD_ROWS: List[List[Dict[str, int]]] = [
     [{"q": 0, "r": 0}],
@@ -53,12 +59,12 @@ AXIAL_DIRECTIONS: List[Dict[str, int]] = [
 ]
 
 GOAL_POSITIONS: Dict[int, List[str]] = {
-    0: ['3-13', '1-13', '0-14', '2-14', '1-15', '2-13', '0-13', '1-14', '0-15', '0-16'],  # punta 3
-    1: ['9-9', '9-11', '10-11', '10-12', '12-12', '9-10', '10-10', '11-11', '9-12', '11-12'],  # punta 5
-    2: ['0-9', '0-11', '1-11', '0-12', '2-12', '0-10', '1-10', '2-11', '1-12', '3-12'],  # punta 4
-    3: ['0-0', '1-1', '0-3', '1-3', '2-3', '0-1', '0-2', '1-2', '2-2', '3-3'],  # punta 0
-    4: ['12-4', '10-4', '11-5', '9-5', '9-6', '11-4', '9-4', '10-5', '10-6', '9-7'],  # punta 2
-    5: ['0-4', '2-4', '0-5', '2-5', '1-6', '1-4', '3-4', '1-5', '0-6', '0-7'],  # punta 1
+    0: ['0-0', '1-1', '0-3', '1-3', '2-3', '0-1', '0-2', '1-2', '2-2', '3-3'],
+    1: ['0-4', '2-4', '0-5', '2-5', '1-6', '1-4', '3-4', '1-5', '0-6', '0-7'],
+    2: ['12-4', '10-4', '11-5', '9-5', '9-6', '11-4', '9-4', '10-5', '10-6', '9-7'],
+    3: ['3-13', '1-13', '0-14', '2-14', '1-15', '2-13', '0-13', '1-14', '0-15', '0-16'],
+    4: ['0-9', '0-11', '1-11', '0-12', '2-12', '0-10', '1-10', '2-11', '1-12', '3-12'],
+    5: ['9-9', '9-11', '10-11', '10-12', '12-12', '9-10', '10-10', '11-11', '9-12', '11-12'],
 }
 
 TARGET_MAP = {0: 3, 3: 0, 1: 5, 5: 1, 2: 4, 4: 2}
@@ -179,7 +185,7 @@ class MaxHeuristicAgent:
         )
 
         # 4) Puntuar el estado actual como referencia (base_score)
-        base_score, _, _, _ = self._evaluate_state(
+        base_score, _, _, _, _ = self._evaluate_state(
             ((p.id_pieza, str(p.jugador_id), p.tipo, p.posicion) for p in piezas),
             jugador_id,
             target,
@@ -316,6 +322,17 @@ class MaxHeuristicAgent:
         target_punta: int,
     ) -> Tuple[float, Dict[str, float]]:
         """Evalúa el estado tras mover una pieza"""
+        goal_positions: Set[str] = set()
+        if target_punta is not None:
+            goal_positions = set(GOAL_POSITIONS.get(target_punta, []))
+
+        player_positions_before = [
+            p.posicion for p in piezas if str(p.jugador_id) == str(jugador_id) and p.posicion
+        ]
+        outside_before = [pos for pos in player_positions_before if pos not in goal_positions]
+        lone_piece_bonus = 0.0
+        lone_piece_candidate = len(outside_before) == 1 and origen in outside_before
+
         # 1) Construir estado hipotético actualizado
         piezas_actualizadas: List[Tuple[str, str, str, str]] = []  # (pieza_id, jugador_id, tipo, posicion)
         for p in piezas:
@@ -323,7 +340,7 @@ class MaxHeuristicAgent:
             piezas_actualizadas.append((p.id_pieza, str(p.jugador_id), p.tipo, pos))
 
         # 2) Evaluar el estado resultante (distancias y bloqueos)
-        score, dist_total, min_distance, blocked = self._evaluate_state(
+        score, dist_total, min_distance, blocked, home_in_home = self._evaluate_state(
             piezas_actualizadas,
             jugador_id,
             target_punta,
@@ -334,20 +351,56 @@ class MaxHeuristicAgent:
         dist_before = _distance_to_goal(origen, target_punta)
         dist_after = _distance_to_goal(destino, target_punta)
         piece_progress = 0.0
+        far_penalty = 0.0
+        goal_move_penalty = 0.0
+        win_bonus = 0.0
+        goal_landing_penalty = 0.0
         if dist_before is not None and dist_after is not None:
             piece_progress = float(dist_before - dist_after)
             if piece_progress >= 0:
                 score += W_PROGRESS_ADV * piece_progress
             else:
                 score += W_PROGRESS_BACK * piece_progress
+        if dist_after is not None:
+            far_penalty = W_FAR_DESTINATION * float(dist_after)
+            score -= far_penalty
+
+        # Penalizar mover piezas que ya están dentro de la punta objetivo
+        if goal_positions and origen in goal_positions:
+            goal_move_penalty = W_GOAL_MOVE_PENALTY
+            score -= goal_move_penalty
+
+        player_positions_after = [
+            pos for (_pid, _jug_id, _tipo, pos) in piezas_actualizadas
+            if str(_jug_id) == str(jugador_id)
+        ]
+        outside_after = [pos for pos in player_positions_after if pos and pos not in goal_positions]
+
+        if goal_positions and player_positions_after:
+            if not outside_after:
+                win_bonus = W_WIN_MOVE_BONUS
+                score += win_bonus
+            elif destino in goal_positions:
+                goal_landing_penalty = W_GOAL_LANDING_PENALTY
+                score -= goal_landing_penalty
+
+        if lone_piece_candidate:
+            lone_piece_bonus = W_LONE_PIECE_BONUS
+            score += lone_piece_bonus
 
         detail = {
             "dist_total": dist_total,
             "dist_min": min_distance,
             "blocked": blocked,
+            "en_punta_inicial": home_in_home,
             "dist_before": dist_before,
             "dist_after": dist_after,
             "progreso_pieza": piece_progress,
+            "penalizacion_lejania": far_penalty,
+            "penalizacion_meta": goal_move_penalty,
+            "penalizacion_aterrizaje_meta": goal_landing_penalty,
+            "bonus_victoria": win_bonus,
+            "bonus_pieza_sola": lone_piece_bonus,
         }
         return score, detail
 
@@ -365,11 +418,12 @@ class MaxHeuristicAgent:
         goal_coords = [_axial_from_key(pos) for pos in goal_positions]
         goal_coords = [c for c in goal_coords if c is not None]
         if not goal_coords:
-            return float("-inf") if not return_detail else (float("-inf"), float("inf"), float("inf"), 0)
+            return float("-inf") if not return_detail else (float("-inf"), float("inf"), float("inf"), 0, 0)
 
         total_distance = 0.0
         min_distance = None
         piezas_count = 0
+        home_in_home = 0
 
         piezas_list = list(piezas)
         occupied = {pos for (_, jug_id, _tipo, pos) in piezas_list if pos}
@@ -394,13 +448,18 @@ class MaxHeuristicAgent:
                 min_distance = min_dist
             piezas_count += 1
 
+            # Penalización por seguir dentro de la punta inicial
+            home_positions = GOAL_POSITIONS.get(punta, [])
+            if pos in home_positions:
+                home_in_home += 1
+
             # Bloqueos: piezas sin movimientos legales (permitimos simples y saltos)
             moves = self._get_valid_moves(pos, occupied, allow_simple=True)
             if len(moves) == 0:
                 blocked += 1
 
         if piezas_count == 0:
-            return float("-inf") if not return_detail else (float("-inf"), float("inf"), float("inf"), blocked)
+            return float("-inf") if not return_detail else (float("-inf"), float("inf"), float("inf"), blocked, home_in_home)
 
         min_distance = float(min_distance if min_distance is not None else 0)
 
@@ -409,9 +468,10 @@ class MaxHeuristicAgent:
         score -= W_TOTAL_DIST * float(total_distance)
         score -= W_FRONT_DIST * min_distance
         score -= W_BLOCKED * float(blocked)
+        score -= W_HOME_PENALTY * float(home_in_home)
 
         if return_detail:
-            return score, total_distance, min_distance, blocked
+            return score, total_distance, min_distance, blocked, home_in_home
         return score
 
     def _get_valid_moves(

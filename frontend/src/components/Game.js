@@ -58,8 +58,8 @@ function Game() {
   const [aiSeqIndex, setAiSeqIndex] = useState(0);
   const aiSeqTokenRef = useRef(null);
 
-  const AI_FIRST_DELAY_MS = 500;
-  const AI_CHAIN_DELAY_MS = 500;
+  const AI_FIRST_DELAY_MS = 100;
+  const AI_CHAIN_DELAY_MS = 100;
 
   useEffect(() => {
     if (actualTurn?.numero) {
