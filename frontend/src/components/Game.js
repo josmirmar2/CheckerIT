@@ -54,6 +54,12 @@ function Game() {
   const [aiThinking, setAiThinking] = useState(false);
   const [aiAutoFinishToken, setAiAutoFinishToken] = useState(null);
   const [aiError, setAiError] = useState(null);
+  const [aiSequence, setAiSequence] = useState(null); // [{fromKey,toKey,piezaId?}, ...]
+  const [aiSeqIndex, setAiSeqIndex] = useState(0);
+  const aiSeqTokenRef = useRef(null);
+
+  const AI_FIRST_DELAY_MS = 500;
+  const AI_CHAIN_DELAY_MS = 500;
 
   useEffect(() => {
     if (actualTurn?.numero) {
@@ -151,44 +157,46 @@ function Game() {
       const res = await fetch(`http://localhost:8000/api/piezas/?partida_id=${partida.id_partida}`);
       const piezas = await res.json();
 
-      if (!Array.isArray(piezas)) return;
+      if (!Array.isArray(piezas)) return false;
 
+      // Para cada punta de inicio, definimos las casillas objetivo en la punta opuesta
       const posicionesObjetivo = {
-        0: ['3-13', '1-13', '0-14', '2-14', '1-15', '2-13', '0-13', '1-14', '0-15', '0-16'], // Punta 3
-        1: ['9-9', '9-11', '10-11', '10-12', '12-12', '9-10', '10-10', '11-11', '9-12', '11-12'], // Punta 5
-        2: ['0-9', '0-11', '1-11', '0-12', '2-12', '0-10', '1-10', '2-11', '1-12', '3-12'], // Punta 4
-        3: ['0-0', '1-1', '0-3', '1-3', '2-3', '0-1', '0-2', '1-2', '2-2', '3-3'], // Punta 0
-        4: ['12-4', '10-4', '11-5', '9-5', '9-6', '11-4', '9-4', '10-5', '10-6', '9-7'], // Punta 2
-        5: ['0-4', '2-4', '0-5', '2-5', '1-6', '1-4', '3-4', '1-5', '0-6', '0-7'] // Punta 1
+        0: ['3-13', '1-13', '0-14', '2-14', '1-15', '2-13', '0-13', '1-14', '0-15', '0-16'], // Objetivo para quien empieza en punta 0 (opuesto: 3)
+        1: ['9-9', '9-11', '10-11', '10-12', '12-12', '9-10', '10-10', '11-11', '9-12', '11-12'], // Objetivo para punta 1 (opuesto: 5)
+        2: ['0-9', '0-11', '1-11', '0-12', '2-12', '0-10', '1-10', '2-11', '1-12', '3-12'], // Objetivo para punta 2 (opuesto: 4)
+        3: ['0-0', '1-1', '0-3', '1-3', '2-3', '0-1', '0-2', '1-2', '2-2', '3-3'],       // Objetivo para punta 3 (opuesto: 0)
+        4: ['12-4', '10-4', '11-5', '9-5', '9-6', '11-4', '9-4', '10-5', '10-6', '9-7'],  // Objetivo para punta 4 (opuesto: 2)
+        5: ['0-4', '2-4', '0-5', '2-5', '1-6', '1-4', '3-4', '1-5', '0-6', '0-7']        // Objetivo para punta 5 (opuesto: 1)
       };
 
       const activePuntas = getActivePuntas(jugadoresConfig.length);
 
       for (let i = 0; i < jugadoresConfig.length; i++) {
-        const punta = activePuntas[i];
-        const posicionesObjetivoJugador = posicionesObjetivo[punta];
+        const puntaInicio = activePuntas[i];
+        const posicionesObjetivoJugador = posicionesObjetivo[puntaInicio] || [];
+        const jugadorId = dbJugadores[i]?.id_jugador;
 
-        const piezasJugador = piezas.filter(p => {
-          const tipoPartes = p.tipo.split('-');
-          return tipoPartes.length > 0 && parseInt(tipoPartes[0]) === punta;
-        });
+        // Seleccionamos las piezas del jugador por id de jugador
+        const piezasJugador = Array.isArray(piezas)
+          ? piezas.filter((p) => (jugadorId ? p.jugador === jugadorId : false))
+          : [];
 
-        const todasEnObjetivo = piezasJugador.every(pieza => 
+        if (piezasJugador.length === 0) continue;
+
+        const todasEnObjetivo = piezasJugador.every((pieza) =>
           posicionesObjetivoJugador.includes(pieza.posicion)
         );
 
-        if (todasEnObjetivo && piezasJugador.length === 10) {
+        if (todasEnObjetivo) {
           const ganador = {
             ...jugadoresConfig[i],
-            punta: punta
+            punta: puntaInicio
           };
 
           const perdedores = jugadoresConfig
-            .filter((_, idx) => idx !== i)
-            .map((j, idx) => ({
-              ...j,
-              punta: activePuntas[idx < i ? idx : idx + 1]
-            }));
+            .map((j, idx) => ({ jugador: j, idx }))
+            .filter(({ idx }) => idx !== i)
+            .map(({ jugador, idx }) => ({ ...jugador, punta: activePuntas[idx] }));
 
           setVictoryData({
             ganador,
@@ -204,7 +212,7 @@ function Game() {
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ fecha_fin: new Date().toISOString(), estado: 'FINALIZADA' })
-            }).catch(err => console.error('Error marcando partida finalizada:', err));
+            }).catch((err) => console.error('Error marcando partida finalizada:', err));
           }
 
           setShowVictory(true);
@@ -480,13 +488,39 @@ function Game() {
       }
 
       const token = Date.now();
-      setAiMoveCmd({ token, fromKey: data.origen, toKey: data.destino, piezaId: data.pieza_id || data.pieza });
-      setAiAutoFinishToken(token);
+      // Si viene una secuencia (saltos encadenados), la reproducimos paso a paso
+      if (Array.isArray(data.secuencia) && data.secuencia.length > 0) {
+        const seq = data.secuencia
+          .filter((m) => m?.origen && m?.destino)
+          .map((m) => ({ fromKey: m.origen, toKey: m.destino, piezaId: data.pieza_id || data.pieza }));
+
+        if (seq.length === 0) {
+          throw new Error('Respuesta de IA con secuencia vacía');
+        }
+
+        aiSeqTokenRef.current = token;
+        setAiSequence(seq);
+        setAiSeqIndex(0);
+        setAiMoveCmd(null);
+        setAiAutoFinishToken(null);
+      } else {
+        // Movimiento único
+        setAiSequence(null);
+        setAiSeqIndex(0);
+        setAiAutoFinishToken(null);
+        // No ejecutar instantáneo: esperar un poco
+        setTimeout(() => {
+          setAiMoveCmd({ token, fromKey: data.origen, toKey: data.destino, piezaId: data.pieza_id || data.pieza });
+        }, AI_FIRST_DELAY_MS);
+      }
     } catch (error) {
       console.error('Error al solicitar jugada IA:', error);
       setAiError(error.message || 'Fallo al calcular jugada de IA');
       setAiMoveCmd(null);
       setAiAutoFinishToken(null);
+      setAiSequence(null);
+      setAiSeqIndex(0);
+      aiSeqTokenRef.current = null;
     } finally {
       setAiThinking(false);
     }
@@ -494,13 +528,15 @@ function Game() {
 
   useEffect(() => {
     if (!isAITurn) return;
-    if (showVictory || moveMade || aiThinking) return;
+    if (showVictory || aiThinking) return;
     if (!partida?.id_partida) return;
     if (!dbJugadores[currentPlayerIndex]?.id_jugador) return;
     if (aiMoveCmd) return;
+    if (aiSequence) return; // ya tenemos secuencia pendiente
+    if (moveMade) return; // ya se movió este turno
 
     requestAiMove();
-  }, [isAITurn, showVictory, moveMade, aiThinking, partida?.id_partida, currentPlayerIndex, dbJugadores, aiMoveCmd]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAITurn, showVictory, moveMade, aiThinking, partida?.id_partida, currentPlayerIndex, dbJugadores, aiMoveCmd, aiSequence]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveTurnToDatabase = async () => {
     try {
@@ -629,6 +665,11 @@ function Game() {
       occupant: move.occupant,
       pieza_id: piezaId,
     }]);
+
+    // Si la IA está ejecutando una secuencia, avanzar al siguiente paso
+    if (isAITurn && aiSequence && aiSeqTokenRef.current) {
+      setAiSeqIndex((idx) => idx + 1);
+    }
   };
 
   const undoMove = () => {
@@ -665,23 +706,35 @@ function Game() {
     setTurnStartPieceByPos(null);
     setAiMoveCmd(null);
     setAiAutoFinishToken(null);
+    setAiSequence(null);
+    setAiSeqIndex(0);
+    aiSeqTokenRef.current = null;
   };
 
+  // Ejecutar secuencias de IA paso a paso con retardo
   useEffect(() => {
-    if (!aiAutoFinishToken) return;
-    if (!moveMade) return;
+    if (!isAITurn) return;
+    if (!aiSequence || !aiSeqTokenRef.current) return;
+    if (aiThinking) return;
+    if (aiSeqIndex >= aiSequence.length) return;
 
-    const finishTurn = async () => {
-      await continueTurn();
-    };
+    const step = aiSequence[aiSeqIndex];
+    const delay = aiSeqIndex === 0 ? AI_FIRST_DELAY_MS : AI_CHAIN_DELAY_MS;
 
-    finishTurn();
-  }, [aiAutoFinishToken, moveMade]); // eslint-disable-line react-hooks/exhaustive-deps
+    const timer = setTimeout(() => {
+      setAiMoveCmd({ token: Date.now(), ...step });
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [isAITurn, aiSequence, aiSeqIndex, aiThinking]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!isAITurn) return;
     if (!moveMade) return;
     if (!moveHistory || moveHistory.length === 0) return;
+
+    // Si hay una secuencia IA en curso, no cerrar turno aún
+    if (aiSequence && aiSeqIndex < (aiSequence?.length || 0)) return;
 
     const autoAdvance = async () => {
       console.log('🤖 Auto-avanzando turno de IA...');
@@ -690,16 +743,7 @@ function Game() {
 
     const timer = setTimeout(autoAdvance, 500);
     return () => clearTimeout(timer);
-  }, [isAITurn, moveMade, moveHistory]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!isAITurn) return;
-    if (aiThinking) return;
-    if (moveMade) return;
-    if (aiMoveCmd) return;
-    if (!partida?.id_partida) return;
-    requestAiMove();
-  }, [isAITurn, aiThinking, moveMade, aiMoveCmd, partida?.id_partida, currentPlayerIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAITurn, moveMade, moveHistory, aiSequence, aiSeqIndex]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const passTurn = async () => {
     await saveTurnToDatabase();
@@ -711,6 +755,9 @@ function Game() {
     setTurnStartPieceByPos(null);
     setAiMoveCmd(null);
     setAiAutoFinishToken(null);
+    setAiSequence(null);
+    setAiSeqIndex(0);
+    aiSeqTokenRef.current = null;
   };
 
   const getIconSrc = (iconName) => {
