@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from functools import lru_cache
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from ..models import Movimiento, Pieza
@@ -14,12 +15,18 @@ W_NOJUMP_PENALTY = 0.2       # Penalización por mover simple cuando existen sal
 W_CHAIN_LEN_BONUS = 0.15     # Bono extra por cada salto en cadena
 W_REVERSE_PENALTY = 2.0      # Penaliza deshacer la última jugada (A->B seguido de B->A)
 W_SAME_PIECE_PENALTY = 0.2   # Penaliza repetir con la misma pieza en turnos consecutivos
-W_FAR_DESTINATION = 0.5      # Penaliza terminar lejos de la punta objetivo
-W_HOME_PENALTY = 0.6         # Penaliza piezas estacionadas en su punta inicial
-W_GOAL_MOVE_PENALTY = 1.2    # Penaliza mover piezas ya asentadas en la punta destino
-W_WIN_MOVE_BONUS = 200.0     # Prioriza el movimiento que completa la victoria
-W_GOAL_LANDING_PENALTY = 40.0  # Desincentiva ocupar la punta destino antes de cerrar la partida
-W_LONE_PIECE_BONUS = 50.0      # Incentiva mover la única pieza fuera de la punta destino
+W_FAR_DESTINATION = 0.5       # Penaliza terminar lejos de la punta objetivo
+W_HOME_PENALTY = 0.6          # Penaliza piezas estacionadas en su punta inicial
+W_GOAL_MOVE_PENALTY = 3.0     # Penaliza mover piezas asentadas en la punta destino
+W_GOAL_RELOC_PENALTY = 12.0   # Penalización extra si aún quedan varias piezas fuera
+W_GOAL_STAY_PENALTY = 8.0     # Penaliza moverse dentro de la punta destino con piezas pendientes
+W_GOAL_ENTRY_BONUS = 20.0     # Bono por entrar en la punta destino mientras quedan piezas fuera
+W_GOAL_REARRANGE_BONUS = 5.0  # Bono por reacomodar piezas dentro de la punta cuando no hay progreso externo
+W_GOAL_DEPTH_BONUS = 6.0      # Bono por colocar la pieza más profunda en la punta destino
+W_LONE_PIECE_BONUS = 80.0     # Incentiva mover la última pieza pendiente hacia la punta destino
+W_OUTSIDE_MOVE_BONUS = 2.5    # Favorece mover piezas que todavía no están en destino
+W_GOAL_CHAIN_BONUS = 6.0      # Bono adicional si el movimiento en cadena entra en la punta destino
+W_WIN_MOVE_BONUS = 200.0      # Prioriza el movimiento que completa la victoria
 
 CARTESIAN_COORD_ROWS: List[List[Dict[str, int]]] = [
     [{"q": 0, "r": 0}],
@@ -116,6 +123,50 @@ def _distance_to_goal(pos_key: Optional[str], target_punta: int) -> Optional[int
     return min(_hex_distance(axial, g) for g in goal_coords)
 
 
+@lru_cache(maxsize=None)
+def _goal_depth_map(target_punta: int) -> Dict[str, float]:
+    # Calcula pesos normalizados (0..1) que representan qué tan profunda es cada casilla del objetivo
+    positions = GOAL_POSITIONS.get(target_punta, [])
+    coords: List[Tuple[str, Tuple[int, int]]] = []
+    for pos in positions:
+        axial = _axial_from_key(pos)
+        if axial:
+            coords.append((pos, axial))
+    if not coords:
+        return {}
+
+    avg_q = sum(coord[0] for _, coord in coords) / float(len(coords))
+    avg_r = sum(coord[1] for _, coord in coords) / float(len(coords))
+    dots: Dict[str, float] = {}
+    for pos, (q, r) in coords:
+        dots[pos] = q * avg_q + r * avg_r
+
+    min_dot = min(dots.values())
+    max_dot = max(dots.values())
+    avg_dot = sum(dots.values()) / float(len(dots))
+    use_max = (max_dot - avg_dot) >= (avg_dot - min_dot)
+    span = max_dot - min_dot
+    if abs(span) < 1e-6:
+        return {pos: 0.0 for pos in positions}
+
+    depth: Dict[str, float] = {}
+    for pos, dot in dots.items():
+        if use_max:
+            norm = (dot - min_dot) / span
+        else:
+            norm = (max_dot - dot) / span
+        depth[pos] = float(norm)
+    return depth
+
+
+def _goal_depth_score(pos_key: Optional[str], target_punta: int) -> float:
+    # Devuelve la profundidad normalizada (0..1) de una casilla dentro de la punta objetivo
+    if pos_key is None:
+        return 0.0
+    depth_map = _goal_depth_map(target_punta)
+    return depth_map.get(pos_key, 0.0)
+
+
 def _parse_punta(tipo: str) -> Optional[int]:
     # Extrae el índice de punta desde el campo tipo (formato 'punta-color')
     try:
@@ -165,7 +216,55 @@ class MaxHeuristicAgent:
 
         # 3) Estado ocupado y detección de si hay algún salto posible
         occupied = {p.posicion for p in piezas if p.posicion}
+        goal_positions = set(GOAL_POSITIONS.get(target, []))
 
+        precomputed_moves: Dict[str, Tuple[Set[str], List[List[str]]]] = {}
+        has_any_jump = False
+        outside_progress_possible = False
+
+        for pieza in piezas_jugador:
+            if not pieza.posicion:
+                continue
+
+            simple_moves = set(self._compute_simple_moves(pieza.posicion, occupied)) if allow_simple else set()
+            jump_sequences = self._compute_jump_sequences(pieza.posicion, occupied)
+
+            if jump_sequences:
+                has_any_jump = True
+
+            precomputed_moves[pieza.id_pieza] = (simple_moves, jump_sequences)
+
+            if outside_progress_possible:
+                continue
+
+            if pieza.posicion not in goal_positions:
+                dist_before = _distance_to_goal(pieza.posicion, target)
+                if dist_before is None:
+                    continue
+
+                for destino in simple_moves:
+                    if destino in goal_positions:
+                        outside_progress_possible = True
+                        break
+                    dist_after = _distance_to_goal(destino, target)
+                    if dist_after is not None and dist_after < dist_before:
+                        outside_progress_possible = True
+                        break
+
+                if outside_progress_possible:
+                    continue
+
+                for seq in jump_sequences:
+                    for landing in seq[1:]:
+                        if landing in goal_positions:
+                            outside_progress_possible = True
+                            break
+                        dist_after = _distance_to_goal(landing, target)
+                        if dist_after is not None and dist_after < dist_before:
+                            outside_progress_possible = True
+                            break
+                    if outside_progress_possible:
+                        break
         # Último movimiento del jugador (para evitar oscilaciones A->B->A)
         last_move = (
             Movimiento.objects.filter(partida_id=partida_id, jugador_id=jugador_id)
@@ -176,13 +275,6 @@ class MaxHeuristicAgent:
         last_from = getattr(last_move, "origen", None)
         last_to = getattr(last_move, "destino", None)
         last_piece_id = getattr(last_move, "pieza_id", None)
-
-        # ¿Hay algún salto (cadena) disponible para este jugador en el estado actual?
-        has_any_jump = any(
-            self._compute_jump_sequences(p.posicion, occupied)
-            for p in piezas_jugador
-            if p.posicion
-        )
 
         # 4) Puntuar el estado actual como referencia (base_score)
         base_score, _, _, _, _ = self._evaluate_state(
@@ -199,8 +291,7 @@ class MaxHeuristicAgent:
             if not pieza.posicion:
                 continue
             # 5.a) Obtener todos los movimientos válidos de la pieza
-            simple_moves = set(self._compute_simple_moves(pieza.posicion, occupied)) if allow_simple else set()
-            jump_sequences = self._compute_jump_sequences(pieza.posicion, occupied)
+            simple_moves, jump_sequences = precomputed_moves.get(pieza.id_pieza, (set(), []))
             jump_best = self._pick_best_jump_sequence(pieza.posicion, jump_sequences, target)
 
             # Candidatos: movimientos simples + (si existe) mejor salto en cadena
@@ -220,12 +311,18 @@ class MaxHeuristicAgent:
                     destino=destino,
                     piezas=piezas,
                     target_punta=target,
+                    outside_progress_available=outside_progress_possible,
+                    sequence=seq,
                 )
                 is_jump = seq is not None
                 jump_bonus = W_JUMP_BONUS if is_jump else 0.0
                 chain_len = (len(seq) - 1) if seq else 0
                 chain_bonus = float(chain_len) * W_CHAIN_LEN_BONUS
-                non_jump_penalty = W_NOJUMP_PENALTY if has_any_jump and not is_jump else 0.0
+                entered_goal = detail.get("entro_meta", 0.0) > 0.0
+                rearranging_goal = detail.get("reacomodo_meta", 0.0) > 0.0
+                non_jump_penalty = 0.0
+                if has_any_jump and not is_jump and not (entered_goal or rearranging_goal):
+                    non_jump_penalty = W_NOJUMP_PENALTY
 
                 reverse_penalty = 0.0
                 if last_from and last_to and last_from == destino and last_to == pieza.posicion:
@@ -291,9 +388,30 @@ class MaxHeuristicAgent:
         if not sequences:
             return None
 
+        goal_positions = set(GOAL_POSITIONS.get(target_punta, []))
+        trimmed_sequences: List[List[str]] = []
+        seen: Set[Tuple[str, ...]] = set()
+
+        for seq in sequences:
+            trimmed = list(seq)
+            if goal_positions and len(seq) > 1:
+                for idx in range(1, len(seq)):
+                    if seq[idx] in goal_positions:
+                        trimmed = seq[: idx + 1]
+                        break
+
+            key = tuple(trimmed)
+            if key in seen:
+                continue
+            seen.add(key)
+            trimmed_sequences.append(list(trimmed))
+
+        if not trimmed_sequences:
+            return None
+
         dist_before = _distance_to_goal(origin_key, target_punta)
         if dist_before is None:
-            return max(sequences, key=lambda s: len(s))
+            return max(trimmed_sequences, key=lambda s: len(s))
 
         origin_axial = _axial_from_key(origin_key)
 
@@ -309,7 +427,7 @@ class MaxHeuristicAgent:
                     travel = _hex_distance(origin_axial, final_axial)
             return (progress, chain_len, travel)
 
-        return max(sequences, key=rank)
+        return max(trimmed_sequences, key=rank)
 
     def _score_after_move(
         self,
@@ -320,6 +438,8 @@ class MaxHeuristicAgent:
         destino: str,
         piezas: List[Pieza],
         target_punta: int,
+        sequence: Optional[List[str]] = None,
+        outside_progress_available: bool = True,
     ) -> Tuple[float, Dict[str, float]]:
         """Evalúa el estado tras mover una pieza"""
         goal_positions: Set[str] = set()
@@ -330,8 +450,14 @@ class MaxHeuristicAgent:
             p.posicion for p in piezas if str(p.jugador_id) == str(jugador_id) and p.posicion
         ]
         outside_before = [pos for pos in player_positions_before if pos not in goal_positions]
+        outside_before_count = len(outside_before)
         lone_piece_bonus = 0.0
         lone_piece_candidate = len(outside_before) == 1 and origen in outside_before
+        origin_in_goal = bool(goal_positions and origen in goal_positions)
+        dest_in_goal = bool(goal_positions and destino in goal_positions)
+        outside_move_bonus = 0.0
+        if not origin_in_goal:
+            outside_move_bonus = W_OUTSIDE_MOVE_BONUS
 
         # 1) Construir estado hipotético actualizado
         piezas_actualizadas: List[Tuple[str, str, str, str]] = []  # (pieza_id, jugador_id, tipo, posicion)
@@ -353,8 +479,14 @@ class MaxHeuristicAgent:
         piece_progress = 0.0
         far_penalty = 0.0
         goal_move_penalty = 0.0
+        goal_reloc_penalty = 0.0
+        goal_stay_penalty = 0.0
         win_bonus = 0.0
-        goal_landing_penalty = 0.0
+        goal_entry_bonus = 0.0
+        goal_rearrange_bonus = 0.0
+        goal_depth_bonus = 0.0
+        goal_chain_bonus = 0.0
+        rearranging_goal = False
         if dist_before is not None and dist_after is not None:
             piece_progress = float(dist_before - dist_after)
             if piece_progress >= 0:
@@ -365,28 +497,55 @@ class MaxHeuristicAgent:
             far_penalty = W_FAR_DESTINATION * float(dist_after)
             score -= far_penalty
 
-        # Penalizar mover piezas que ya están dentro de la punta objetivo
-        if goal_positions and origen in goal_positions:
-            goal_move_penalty = W_GOAL_MOVE_PENALTY
-            score -= goal_move_penalty
-
         player_positions_after = [
             pos for (_pid, _jug_id, _tipo, pos) in piezas_actualizadas
             if str(_jug_id) == str(jugador_id)
         ]
         outside_after = [pos for pos in player_positions_after if pos and pos not in goal_positions]
+        outside_after_count = len(outside_after)
+        entered_goal = dest_in_goal and not origin_in_goal
 
         if goal_positions and player_positions_after:
             if not outside_after:
                 win_bonus = W_WIN_MOVE_BONUS
                 score += win_bonus
-            elif destino in goal_positions:
-                goal_landing_penalty = W_GOAL_LANDING_PENALTY
-                score -= goal_landing_penalty
+            elif entered_goal and outside_after_count < outside_before_count:
+                goal_entry_bonus = W_GOAL_ENTRY_BONUS
+                score += goal_entry_bonus
+
+            if origin_in_goal and outside_after_count > 0:
+                if dest_in_goal and not outside_progress_available:
+                    goal_rearrange_bonus = W_GOAL_REARRANGE_BONUS
+                    score += goal_rearrange_bonus
+                    rearranging_goal = True
+                else:
+                    goal_move_penalty = W_GOAL_MOVE_PENALTY
+                    score -= goal_move_penalty
+                    if outside_before_count > 1:
+                        goal_reloc_penalty = W_GOAL_RELOC_PENALTY
+                        score -= goal_reloc_penalty
+                    if dest_in_goal:
+                        goal_stay_penalty = W_GOAL_STAY_PENALTY
+                        score -= goal_stay_penalty
+
+            if dest_in_goal:
+                dest_depth = _goal_depth_score(destino, target_punta)
+                origin_depth = _goal_depth_score(origen, target_punta) if origin_in_goal else 0.0
+                depth_gain = dest_depth - origin_depth
+                if depth_gain > 0:
+                    goal_depth_bonus = depth_gain * W_GOAL_DEPTH_BONUS
+                    score += goal_depth_bonus
+
+            if sequence and len(sequence) > 1 and entered_goal and outside_after_count < outside_before_count:
+                goal_chain_bonus = W_GOAL_CHAIN_BONUS
+                score += goal_chain_bonus
 
         if lone_piece_candidate:
             lone_piece_bonus = W_LONE_PIECE_BONUS
             score += lone_piece_bonus
+
+        if outside_move_bonus:
+            score += outside_move_bonus
 
         detail = {
             "dist_total": dist_total,
@@ -398,9 +557,20 @@ class MaxHeuristicAgent:
             "progreso_pieza": piece_progress,
             "penalizacion_lejania": far_penalty,
             "penalizacion_meta": goal_move_penalty,
-            "penalizacion_aterrizaje_meta": goal_landing_penalty,
+            "penalizacion_reubicacion_meta": goal_reloc_penalty,
+            "penalizacion_permanencia_meta": goal_stay_penalty,
+            "bonus_entrada_meta": goal_entry_bonus,
+            "bonus_reacomodo_meta": goal_rearrange_bonus,
             "bonus_victoria": win_bonus,
             "bonus_pieza_sola": lone_piece_bonus,
+            "bonus_profundidad_meta": goal_depth_bonus,
+            "bonus_cadena_meta": goal_chain_bonus,
+            "bonus_fuera_meta": outside_move_bonus,
+            "piezas_fuera_antes": float(outside_before_count),
+            "piezas_fuera_despues": float(outside_after_count),
+            "entro_meta": 1.0 if entered_goal else 0.0,
+            "reacomodo_meta": 1.0 if rearranging_goal else 0.0,
+            "progreso_externo_disponible": 1.0 if outside_progress_available else 0.0,
         }
         return score, detail
 
