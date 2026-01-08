@@ -22,6 +22,10 @@ W_GOAL_RELOC_PENALTY = 12.0   # Penalización extra si aún quedan varias piezas
 W_GOAL_STAY_PENALTY = 8.0     # Penaliza moverse dentro de la punta destino con piezas pendientes
 W_GOAL_ENTRY_BONUS = 20.0     # Bono por entrar en la punta destino mientras quedan piezas fuera
 W_GOAL_REARRANGE_BONUS = 5.0  # Bono por reacomodar piezas dentro de la punta cuando no hay progreso externo
+W_GOAL_PRIORITY_BASE = 12.0   # Escala base para priorizar casillas clave dentro de la punta destino
+W_GOAL_PRIORITY_FILL_BONUS = 120.0  # Bono por mover piezas internas hacia posiciones prioritarias vacías
+W_GOAL_PRIORITY_GAP_PENALTY = 30.0  # Penaliza casillas prioritarias vacías en la punta destino
+W_GOAL_PRIORITY_BLOCK_PENALTY = 15.0  # Penaliza piezas bloqueando casillas prioritarias vacías
 W_GOAL_DEPTH_BONUS = 6.0      # Bono por colocar la pieza más profunda en la punta destino
 W_LONE_PIECE_BONUS = 80.0     # Incentiva mover la última pieza pendiente hacia la punta destino
 W_OUTSIDE_MOVE_BONUS = 2.5    # Favorece mover piezas que todavía no están en destino
@@ -72,6 +76,15 @@ GOAL_POSITIONS: Dict[int, List[str]] = {
     3: ['3-13', '1-13', '0-14', '2-14', '1-15', '2-13', '0-13', '1-14', '0-15', '0-16'],
     4: ['0-9', '0-11', '1-11', '0-12', '2-12', '0-10', '1-10', '2-11', '1-12', '3-12'],
     5: ['9-9', '9-11', '10-11', '10-12', '12-12', '9-10', '10-10', '11-11', '9-12', '11-12'],
+}
+
+GOAL_PRIORITY_POSITIONS: Dict[int, List[str]] = {
+    0: ['0-0', '0-1', '1-1'],
+    1: ['0-4', '1-4', '0-5'],
+    2: ['12-4', '11-4', '11-5'],
+    3: ['0-16', '1-15', '0-15'],
+    4: ['0-12', '1-21', '0-11'],
+    5: ['12-12', '11-12', '11-11'],
 }
 
 TARGET_MAP = {0: 3, 3: 0, 1: 5, 5: 1, 2: 4, 4: 2}
@@ -165,6 +178,43 @@ def _goal_depth_score(pos_key: Optional[str], target_punta: int) -> float:
         return 0.0
     depth_map = _goal_depth_map(target_punta)
     return depth_map.get(pos_key, 0.0)
+
+
+def _goal_priority_bonus(pos_key: Optional[str], target_punta: int) -> float:
+    # Bono adicional por aterrizar en casillas clave priorizadas dentro de la punta destino
+    if pos_key is None:
+        return 0.0
+    priorities = GOAL_PRIORITY_POSITIONS.get(target_punta)
+    if not priorities or pos_key not in priorities:
+        return 0.0
+    idx = priorities.index(pos_key)
+    scale = max(len(priorities) - idx, 1)
+    return float(scale) * W_GOAL_PRIORITY_BASE
+
+
+def _goal_priority_penalty(player_positions: Iterable[str], target_punta: int) -> Tuple[float, int, int]:
+    # Penaliza estados con casillas prioritarias vacías o bloqueadas dentro de la punta destino
+    priorities = GOAL_PRIORITY_POSITIONS.get(target_punta)
+    if not priorities:
+        return 0.0, 0, 0
+
+    goal_positions = set(GOAL_POSITIONS.get(target_punta, []))
+    priority_set = set(priorities)
+    player_positions_set = {pos for pos in player_positions if pos}
+
+    filled_priority = {pos for pos in player_positions_set if pos in priority_set}
+    missing_count = len(priority_set) - len(filled_priority)
+    blockers_count = 0
+    if missing_count > 0:
+        blockers_count = sum(1 for pos in player_positions_set if pos in goal_positions and pos not in priority_set)
+
+    penalty = 0.0
+    if missing_count > 0:
+        penalty -= W_GOAL_PRIORITY_GAP_PENALTY * float(missing_count)
+        if blockers_count > 0:
+            penalty -= W_GOAL_PRIORITY_BLOCK_PENALTY * float(blockers_count)
+
+    return penalty, missing_count, blockers_count
 
 
 def _parse_punta(tipo: str) -> Optional[int]:
@@ -283,6 +333,11 @@ class MaxHeuristicAgent:
             target,
             return_detail=True,
         )
+        player_positions_current = [
+            p.posicion for p in piezas if str(p.jugador_id) == str(jugador_id) and p.posicion
+        ]
+        base_priority_penalty, _, _ = _goal_priority_penalty(player_positions_current, target)
+        base_score += base_priority_penalty
 
         # 5) Estilo machine_move: evaluar cada movimiento y escoger el mejor
         best: Optional[MoveCandidate] = None
@@ -320,8 +375,9 @@ class MaxHeuristicAgent:
                 chain_bonus = float(chain_len) * W_CHAIN_LEN_BONUS
                 entered_goal = detail.get("entro_meta", 0.0) > 0.0
                 rearranging_goal = detail.get("reacomodo_meta", 0.0) > 0.0
+                priority_fill = detail.get("relleno_prioridad", 0.0) > 0.0
                 non_jump_penalty = 0.0
-                if has_any_jump and not is_jump and not (entered_goal or rearranging_goal):
+                if has_any_jump and not is_jump and not (entered_goal or rearranging_goal or priority_fill):
                     non_jump_penalty = W_NOJUMP_PENALTY
 
                 reverse_penalty = 0.0
@@ -415,17 +471,18 @@ class MaxHeuristicAgent:
 
         origin_axial = _axial_from_key(origin_key)
 
-        def rank(seq: List[str]) -> Tuple[float, int, int]:
+        def rank(seq: List[str]) -> Tuple[float, float, int, int]:
             final = seq[-1]
             dist_after = _distance_to_goal(final, target_punta)
             progress = float(dist_before - dist_after) if dist_after is not None else float("-inf")
+            priority = _goal_priority_bonus(final, target_punta)
             chain_len = len(seq) - 1
             travel = 0
             if origin_axial:
                 final_axial = _axial_from_key(final)
                 if final_axial:
                     travel = _hex_distance(origin_axial, final_axial)
-            return (progress, chain_len, travel)
+            return (progress, priority, chain_len, travel)
 
         return max(trimmed_sequences, key=rank)
 
@@ -445,12 +502,20 @@ class MaxHeuristicAgent:
         goal_positions: Set[str] = set()
         if target_punta is not None:
             goal_positions = set(GOAL_POSITIONS.get(target_punta, []))
+        priority_list = GOAL_PRIORITY_POSITIONS.get(target_punta, []) if target_punta is not None else []
+        priority_set = set(priority_list)
 
         player_positions_before = [
             p.posicion for p in piezas if str(p.jugador_id) == str(jugador_id) and p.posicion
         ]
         outside_before = [pos for pos in player_positions_before if pos not in goal_positions]
         outside_before_count = len(outside_before)
+        priority_penalty_before, priority_missing_before, priority_blockers_before = _goal_priority_penalty(
+            player_positions_before,
+            target_punta,
+        )
+        priority_filled_before = {pos for pos in player_positions_before if pos in priority_set}
+        empty_priority_before = [pos for pos in priority_list if pos not in priority_filled_before]
         lone_piece_bonus = 0.0
         lone_piece_candidate = len(outside_before) == 1 and origen in outside_before
         origin_in_goal = bool(goal_positions and origen in goal_positions)
@@ -486,7 +551,10 @@ class MaxHeuristicAgent:
         goal_rearrange_bonus = 0.0
         goal_depth_bonus = 0.0
         goal_chain_bonus = 0.0
+        goal_priority_bonus = 0.0
+        priority_fill_bonus = 0.0
         rearranging_goal = False
+        fills_priority = False
         if dist_before is not None and dist_after is not None:
             piece_progress = float(dist_before - dist_after)
             if piece_progress >= 0:
@@ -504,6 +572,19 @@ class MaxHeuristicAgent:
         outside_after = [pos for pos in player_positions_after if pos and pos not in goal_positions]
         outside_after_count = len(outside_after)
         entered_goal = dest_in_goal and not origin_in_goal
+        priority_penalty_after, priority_missing_after, priority_blockers_after = _goal_priority_penalty(
+            player_positions_after,
+            target_punta,
+        )
+        priority_filled_after = {pos for pos in player_positions_after if pos in priority_set}
+        fills_priority = (
+            origin_in_goal
+            and origen not in priority_set
+            and dest_in_goal
+            and destino in empty_priority_before
+        )
+        priority_missing_before = len(empty_priority_before)
+        score += priority_penalty_after
 
         if goal_positions and player_positions_after:
             if not outside_after:
@@ -514,7 +595,10 @@ class MaxHeuristicAgent:
                 score += goal_entry_bonus
 
             if origin_in_goal and outside_after_count > 0:
-                if dest_in_goal and not outside_progress_available:
+                if dest_in_goal and fills_priority:
+                    priority_fill_bonus = W_GOAL_PRIORITY_FILL_BONUS
+                    score += priority_fill_bonus
+                elif dest_in_goal and not outside_progress_available:
                     goal_rearrange_bonus = W_GOAL_REARRANGE_BONUS
                     score += goal_rearrange_bonus
                     rearranging_goal = True
@@ -535,6 +619,11 @@ class MaxHeuristicAgent:
                 if depth_gain > 0:
                     goal_depth_bonus = depth_gain * W_GOAL_DEPTH_BONUS
                     score += goal_depth_bonus
+
+                priority_value = _goal_priority_bonus(destino, target_punta)
+                if priority_value > 0:
+                    goal_priority_bonus = priority_value
+                    score += goal_priority_bonus
 
             if sequence and len(sequence) > 1 and entered_goal and outside_after_count < outside_before_count:
                 goal_chain_bonus = W_GOAL_CHAIN_BONUS
@@ -559,8 +648,11 @@ class MaxHeuristicAgent:
             "penalizacion_meta": goal_move_penalty,
             "penalizacion_reubicacion_meta": goal_reloc_penalty,
             "penalizacion_permanencia_meta": goal_stay_penalty,
+            "penalizacion_prioridad_meta": -priority_penalty_after,
             "bonus_entrada_meta": goal_entry_bonus,
             "bonus_reacomodo_meta": goal_rearrange_bonus,
+            "bonus_prioridad_meta": goal_priority_bonus,
+            "bonus_relleno_prioridad": priority_fill_bonus,
             "bonus_victoria": win_bonus,
             "bonus_pieza_sola": lone_piece_bonus,
             "bonus_profundidad_meta": goal_depth_bonus,
@@ -571,6 +663,14 @@ class MaxHeuristicAgent:
             "entro_meta": 1.0 if entered_goal else 0.0,
             "reacomodo_meta": 1.0 if rearranging_goal else 0.0,
             "progreso_externo_disponible": 1.0 if outside_progress_available else 0.0,
+            "prioridad_meta": 1.0 if goal_priority_bonus > 0 else 0.0,
+            "relleno_prioridad": 1.0 if priority_fill_bonus > 0 else 0.0,
+            "prioridades_vacias_antes": float(priority_missing_before),
+            "prioridades_vacias_despues": float(priority_missing_after),
+            "piezas_barrera_meta": float(priority_blockers_after),
+            "piezas_barrera_meta_antes": float(priority_blockers_before),
+            "penalizacion_prioridad_antes": -priority_penalty_before,
+            "penalizacion_prioridad_despues": -priority_penalty_after,
         }
         return score, detail
 
