@@ -16,7 +16,6 @@ def api_root(request):
             'api_jugadores': '/api/jugadores/',
             'api_partidas': '/api/partidas/',
             'api_piezas': '/api/piezas/',
-            'api_tableros': '/api/tableros/',
             'api_turnos': '/api/turnos/',
             'api_movimientos': '/api/movimientos/',
             'api_ia': '/api/ia/',

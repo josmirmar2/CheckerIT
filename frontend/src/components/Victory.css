@@ -1,0 +1,341 @@
+.victory-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: url('./images/Background.jpg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  overflow-y: auto;
+  padding: 10px;
+}
+
+.victory-container {
+  background: rgba(255, 255, 255, 0.85);
+  border: none;
+  border-radius: 20px;
+  padding: 25px;
+  max-width: 700px;
+  width: 100%;
+  max-height: 95vh;
+  overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.victory-title {
+  text-align: center;
+  color: #DEA357;
+  font-size: 2rem;
+  margin-bottom: 20px;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+  font-weight: 700;
+}
+
+/* Winner Section */
+.winner-section {
+  text-align: center;
+  margin-bottom: 20px;
+  padding: 20px;
+  background: rgba(222, 163, 87, 0.1);
+  border-radius: 15px;
+  border: 2px solid rgba(222, 163, 87, 0.3);
+}
+
+.trophy-icon {
+  font-size: 3rem;
+  margin-bottom: 10px;
+  animation: bounce 1s infinite;
+}
+
+@keyframes bounce {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+.winner-label {
+  color: #DEA357;
+  font-size: 1.3rem;
+  margin-bottom: 15px;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-weight: 600;
+}
+
+.winner-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  padding: 15px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 12px;
+}
+
+.winner-avatar {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  border: 4px solid;
+  object-fit: cover;
+  box-shadow: 0 6px 15px rgba(0, 0, 0, 0.3);
+}
+
+.winner-info {
+  text-align: left;
+}
+
+.winner-name {
+  color: #88591B;
+  font-size: 1.6rem;
+  margin-bottom: 10px;
+  font-weight: 600;
+}
+
+.winner-color-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 20px;
+  border-radius: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.color-label {
+  color: #000000;
+  font-weight: 600;
+  font-size: 1rem;
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.5);
+}
+
+/* Stats Section */
+.stats-section {
+  margin-bottom: 20px;
+}
+
+.stats-title {
+  color: #88591B;
+  font-size: 1.2rem;
+  margin-bottom: 15px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1.5fr 1fr;
+  gap: 12px;
+  align-items: center;
+}
+
+.stat-item {
+  background: rgba(222, 163, 87, 0.1);
+  padding: 15px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border: 1px solid rgba(222, 163, 87, 0.2);
+}
+
+.stat-item-large {
+  padding: 20px;
+  justify-content: center;
+  border: 2px solid rgba(222, 163, 87, 0.3);
+  background: rgba(222, 163, 87, 0.15);
+}
+
+.stat-item-large .stat-content {
+  align-items: center;
+  text-align: center;
+}
+
+.stat-item-large .stat-label {
+  font-size: 0.9rem;
+}
+
+.stat-item-large .stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+}
+
+.stat-icon {
+  font-size: 1.8rem;
+}
+
+.stat-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat-label {
+  color: #88591B;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-weight: 500;
+}
+
+.stat-value {
+  color: #88591B;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+/* Losers Section */
+.losers-section {
+  margin-bottom: 20px;
+}
+
+.losers-title {
+  color: #88591B;
+  font-size: 1.2rem;
+  margin-bottom: 6px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.losers-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+  padding: 15px;
+  background: rgba(222, 163, 87, 0.1);
+  border: 2px solid rgba(222, 163, 87, 0.3);
+  border-radius: 15px;
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+}
+
+.loser-card {
+  background: transparent;
+  padding: 8px;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.loser-card:hover {
+  transform: translateY(-3px);
+}
+
+.loser-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 3px solid;
+  object-fit: cover;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+}
+
+.loser-card:hover .loser-avatar {
+  transform: scale(1.05);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.3);
+}
+
+.loser-name {
+  color: #88591B;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+  max-width: 80px;
+  word-wrap: break-word;
+}
+
+/* Victory Button */
+.victory-button {
+  width: 100%;
+  padding: 16px 35px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: all 0.3s ease;
+  background: linear-gradient(135deg, #DEA357 0%, #C08D45 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(222, 163, 87, 0.4);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.victory-button i {
+  font-size: 1.2rem;
+}
+
+.victory-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(222, 163, 87, 0.6);
+  background: linear-gradient(135deg, #E8B567 0%, #DEA357 100%);
+}
+
+.victory-button:active {
+  transform: translateY(0);
+  box-shadow: 0 3px 12px rgba(222, 163, 87, 0.4);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .victory-container {
+    padding: 25px;
+  }
+
+  .victory-title {
+    font-size: 2rem;
+  }
+
+  .winner-card {
+    flex-direction: column;
+  }
+
+  .winner-avatar {
+    width: 100px;
+    height: 100px;
+  }
+
+  .winner-name {
+    font-size: 1.5rem;
+  }
+
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .losers-grid {
+    grid-template-columns: 1fr;
+  }
+}

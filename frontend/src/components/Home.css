@@ -19,17 +19,18 @@
 .game-title {
   font-size: 4rem;
   font-weight: bold;
-  color: #667eea;
+  color: #DEA357;
   margin-bottom: 10px;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .game-subtitle {
   font-size: 1.5rem;
-  color: #764ba2;
-  margin-bottom: 50px;
+  color: #88591B;
+  margin-bottom: 40px;
   font-weight: 300;
 }
+
 
 .button-container {
   display: flex;
@@ -50,26 +51,27 @@
 }
 
 .start-button {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, #D58B2A 0%, #AF7223 100%);
   color: white;
+  box-shadow: 0 4px 15px rgba(213, 139, 42, 0.4);
 }
 
 .start-button:hover {
   transform: translateY(-3px);
-  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 10px 25px rgba(213, 139, 42, 0.6);
 }
 
 .tutorial-button {
   background: white;
-  color: #667eea;
-  border: 2px solid #667eea;
+  color: #AF7223;
+  border: 2px solid #AF7223;
 }
 
 .tutorial-button:hover {
-  background: #667eea;
+  background: #AF7223;
   color: white;
   transform: translateY(-3px);
-  box-shadow: 0 10px 25px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 10px 25px rgba(213, 139, 42, 0.3);
 }
 
 @media (max-width: 600px) {
