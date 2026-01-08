@@ -147,7 +147,7 @@ class JugadorViewSet(viewsets.ModelViewSet):
             return
         dificultad = str(request_data.get('dificultad') or request_data.get('nivel') or 'Fácil')
         numero = jugador.numero or Jugador.objects.filter(humano=False).count()
-        nombre_deseado = f"IA {dificultad} {numero}"
+        nombre_deseado = f"IA {numero}"
         if jugador.nombre != nombre_deseado:
             jugador.nombre = nombre_deseado
             jugador.save(update_fields=['nombre'])
@@ -208,7 +208,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
             if es_humano:
                 nombre = jugador_data.get('nombre', f'Jugador {idx + 1}')
             else:
-                nombre = f"IA {dificultad} {numero}"
+                nombre = f"IA {numero}"
             
             jugador = Jugador.objects.create(
                 id_jugador=f"J{idx + 1}_{datetime.now().timestamp()}",

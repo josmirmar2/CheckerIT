@@ -16,28 +16,33 @@ W_CHAIN_LEN_BONUS = 0.15     # Bono extra por cada salto en cadena
 W_REVERSE_PENALTY = 2.0      # Penaliza deshacer la última jugada (A->B seguido de B->A)
 W_SAME_PIECE_PENALTY = 0.2   # Penaliza repetir con la misma pieza en turnos consecutivos
 W_FAR_DESTINATION = 0.5       # Penaliza terminar lejos de la punta objetivo
-W_HOME_PENALTY = 18.0         # Penaliza fuertemente piezas estacionadas en su punta inicial
-W_HOME_EXIT_BONUS = 220.0     # Bono prioritario por sacar piezas de la punta inicial
-W_HOME_STAY_PENALTY = 150.0   # Penaliza movimientos que permanecen dentro de casa
-W_HOME_RETURN_PENALTY = 260.0 # Penaliza volver a entrar en la punta inicial
-W_HOME_IGNORE_PENALTY = 110.0 # Penaliza ignorar piezas propias en casa cuando aún quedan
-W_HOME_PRIORITY_LEAVE_BONUS = 320.0    # Bono extra por liberar casillas prioritarias de la punta propia
-W_HOME_PRIORITY_STAY_PENALTY = 260.0   # Penaliza mantener piezas sobre casillas prioritarias propias
-W_HOME_PRIORITY_RETURN_PENALTY = 340.0 # Penaliza regresar a una casilla prioritaria propia
+W_HOME_PENALTY = 34.0         # Penaliza fuertemente piezas estacionadas en su punta inicial
+W_HOME_EXIT_BONUS = 520.0     # Bono prioritario por sacar piezas de la punta inicial
+W_HOME_STAY_PENALTY = 280.0   # Penaliza movimientos que permanecen dentro de casa
+W_HOME_RETURN_PENALTY = 460.0 # Penaliza volver a entrar en la punta inicial
+W_HOME_IGNORE_PENALTY = 120.0 # Penaliza movimientos dentro de casa sin progreso hacia la salida
+W_HOME_PRIORITY_LEAVE_BONUS = 520.0    # Bono extra por liberar casillas prioritarias de la punta propia
+W_HOME_PRIORITY_STAY_PENALTY = 420.0   # Penaliza mantener piezas sobre casillas prioritarias propias
+W_HOME_PRIORITY_RETURN_PENALTY = 560.0 # Penaliza regresar a una casilla prioritaria propia
 W_GOAL_MOVE_PENALTY = 3.0     # Penaliza mover piezas asentadas en la punta destino
 W_GOAL_RELOC_PENALTY = 12.0   # Penalización extra si aún quedan varias piezas fuera
 W_GOAL_STAY_PENALTY = 8.0     # Penaliza moverse dentro de la punta destino con piezas pendientes
-W_GOAL_ENTRY_BONUS = 20.0     # Bono por entrar en la punta destino mientras quedan piezas fuera
-W_GOAL_REARRANGE_BONUS = 5.0  # Bono por reacomodar piezas dentro de la punta cuando no hay progreso externo
-W_GOAL_PRIORITY_BASE = 12.0   # Escala base para priorizar casillas clave dentro de la punta destino
-W_GOAL_PRIORITY_FILL_BONUS = 120.0  # Bono por mover piezas internas hacia posiciones prioritarias vacías
+W_GOAL_ENTRY_BONUS = 12.0     # Bono por entrar en la punta destino mientras quedan piezas fuera
+W_GOAL_REARRANGE_BONUS = 4.0  # Bono por reacomodar piezas dentro de la punta cuando no hay progreso externo
+W_GOAL_PRIORITY_BASE = 9.0    # Escala base para priorizar casillas clave dentro de la punta destino
+W_GOAL_PRIORITY_FILL_BONUS = 72.0   # Bono por mover piezas internas hacia posiciones prioritarias vacías
 W_GOAL_PRIORITY_GAP_PENALTY = 30.0  # Penaliza casillas prioritarias vacías en la punta destino
 W_GOAL_PRIORITY_BLOCK_PENALTY = 15.0  # Penaliza piezas bloqueando casillas prioritarias vacías
-W_GOAL_DEPTH_BONUS = 6.0      # Bono por colocar la pieza más profunda en la punta destino
+W_GOAL_DEPTH_BONUS = 4.0      # Bono por colocar la pieza más profunda en la punta destino
 W_LONE_PIECE_BONUS = 80.0     # Incentiva mover la última pieza pendiente hacia la punta destino
 W_OUTSIDE_MOVE_BONUS = 2.5    # Favorece mover piezas que todavía no están en destino
-W_GOAL_CHAIN_BONUS = 6.0      # Bono adicional si el movimiento en cadena entra en la punta destino
+W_GOAL_CHAIN_BONUS = 4.0      # Bono adicional si el movimiento en cadena entra en la punta destino
 W_WIN_MOVE_BONUS = 200.0      # Prioriza el movimiento que completa la victoria
+
+W_HOME_OUTSIDE_IGNORE_PENALTY = 420.0   # Penaliza mover piezas ajenas a casa mientras aún quedan piezas en casa
+W_HOME_PROGRESS_BONUS = 180.0          # Bono por avanzar dentro de casa hacia la salida
+
+HOME_GOAL_SUPPRESSION_FACTOR = 0.25  # Factor para reducir recompensas de meta mientras queden piezas en casa
 
 CARTESIAN_COORD_ROWS: List[List[Dict[str, int]]] = [
     [{"q": 0, "r": 0}],
@@ -604,6 +609,8 @@ class MaxHeuristicAgent:
         home_stay_penalty = 0.0
         home_return_penalty = 0.0
         home_ignore_penalty = 0.0
+        home_outside_ignore_penalty = 0.0
+        home_progress_bonus = 0.0
         home_priority_leave_bonus = 0.0
         home_priority_stay_penalty = 0.0
         home_priority_return_penalty = 0.0
@@ -628,15 +635,12 @@ class MaxHeuristicAgent:
                 score += win_bonus
             elif entered_goal and outside_after_count < outside_before_count:
                 goal_entry_bonus = W_GOAL_ENTRY_BONUS
-                score += goal_entry_bonus
 
             if origin_in_goal and outside_after_count > 0:
                 if dest_in_goal and fills_priority:
                     priority_fill_bonus = W_GOAL_PRIORITY_FILL_BONUS
-                    score += priority_fill_bonus
                 elif dest_in_goal and not outside_progress_available:
                     goal_rearrange_bonus = W_GOAL_REARRANGE_BONUS
-                    score += goal_rearrange_bonus
                     rearranging_goal = True
                 else:
                     goal_move_penalty = W_GOAL_MOVE_PENALTY
@@ -654,23 +658,18 @@ class MaxHeuristicAgent:
                 depth_gain = dest_depth - origin_depth
                 if depth_gain > 0:
                     goal_depth_bonus = depth_gain * W_GOAL_DEPTH_BONUS
-                    score += goal_depth_bonus
 
                 priority_value = _goal_priority_bonus(destino, target_punta)
                 if priority_value > 0:
                     goal_priority_bonus = priority_value
-                    score += goal_priority_bonus
 
             if sequence and len(sequence) > 1 and entered_goal and outside_after_count < outside_before_count:
                 goal_chain_bonus = W_GOAL_CHAIN_BONUS
-                score += goal_chain_bonus
 
         if lone_piece_candidate:
             lone_piece_bonus = W_LONE_PIECE_BONUS
-            score += lone_piece_bonus
 
-        if outside_move_bonus:
-            score += outside_move_bonus
+        # Recompensas por progreso interno/meta se aplicarán después de considerar piezas pendientes en casa
 
         if home_positions:
             if home_after_count < home_before_count:
@@ -680,12 +679,18 @@ class MaxHeuristicAgent:
             if origin_in_home and dest_in_home:
                 home_stay_penalty = W_HOME_STAY_PENALTY
                 score -= home_stay_penalty
+                if piece_progress > 0:
+                    home_progress_bonus = W_HOME_PROGRESS_BONUS * float(piece_progress)
+                    score += home_progress_bonus
+                elif home_before_count > 0:
+                    home_ignore_penalty = W_HOME_IGNORE_PENALTY
+                    score -= home_ignore_penalty
             if not origin_in_home and dest_in_home:
                 home_return_penalty = W_HOME_RETURN_PENALTY
                 score -= home_return_penalty
-            if home_before_count > 0 and home_after_count == home_before_count:
-                home_ignore_penalty = W_HOME_IGNORE_PENALTY
-                score -= home_ignore_penalty
+            if home_before_count > 0 and not origin_in_home and not dest_in_home:
+                home_outside_ignore_penalty = W_HOME_OUTSIDE_IGNORE_PENALTY
+                score -= home_outside_ignore_penalty
 
         if home_priority_set:
             if origin_in_home_priority and not dest_in_home_priority:
@@ -701,6 +706,34 @@ class MaxHeuristicAgent:
                 extra_penalty = W_HOME_PRIORITY_STAY_PENALTY * 0.5
                 home_priority_stay_penalty += extra_penalty
                 score -= extra_penalty
+
+        removed_home_piece = home_before_count > home_after_count
+        goal_bonus_scale = 1.0 if (home_after_count == 0 or removed_home_piece) else HOME_GOAL_SUPPRESSION_FACTOR
+
+        if goal_entry_bonus > 0.0:
+            goal_entry_bonus *= goal_bonus_scale
+            score += goal_entry_bonus
+        if goal_rearrange_bonus > 0.0:
+            goal_rearrange_bonus *= goal_bonus_scale
+            score += goal_rearrange_bonus
+        if goal_priority_bonus > 0.0:
+            goal_priority_bonus *= goal_bonus_scale
+            score += goal_priority_bonus
+        if priority_fill_bonus > 0.0:
+            priority_fill_bonus *= goal_bonus_scale
+            score += priority_fill_bonus
+        if goal_depth_bonus > 0.0:
+            goal_depth_bonus *= goal_bonus_scale
+            score += goal_depth_bonus
+        if goal_chain_bonus > 0.0:
+            goal_chain_bonus *= goal_bonus_scale
+            score += goal_chain_bonus
+        if lone_piece_bonus > 0.0:
+            lone_piece_bonus *= goal_bonus_scale
+            score += lone_piece_bonus
+        if outside_move_bonus > 0.0:
+            outside_move_bonus *= goal_bonus_scale
+            score += outside_move_bonus
 
         detail = {
             "dist_total": dist_total,
@@ -728,6 +761,8 @@ class MaxHeuristicAgent:
             "penalizacion_permanecer_casa": home_stay_penalty,
             "penalizacion_retorno_casa": home_return_penalty,
             "penalizacion_ignorar_casa": home_ignore_penalty,
+            "bonus_progreso_casa": home_progress_bonus,
+            "penalizacion_distraccion_casa": home_outside_ignore_penalty,
             "bonus_salida_prioridad_casa": home_priority_leave_bonus,
             "penalizacion_permanecer_prioridad_casa": home_priority_stay_penalty,
             "penalizacion_retorno_prioridad_casa": home_priority_return_penalty,
@@ -752,6 +787,7 @@ class MaxHeuristicAgent:
             "piezas_barrera_meta_antes": float(priority_blockers_before),
             "penalizacion_prioridad_antes": -priority_penalty_before,
             "penalizacion_prioridad_despues": -priority_penalty_after,
+            "factor_supresion_meta": goal_bonus_scale,
         }
         return score, detail
 
