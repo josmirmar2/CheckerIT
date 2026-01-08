@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './Board.css';
 
-const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, partidaId = null, onMove = null, moveMade = false, lockedPiecePos = null, undoToken = 0, undoToOriginalToken = 0, originalPiecePos = null, initialBoardState = null, pieceByPos = new Map(), aiMove = null, disablePlayerActions = false }) => {
+const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, partidaId = null, onMove = null, moveMade = false, lockedPiecePos = null, undoToken = 0, undoToOriginalToken = 0, originalPiecePos = null, initialBoardState = null, pieceByPos = new Map(), aiMove = null, disablePlayerActions = false, blockAiMoves = false }) => {
   const BOARD_COLORS = ['#FFFFFF', '#0000ffff', '#00ff00ff', '#000000', '#ff0000ff', '#ffbf00ff'];
   const LIGHT_COLORS = ['#ffffffcf', '#8888ffaf', '#9af89aab', '#666666af', '#ffa2a2a1', '#ffe988b6'];
 
@@ -113,22 +113,22 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
   const generarTablero = () => {
     const filas = [
       [0],
-      [0, 1],  
-      [0, 1, 2],                         
-      [0, 1, 2, 3],  
-      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 
-      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 
-      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 
-      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-      [0, 1, 2, 3, 4, 5, 6, 7, 8],                      
-      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
-      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
-      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 
-      [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
-      [0, 1, 2, 3],
-      [0, 1, 2],
-      [0, 1],
-      [0],                       
+        [0, 1],  
+        [0, 1, 2],                         
+        [0, 1, 2, 3],  
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12], 
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8],                      
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], 
+        [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+        [0, 1, 2, 3],
+        [0, 1, 2],
+        [0, 1],
+        [0],                       
     ];
 
     const posicionAPunta = {
@@ -348,6 +348,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
 
   useEffect(() => {
     if (!aiMove || !aiMove.token) return;
+    if (blockAiMoves) return;
 
     const { fromKey, toKey, piezaId = null } = aiMove;
     const [fromCol, fromFila] = String(fromKey || '').split('-').map(Number);
@@ -405,7 +406,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
         pieza_id: resolvedId,
       });
     }
-  }, [aiMove]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [aiMove, blockAiMoves]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!moveMade || moveHistory.length === 0) return;

@@ -142,6 +142,24 @@ class JugadorViewSet(viewsets.ModelViewSet):
     queryset = Jugador.objects.all()
     serializer_class = JugadorSerializer
 
+    def _ensure_ai_name(self, jugador, request_data):
+        if jugador.humano:
+            return
+        dificultad = str(request_data.get('dificultad') or request_data.get('nivel') or 'Fácil')
+        numero = jugador.numero or Jugador.objects.filter(humano=False).count()
+        nombre_deseado = f"IA {dificultad} {numero}"
+        if jugador.nombre != nombre_deseado:
+            jugador.nombre = nombre_deseado
+            jugador.save(update_fields=['nombre'])
+
+    def perform_create(self, serializer):
+        jugador = serializer.save()
+        self._ensure_ai_name(jugador, self.request.data)
+
+    def perform_update(self, serializer):
+        jugador = serializer.save()
+        self._ensure_ai_name(jugador, self.request.data)
+
 
 class PartidaViewSet(viewsets.ModelViewSet):
     """
@@ -184,8 +202,13 @@ class PartidaViewSet(viewsets.ModelViewSet):
         
         for idx, jugador_data in enumerate(jugadores_data):
             es_humano = jugador_data.get('tipo', 'humano') == 'humano'
-            nombre = jugador_data.get('nombre', f'Jugador {idx + 1}')
             numero = jugador_data.get('numero', idx + 1)
+            dificultad = jugador_data.get('dificultad', 'Fácil')
+
+            if es_humano:
+                nombre = jugador_data.get('nombre', f'Jugador {idx + 1}')
+            else:
+                nombre = f"IA {dificultad} {numero}"
             
             jugador = Jugador.objects.create(
                 id_jugador=f"J{idx + 1}_{datetime.now().timestamp()}",
@@ -195,7 +218,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
             )
             
             if not es_humano:
-                dificultad = jugador_data.get('dificultad', 'Fácil')
                 nivel = 2 if dificultad == 'Difícil' else 1
                 
                 IA.objects.create(

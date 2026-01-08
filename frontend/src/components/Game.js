@@ -57,15 +57,20 @@ function Game() {
   const [aiSequence, setAiSequence] = useState(null); // [{fromKey,toKey,piezaId?}, ...]
   const [aiSeqIndex, setAiSeqIndex] = useState(0);
   const aiSeqTokenRef = useRef(null);
+  const isPausedRef = useRef(false);
 
-  const AI_FIRST_DELAY_MS = 100;
-  const AI_CHAIN_DELAY_MS = 100;
+  const AI_FIRST_DELAY_MS = 1;
+  const AI_CHAIN_DELAY_MS = 1;
 
   useEffect(() => {
     if (actualTurn?.numero) {
       setTurnCount(actualTurn.numero);
     }
   }, [actualTurn?.numero]);
+
+  useEffect(() => {
+    isPausedRef.current = isPaused;
+  }, [isPaused]);
 
   const jugadoresConfig = useMemo(() => location.state?.jugadoresConfig || [], [location.state]);
   const isAITurn = useMemo(() => jugadoresConfig[currentPlayerIndex]?.tipo === 'ia', [jugadoresConfig, currentPlayerIndex]);
@@ -465,6 +470,7 @@ function Game() {
   }, [partida]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const requestAiMove = async () => {
+    if (isPausedRef.current) return;
     const jugadorDb = dbJugadores[currentPlayerIndex];
     if (!jugadorDb?.id_jugador || !partida?.id_partida) return;
 
@@ -510,6 +516,7 @@ function Game() {
         setAiAutoFinishToken(null);
         // No ejecutar instantáneo: esperar un poco
         setTimeout(() => {
+          if (isPausedRef.current) return;
           setAiMoveCmd({ token, fromKey: data.origen, toKey: data.destino, piezaId: data.pieza_id || data.pieza });
         }, AI_FIRST_DELAY_MS);
       }
@@ -534,9 +541,10 @@ function Game() {
     if (aiMoveCmd) return;
     if (aiSequence) return; // ya tenemos secuencia pendiente
     if (moveMade) return; // ya se movió este turno
+    if (isPaused) return;
 
     requestAiMove();
-  }, [isAITurn, showVictory, moveMade, aiThinking, partida?.id_partida, currentPlayerIndex, dbJugadores, aiMoveCmd, aiSequence]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAITurn, showVictory, moveMade, aiThinking, partida?.id_partida, currentPlayerIndex, dbJugadores, aiMoveCmd, aiSequence, isPaused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saveTurnToDatabase = async () => {
     try {
@@ -636,6 +644,7 @@ function Game() {
   };
 
   const handleBoardMove = (move) => {
+    if (isPausedRef.current) return;
     setMoveMade(true);
     setLockedPiecePos(move.to);
     if (!originalPiecePos) {
@@ -673,6 +682,7 @@ function Game() {
   };
 
   const undoMove = () => {
+    if (isPausedRef.current) return;
     if (!moveMade) return;
     setUndoToOriginalToken((prev) => prev + 1);
     setMoveMade(false);
@@ -687,6 +697,7 @@ function Game() {
   };
 
   const continueTurn = async () => {
+    if (isPausedRef.current) return;
     if (!moveMade) return;
     if (moveHistory.length > 0) {
       await saveMoveToDatabase(moveHistory);
@@ -717,16 +728,18 @@ function Game() {
     if (!aiSequence || !aiSeqTokenRef.current) return;
     if (aiThinking) return;
     if (aiSeqIndex >= aiSequence.length) return;
+    if (isPaused) return;
 
     const step = aiSequence[aiSeqIndex];
     const delay = aiSeqIndex === 0 ? AI_FIRST_DELAY_MS : AI_CHAIN_DELAY_MS;
 
     const timer = setTimeout(() => {
+      if (isPausedRef.current) return;
       setAiMoveCmd({ token: Date.now(), ...step });
     }, delay);
 
     return () => clearTimeout(timer);
-  }, [isAITurn, aiSequence, aiSeqIndex, aiThinking]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAITurn, aiSequence, aiSeqIndex, aiThinking, isPaused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!isAITurn) return;
@@ -735,6 +748,7 @@ function Game() {
 
     // Si hay una secuencia IA en curso, no cerrar turno aún
     if (aiSequence && aiSeqIndex < (aiSequence?.length || 0)) return;
+    if (isPaused) return;
 
     const autoAdvance = async () => {
       console.log('🤖 Auto-avanzando turno de IA...');
@@ -743,9 +757,10 @@ function Game() {
 
     const timer = setTimeout(autoAdvance, 500);
     return () => clearTimeout(timer);
-  }, [isAITurn, moveMade, moveHistory, aiSequence, aiSeqIndex]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isAITurn, moveMade, moveHistory, aiSequence, aiSeqIndex, isPaused]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const passTurn = async () => {
+    if (isPausedRef.current) return;
     await saveTurnToDatabase();
     setMoveMade(false);
     setLockedPiecePos(null);
@@ -822,11 +837,6 @@ function Game() {
             <button className="compact-button" onClick={handlePause}>
               <i className="fas fa-home"></i>
             </button>
-            {isAITurn && (
-              <div className="ai-status">
-                {aiThinking ? 'IA pensando…' : aiError ? 'IA sin jugada' : 'IA listo'}
-              </div>
-            )}
           </div>
 
           <div className="board-container">
@@ -843,7 +853,8 @@ function Game() {
               initialBoardState={initialBoardState}
               pieceByPos={pieceByPos}
               aiMove={aiMoveCmd}
-              disablePlayerActions={isAITurn || aiThinking}
+              disablePlayerActions={isPaused || isAITurn || aiThinking}
+              blockAiMoves={isPaused}
             />
           </div>
 
@@ -852,11 +863,11 @@ function Game() {
               <>
                 {moveMade ? (
                   <>
-                    <button className="control-button" onClick={continueTurn} disabled={isAITurn || aiThinking}>Continuar</button>
-                    <button className="control-button" onClick={undoMove} disabled={isAITurn || aiThinking}>Deshacer</button>
+                    <button className="control-button" onClick={continueTurn} disabled={isPaused || isAITurn || aiThinking}>Continuar</button>
+                    <button className="control-button" onClick={undoMove} disabled={isPaused || isAITurn || aiThinking}>Deshacer</button>
                   </>
                 ) : (
-                  <button className="control-button" onClick={passTurn} disabled={isAITurn || aiThinking}>Pasar Turno</button>
+                  <button className="control-button" onClick={passTurn} disabled={isPaused || isAITurn || aiThinking}>Pasar Turno</button>
                 )}
               </>
             )}
