@@ -59,8 +59,8 @@ function Game() {
   const aiSeqTokenRef = useRef(null);
   const isPausedRef = useRef(false);
 
-  const AI_FIRST_DELAY_MS = 1;
-  const AI_CHAIN_DELAY_MS = 1;
+  const AI_FIRST_DELAY_MS = 200;
+  const AI_CHAIN_DELAY_MS = 200;
 
   useEffect(() => {
     if (actualTurn?.numero) {
@@ -74,6 +74,23 @@ function Game() {
 
   const jugadoresConfig = useMemo(() => location.state?.jugadoresConfig || [], [location.state]);
   const isAITurn = useMemo(() => jugadoresConfig[currentPlayerIndex]?.tipo === 'ia', [jugadoresConfig, currentPlayerIndex]);
+  const activePuntas = useMemo(() => getActivePuntas(jugadoresConfig.length), [jugadoresConfig.length]);
+
+  const resolveNombreJugador = (configJugador, jugadorDb) => {
+    const nombreDb = jugadorDb?.nombre;
+    if (typeof nombreDb === 'string' && nombreDb.trim().length > 0) {
+      return nombreDb.trim();
+    }
+    const nombreConfig = configJugador?.nombre;
+    if (typeof nombreConfig === 'string' && nombreConfig.trim().length > 0) {
+      return nombreConfig.trim();
+    }
+    if (configJugador?.tipo === 'ia') {
+      const diff = configJugador?.dificultad;
+      return diff ? `IA ${diff}` : 'IA';
+    }
+    return 'Jugador';
+  };
 
   const handlePause = () => {
     setIsPaused(true);
@@ -174,8 +191,6 @@ function Game() {
         5: ['0-4', '2-4', '0-5', '2-5', '1-6', '1-4', '3-4', '1-5', '0-6', '0-7']        // Objetivo para punta 5 (opuesto: 1)
       };
 
-      const activePuntas = getActivePuntas(jugadoresConfig.length);
-
       for (let i = 0; i < jugadoresConfig.length; i++) {
         const puntaInicio = activePuntas[i];
         const posicionesObjetivoJugador = posicionesObjetivo[puntaInicio] || [];
@@ -195,13 +210,18 @@ function Game() {
         if (todasEnObjetivo) {
           const ganador = {
             ...jugadoresConfig[i],
+            nombre: resolveNombreJugador(jugadoresConfig[i], dbJugadores[i]),
             punta: puntaInicio
           };
 
           const perdedores = jugadoresConfig
             .map((j, idx) => ({ jugador: j, idx }))
             .filter(({ idx }) => idx !== i)
-            .map(({ jugador, idx }) => ({ ...jugador, punta: activePuntas[idx] }));
+            .map(({ jugador, idx }) => ({
+              ...jugador,
+              nombre: resolveNombreJugador(jugador, dbJugadores[idx]),
+              punta: activePuntas[idx]
+            }));
 
           setVictoryData({
             ganador,
@@ -806,20 +826,21 @@ function Game() {
             )}
             {jugadoresConfig.map((jugador, idx) => {
               const isCurrent = idx === currentPlayerIndex;
-              const activePuntas = getActivePuntas(jugadoresConfig.length);
               const punta = activePuntas[idx];
               const colorHex = PLAYER_COLORS[punta];
+              const displayName = resolveNombreJugador(jugador, dbJugadores[idx]);
+              const keyBase = dbJugadores[idx]?.id_jugador || `${jugador?.nombre || 'IA'}-${idx}`;
               return (
                 <div
-                  key={`${jugador.nombre || 'IA'}-${idx}`}
+                  key={keyBase}
                   className={`turn-card ${isCurrent ? 'current' : ''}`}
                 >
                   <div className="turn-avatar">
-                    <img src={getIconSrc(jugador.icono)} alt={jugador.nombre || 'IA'} />
+                    <img src={getIconSrc(jugador.icono)} alt={displayName} />
                   </div>
                   <div className="turn-info">
                     <div className="turn-color-dot" style={{ backgroundColor: colorHex }} />
-                    <span className="turn-name">{jugador.nombre || `IA ${jugador.dificultad}`}</span>
+                    <span className="turn-name">{displayName}</span>
                     {isCurrent && <span className="turn-indicator">Turno actual</span>}
                   </div>
                 </div>
