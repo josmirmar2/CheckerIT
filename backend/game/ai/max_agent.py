@@ -16,7 +16,14 @@ W_CHAIN_LEN_BONUS = 0.15     # Bono extra por cada salto en cadena
 W_REVERSE_PENALTY = 2.0      # Penaliza deshacer la última jugada (A->B seguido de B->A)
 W_SAME_PIECE_PENALTY = 0.2   # Penaliza repetir con la misma pieza en turnos consecutivos
 W_FAR_DESTINATION = 0.5       # Penaliza terminar lejos de la punta objetivo
-W_HOME_PENALTY = 0.6          # Penaliza piezas estacionadas en su punta inicial
+W_HOME_PENALTY = 18.0         # Penaliza fuertemente piezas estacionadas en su punta inicial
+W_HOME_EXIT_BONUS = 220.0     # Bono prioritario por sacar piezas de la punta inicial
+W_HOME_STAY_PENALTY = 150.0   # Penaliza movimientos que permanecen dentro de casa
+W_HOME_RETURN_PENALTY = 260.0 # Penaliza volver a entrar en la punta inicial
+W_HOME_IGNORE_PENALTY = 110.0 # Penaliza ignorar piezas propias en casa cuando aún quedan
+W_HOME_PRIORITY_LEAVE_BONUS = 320.0    # Bono extra por liberar casillas prioritarias de la punta propia
+W_HOME_PRIORITY_STAY_PENALTY = 260.0   # Penaliza mantener piezas sobre casillas prioritarias propias
+W_HOME_PRIORITY_RETURN_PENALTY = 340.0 # Penaliza regresar a una casilla prioritaria propia
 W_GOAL_MOVE_PENALTY = 3.0     # Penaliza mover piezas asentadas en la punta destino
 W_GOAL_RELOC_PENALTY = 12.0   # Penalización extra si aún quedan varias piezas fuera
 W_GOAL_STAY_PENALTY = 8.0     # Penaliza moverse dentro de la punta destino con piezas pendientes
@@ -505,11 +512,29 @@ class MaxHeuristicAgent:
         priority_list = GOAL_PRIORITY_POSITIONS.get(target_punta, []) if target_punta is not None else []
         priority_set = set(priority_list)
 
+        home_punta = None
+        for p in piezas:
+            if str(p.jugador_id) == str(jugador_id):
+                home_punta = _parse_punta(p.tipo)
+                if home_punta is not None:
+                    break
+
+        home_positions = set(GOAL_POSITIONS.get(home_punta, [])) if home_punta is not None else set()
+        home_priority_set = set(GOAL_PRIORITY_POSITIONS.get(home_punta, [])) if home_punta is not None else set()
+        origin_in_home = bool(home_positions and origen in home_positions)
+        dest_in_home = bool(home_positions and destino in home_positions)
+        origin_in_home_priority = bool(home_priority_set and origen in home_priority_set)
+        dest_in_home_priority = bool(home_priority_set and destino in home_priority_set)
+
         player_positions_before = [
             p.posicion for p in piezas if str(p.jugador_id) == str(jugador_id) and p.posicion
         ]
         outside_before = [pos for pos in player_positions_before if pos not in goal_positions]
         outside_before_count = len(outside_before)
+        home_before = [pos for pos in player_positions_before if pos in home_positions]
+        home_priority_before = [pos for pos in player_positions_before if pos in home_priority_set]
+        home_before_count = len(home_before)
+        home_priority_before_count = len(home_priority_before)
         priority_penalty_before, priority_missing_before, priority_blockers_before = _goal_priority_penalty(
             player_positions_before,
             target_punta,
@@ -571,6 +596,17 @@ class MaxHeuristicAgent:
         ]
         outside_after = [pos for pos in player_positions_after if pos and pos not in goal_positions]
         outside_after_count = len(outside_after)
+        home_after = [pos for pos in player_positions_after if pos in home_positions]
+        home_priority_after = [pos for pos in player_positions_after if pos in home_priority_set]
+        home_after_count = len(home_after)
+        home_priority_after_count = len(home_priority_after)
+        home_exit_bonus = 0.0
+        home_stay_penalty = 0.0
+        home_return_penalty = 0.0
+        home_ignore_penalty = 0.0
+        home_priority_leave_bonus = 0.0
+        home_priority_stay_penalty = 0.0
+        home_priority_return_penalty = 0.0
         entered_goal = dest_in_goal and not origin_in_goal
         priority_penalty_after, priority_missing_after, priority_blockers_after = _goal_priority_penalty(
             player_positions_after,
@@ -636,6 +672,36 @@ class MaxHeuristicAgent:
         if outside_move_bonus:
             score += outside_move_bonus
 
+        if home_positions:
+            if home_after_count < home_before_count:
+                exit_count = home_before_count - home_after_count
+                home_exit_bonus = W_HOME_EXIT_BONUS * float(exit_count)
+                score += home_exit_bonus
+            if origin_in_home and dest_in_home:
+                home_stay_penalty = W_HOME_STAY_PENALTY
+                score -= home_stay_penalty
+            if not origin_in_home and dest_in_home:
+                home_return_penalty = W_HOME_RETURN_PENALTY
+                score -= home_return_penalty
+            if home_before_count > 0 and home_after_count == home_before_count:
+                home_ignore_penalty = W_HOME_IGNORE_PENALTY
+                score -= home_ignore_penalty
+
+        if home_priority_set:
+            if origin_in_home_priority and not dest_in_home_priority:
+                home_priority_leave_bonus = W_HOME_PRIORITY_LEAVE_BONUS
+                score += home_priority_leave_bonus
+            if origin_in_home_priority and dest_in_home_priority:
+                home_priority_stay_penalty = W_HOME_PRIORITY_STAY_PENALTY
+                score -= home_priority_stay_penalty
+            if not origin_in_home_priority and dest_in_home_priority:
+                home_priority_return_penalty = W_HOME_PRIORITY_RETURN_PENALTY
+                score -= home_priority_return_penalty
+            if home_priority_before_count > 0 and home_priority_after_count == home_priority_before_count:
+                extra_penalty = W_HOME_PRIORITY_STAY_PENALTY * 0.5
+                home_priority_stay_penalty += extra_penalty
+                score -= extra_penalty
+
         detail = {
             "dist_total": dist_total,
             "dist_min": min_distance,
@@ -658,8 +724,23 @@ class MaxHeuristicAgent:
             "bonus_profundidad_meta": goal_depth_bonus,
             "bonus_cadena_meta": goal_chain_bonus,
             "bonus_fuera_meta": outside_move_bonus,
+            "bonus_salida_casa": home_exit_bonus,
+            "penalizacion_permanecer_casa": home_stay_penalty,
+            "penalizacion_retorno_casa": home_return_penalty,
+            "penalizacion_ignorar_casa": home_ignore_penalty,
+            "bonus_salida_prioridad_casa": home_priority_leave_bonus,
+            "penalizacion_permanecer_prioridad_casa": home_priority_stay_penalty,
+            "penalizacion_retorno_prioridad_casa": home_priority_return_penalty,
             "piezas_fuera_antes": float(outside_before_count),
             "piezas_fuera_despues": float(outside_after_count),
+            "piezas_casa_antes": float(home_before_count),
+            "piezas_casa_despues": float(home_after_count),
+            "piezas_prioridad_casa_antes": float(home_priority_before_count),
+            "piezas_prioridad_casa_despues": float(home_priority_after_count),
+            "origen_en_casa": 1.0 if origin_in_home else 0.0,
+            "destino_en_casa": 1.0 if dest_in_home else 0.0,
+            "origen_prioridad_casa": 1.0 if origin_in_home_priority else 0.0,
+            "destino_prioridad_casa": 1.0 if dest_in_home_priority else 0.0,
             "entro_meta": 1.0 if entered_goal else 0.0,
             "reacomodo_meta": 1.0 if rearranging_goal else 0.0,
             "progreso_externo_disponible": 1.0 if outside_progress_available else 0.0,
