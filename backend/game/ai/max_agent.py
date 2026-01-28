@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple, Union
 
 from ..models import Movimiento, Pieza
 
@@ -511,128 +511,70 @@ class MaxHeuristicAgent:
         outside_progress_available: bool = True,
     ) -> Tuple[float, Dict[str, float]]:
         """Evalúa el estado tras mover una pieza"""
-        goal_positions: Set[str] = set()
-        if target_punta is not None:
-            goal_positions = set(GOAL_POSITIONS.get(target_punta, []))
-        priority_list = GOAL_PRIORITY_POSITIONS.get(target_punta, []) if target_punta is not None else []
-        priority_set = set(priority_list)
+        # 1) Configuración inicial y estado antes del movimiento
+        goal_positions = set(GOAL_POSITIONS.get(target_punta, []))
+        priority_list = GOAL_PRIORITY_POSITIONS.get(target_punta, [])
+        priority_set = set(priority_list) if priority_list else set()
 
-        home_punta = None
-        for p in piezas:
-            if str(p.jugador_id) == str(jugador_id):
-                home_punta = _parse_punta(p.tipo)
-                if home_punta is not None:
-                    break
-
+        home_punta = next((_parse_punta(p.tipo) for p in piezas if str(p.jugador_id) == str(jugador_id) and p.tipo), None)
         home_positions = set(GOAL_POSITIONS.get(home_punta, [])) if home_punta is not None else set()
         home_priority_set = set(GOAL_PRIORITY_POSITIONS.get(home_punta, [])) if home_punta is not None else set()
-        origin_in_home = bool(home_positions and origen in home_positions)
-        dest_in_home = bool(home_positions and destino in home_positions)
-        origin_in_home_priority = bool(home_priority_set and origen in home_priority_set)
-        dest_in_home_priority = bool(home_priority_set and destino in home_priority_set)
 
-        player_positions_before = [
-            p.posicion for p in piezas if str(p.jugador_id) == str(jugador_id) and p.posicion
-        ]
+        origin_in_home, dest_in_home = origen in home_positions, destino in home_positions
+        origin_in_home_priority, dest_in_home_priority = origen in home_priority_set, destino in home_priority_set
+        origin_in_goal, dest_in_goal = origen in goal_positions, destino in goal_positions
+
+        player_positions_before = [p.posicion for p in piezas if str(p.jugador_id) == str(jugador_id) and p.posicion]
         outside_before = [pos for pos in player_positions_before if pos not in goal_positions]
-        outside_before_count = len(outside_before)
         home_before = [pos for pos in player_positions_before if pos in home_positions]
         home_priority_before = [pos for pos in player_positions_before if pos in home_priority_set]
-        home_before_count = len(home_before)
-        home_priority_before_count = len(home_priority_before)
-        priority_penalty_before, priority_missing_before, priority_blockers_before = _goal_priority_penalty(
-            player_positions_before,
-            target_punta,
-        )
+        
+        priority_penalty_before, priority_missing_before, priority_blockers_before = _goal_priority_penalty(player_positions_before, target_punta)
         priority_filled_before = {pos for pos in player_positions_before if pos in priority_set}
-        empty_priority_before = [pos for pos in priority_list if pos not in priority_filled_before]
-        lone_piece_bonus = 0.0
+        empty_priority_before = [pos for pos in priority_list if pos not in priority_filled_before] if priority_list else []
+        
         lone_piece_candidate = len(outside_before) == 1 and origen in outside_before
-        origin_in_goal = bool(goal_positions and origen in goal_positions)
-        dest_in_goal = bool(goal_positions and destino in goal_positions)
-        outside_move_bonus = 0.0
-        if not origin_in_goal:
-            outside_move_bonus = W_OUTSIDE_MOVE_BONUS
+        outside_move_bonus = W_OUTSIDE_MOVE_BONUS if not origin_in_goal else 0.0
 
-        # 1) Construir estado hipotético actualizado
-        piezas_actualizadas: List[Tuple[str, str, str, str]] = []  # (pieza_id, jugador_id, tipo, posicion)
-        for p in piezas:
-            pos = destino if p.id_pieza == pieza_id else p.posicion
-            piezas_actualizadas.append((p.id_pieza, str(p.jugador_id), p.tipo, pos))
+        # 2) Construir y evaluar estado hipotético
+        piezas_actualizadas = [(p.id_pieza, str(p.jugador_id), p.tipo, destino if p.id_pieza == pieza_id else p.posicion) for p in piezas]
+        score, dist_total, min_distance, blocked, home_in_home = self._evaluate_state(piezas_actualizadas, jugador_id, target_punta, return_detail=True)
 
-        # 2) Evaluar el estado resultante (distancias y bloqueos)
-        score, dist_total, min_distance, blocked, home_in_home = self._evaluate_state(
-            piezas_actualizadas,
-            jugador_id,
-            target_punta,
-            return_detail=True,
-        )
+        # 3) Progreso de la pieza movida
+        dist_before, dist_after = _distance_to_goal(origen, target_punta), _distance_to_goal(destino, target_punta)
+        piece_progress = float(dist_before - dist_after) if dist_before is not None and dist_after is not None else 0.0
+        score += (W_PROGRESS_ADV if piece_progress >= 0 else W_PROGRESS_BACK) * piece_progress
+        far_penalty = W_FAR_DESTINATION * float(dist_after) if dist_after is not None else 0.0
+        score -= far_penalty
 
-        # 3) Añadir progreso de la pieza movida (acercar vs alejar)
-        dist_before = _distance_to_goal(origen, target_punta)
-        dist_after = _distance_to_goal(destino, target_punta)
-        piece_progress = 0.0
-        far_penalty = 0.0
-        goal_move_penalty = 0.0
-        goal_reloc_penalty = 0.0
-        goal_stay_penalty = 0.0
-        win_bonus = 0.0
-        goal_entry_bonus = 0.0
-        goal_rearrange_bonus = 0.0
-        goal_depth_bonus = 0.0
-        goal_chain_bonus = 0.0
-        goal_priority_bonus = 0.0
-        priority_fill_bonus = 0.0
-        rearranging_goal = False
-        fills_priority = False
-        if dist_before is not None and dist_after is not None:
-            piece_progress = float(dist_before - dist_after)
-            if piece_progress >= 0:
-                score += W_PROGRESS_ADV * piece_progress
-            else:
-                score += W_PROGRESS_BACK * piece_progress
-        if dist_after is not None:
-            far_penalty = W_FAR_DESTINATION * float(dist_after)
-            score -= far_penalty
-
-        player_positions_after = [
-            pos for (_pid, _jug_id, _tipo, pos) in piezas_actualizadas
-            if str(_jug_id) == str(jugador_id)
-        ]
-        outside_after = [pos for pos in player_positions_after if pos and pos not in goal_positions]
-        outside_after_count = len(outside_after)
+        # 4) Estado después del movimiento
+        player_positions_after = [pos for _, jug_id, _, pos in piezas_actualizadas if str(jug_id) == str(jugador_id) and pos]
+        outside_after = [pos for pos in player_positions_after if pos not in goal_positions]
         home_after = [pos for pos in player_positions_after if pos in home_positions]
         home_priority_after = [pos for pos in player_positions_after if pos in home_priority_set]
-        home_after_count = len(home_after)
-        home_priority_after_count = len(home_priority_after)
-        home_exit_bonus = 0.0
-        home_stay_penalty = 0.0
-        home_return_penalty = 0.0
-        home_ignore_penalty = 0.0
-        home_outside_ignore_penalty = 0.0
-        home_progress_bonus = 0.0
-        home_priority_leave_bonus = 0.0
-        home_priority_stay_penalty = 0.0
-        home_priority_return_penalty = 0.0
+        
+        outside_before_count, outside_after_count = len(outside_before), len(outside_after)
+        home_before_count, home_after_count = len(home_before), len(home_after)
+        home_priority_before_count, home_priority_after_count = len(home_priority_before), len(home_priority_after)
+        
         entered_goal = dest_in_goal and not origin_in_goal
-        priority_penalty_after, priority_missing_after, priority_blockers_after = _goal_priority_penalty(
-            player_positions_after,
-            target_punta,
-        )
-        priority_filled_after = {pos for pos in player_positions_after if pos in priority_set}
-        fills_priority = (
-            origin_in_goal
-            and origen not in priority_set
-            and dest_in_goal
-            and destino in empty_priority_before
-        )
-        priority_missing_before = len(empty_priority_before)
+        priority_penalty_after, priority_missing_after, priority_blockers_after = _goal_priority_penalty(player_positions_after, target_punta)
+        fills_priority = origin_in_goal and origen not in priority_set and dest_in_goal and destino in empty_priority_before
         score += priority_penalty_after
 
+        # 5) Inicializar bonificaciones y penalizaciones
+        goal_move_penalty, goal_reloc_penalty, goal_stay_penalty = 0.0, 0.0, 0.0
+        win_bonus, goal_entry_bonus, goal_rearrange_bonus = 0.0, 0.0, 0.0
+        goal_depth_bonus, goal_chain_bonus, goal_priority_bonus, priority_fill_bonus = 0.0, 0.0, 0.0, 0.0
+        home_exit_bonus, home_stay_penalty, home_return_penalty = 0.0, 0.0, 0.0
+        home_ignore_penalty, home_outside_ignore_penalty, home_progress_bonus = 0.0, 0.0, 0.0
+        home_priority_leave_bonus, home_priority_stay_penalty, home_priority_return_penalty = 0.0, 0.0, 0.0
+        rearranging_goal = False
+        
+        # 6) Evaluación de metas
         if goal_positions and player_positions_after:
             if not outside_after:
                 win_bonus = W_WIN_MOVE_BONUS
-                score += win_bonus
             elif entered_goal and outside_after_count < outside_before_count:
                 goal_entry_bonus = W_GOAL_ENTRY_BONUS
 
@@ -644,150 +586,91 @@ class MaxHeuristicAgent:
                     rearranging_goal = True
                 else:
                     goal_move_penalty = W_GOAL_MOVE_PENALTY
-                    score -= goal_move_penalty
                     if outside_before_count > 1:
                         goal_reloc_penalty = W_GOAL_RELOC_PENALTY
-                        score -= goal_reloc_penalty
                     if dest_in_goal:
                         goal_stay_penalty = W_GOAL_STAY_PENALTY
-                        score -= goal_stay_penalty
-
+            
             if dest_in_goal:
-                dest_depth = _goal_depth_score(destino, target_punta)
-                origin_depth = _goal_depth_score(origen, target_punta) if origin_in_goal else 0.0
-                depth_gain = dest_depth - origin_depth
+                depth_gain = _goal_depth_score(destino, target_punta) - (_goal_depth_score(origen, target_punta) if origin_in_goal else 0.0)
                 if depth_gain > 0:
                     goal_depth_bonus = depth_gain * W_GOAL_DEPTH_BONUS
-
-                priority_value = _goal_priority_bonus(destino, target_punta)
-                if priority_value > 0:
+                if (priority_value := _goal_priority_bonus(destino, target_punta)) > 0:
                     goal_priority_bonus = priority_value
 
             if sequence and len(sequence) > 1 and entered_goal and outside_after_count < outside_before_count:
                 goal_chain_bonus = W_GOAL_CHAIN_BONUS
 
-        if lone_piece_candidate:
-            lone_piece_bonus = W_LONE_PIECE_BONUS
+        lone_piece_bonus = W_LONE_PIECE_BONUS if lone_piece_candidate else 0.0
+        
+        score += win_bonus - goal_move_penalty - goal_reloc_penalty - goal_stay_penalty
 
-        # Recompensas por progreso interno/meta se aplicarán después de considerar piezas pendientes en casa
-
+        # 7) Evaluación de casa (punta inicial)
         if home_positions:
             if home_after_count < home_before_count:
-                exit_count = home_before_count - home_after_count
-                home_exit_bonus = W_HOME_EXIT_BONUS * float(exit_count)
-                score += home_exit_bonus
-            if origin_in_home and dest_in_home:
+                home_exit_bonus = W_HOME_EXIT_BONUS * float(home_before_count - home_after_count)
+            elif origin_in_home and dest_in_home:
                 home_stay_penalty = W_HOME_STAY_PENALTY
-                score -= home_stay_penalty
                 if piece_progress > 0:
                     home_progress_bonus = W_HOME_PROGRESS_BONUS * float(piece_progress)
-                    score += home_progress_bonus
                 elif home_before_count > 0:
                     home_ignore_penalty = W_HOME_IGNORE_PENALTY
-                    score -= home_ignore_penalty
-            if not origin_in_home and dest_in_home:
+            elif not origin_in_home and dest_in_home:
                 home_return_penalty = W_HOME_RETURN_PENALTY
-                score -= home_return_penalty
-            if home_before_count > 0 and not origin_in_home and not dest_in_home:
+            elif home_before_count > 0 and not origin_in_home and not dest_in_home:
                 home_outside_ignore_penalty = W_HOME_OUTSIDE_IGNORE_PENALTY
-                score -= home_outside_ignore_penalty
+        
+        score += home_exit_bonus + home_progress_bonus - home_stay_penalty - home_ignore_penalty - home_return_penalty - home_outside_ignore_penalty
 
+        # 8) Evaluación de prioridades en casa
         if home_priority_set:
             if origin_in_home_priority and not dest_in_home_priority:
                 home_priority_leave_bonus = W_HOME_PRIORITY_LEAVE_BONUS
-                score += home_priority_leave_bonus
-            if origin_in_home_priority and dest_in_home_priority:
+            elif origin_in_home_priority and dest_in_home_priority:
                 home_priority_stay_penalty = W_HOME_PRIORITY_STAY_PENALTY
-                score -= home_priority_stay_penalty
-            if not origin_in_home_priority and dest_in_home_priority:
+            elif not origin_in_home_priority and dest_in_home_priority:
                 home_priority_return_penalty = W_HOME_PRIORITY_RETURN_PENALTY
-                score -= home_priority_return_penalty
+            
             if home_priority_before_count > 0 and home_priority_after_count == home_priority_before_count:
                 extra_penalty = W_HOME_PRIORITY_STAY_PENALTY * 0.5
                 home_priority_stay_penalty += extra_penalty
-                score -= extra_penalty
-
+        
+        score += home_priority_leave_bonus - home_priority_stay_penalty - home_priority_return_penalty
+        
+        # 9) Aplicar factor de supresión y bonificaciones finales
         removed_home_piece = home_before_count > home_after_count
         goal_bonus_scale = 1.0 if (home_after_count == 0 or removed_home_piece) else HOME_GOAL_SUPPRESSION_FACTOR
 
-        if goal_entry_bonus > 0.0:
-            goal_entry_bonus *= goal_bonus_scale
-            score += goal_entry_bonus
-        if goal_rearrange_bonus > 0.0:
-            goal_rearrange_bonus *= goal_bonus_scale
-            score += goal_rearrange_bonus
-        if goal_priority_bonus > 0.0:
-            goal_priority_bonus *= goal_bonus_scale
-            score += goal_priority_bonus
-        if priority_fill_bonus > 0.0:
-            priority_fill_bonus *= goal_bonus_scale
-            score += priority_fill_bonus
-        if goal_depth_bonus > 0.0:
-            goal_depth_bonus *= goal_bonus_scale
-            score += goal_depth_bonus
-        if goal_chain_bonus > 0.0:
-            goal_chain_bonus *= goal_bonus_scale
-            score += goal_chain_bonus
-        if lone_piece_bonus > 0.0:
-            lone_piece_bonus *= goal_bonus_scale
-            score += lone_piece_bonus
-        if outside_move_bonus > 0.0:
-            outside_move_bonus *= goal_bonus_scale
-            score += outside_move_bonus
-
+        score += goal_entry_bonus  # Se aplica siempre sin supresión
+        
+        bonuses_to_scale = [goal_rearrange_bonus, goal_priority_bonus, priority_fill_bonus, goal_depth_bonus, goal_chain_bonus, lone_piece_bonus, outside_move_bonus]
+        for bonus in bonuses_to_scale:
+            if bonus > 0.0:
+                score += bonus * goal_bonus_scale
+        
+        # 10) Devolver score y detalle
         detail = {
-            "dist_total": dist_total,
-            "dist_min": min_distance,
-            "blocked": blocked,
-            "en_punta_inicial": home_in_home,
-            "dist_before": dist_before,
-            "dist_after": dist_after,
-            "progreso_pieza": piece_progress,
-            "penalizacion_lejania": far_penalty,
-            "penalizacion_meta": goal_move_penalty,
-            "penalizacion_reubicacion_meta": goal_reloc_penalty,
-            "penalizacion_permanencia_meta": goal_stay_penalty,
-            "penalizacion_prioridad_meta": -priority_penalty_after,
-            "bonus_entrada_meta": goal_entry_bonus,
-            "bonus_reacomodo_meta": goal_rearrange_bonus,
-            "bonus_prioridad_meta": goal_priority_bonus,
-            "bonus_relleno_prioridad": priority_fill_bonus,
-            "bonus_victoria": win_bonus,
-            "bonus_pieza_sola": lone_piece_bonus,
-            "bonus_profundidad_meta": goal_depth_bonus,
-            "bonus_cadena_meta": goal_chain_bonus,
-            "bonus_fuera_meta": outside_move_bonus,
-            "bonus_salida_casa": home_exit_bonus,
-            "penalizacion_permanecer_casa": home_stay_penalty,
-            "penalizacion_retorno_casa": home_return_penalty,
-            "penalizacion_ignorar_casa": home_ignore_penalty,
-            "bonus_progreso_casa": home_progress_bonus,
-            "penalizacion_distraccion_casa": home_outside_ignore_penalty,
-            "bonus_salida_prioridad_casa": home_priority_leave_bonus,
-            "penalizacion_permanecer_prioridad_casa": home_priority_stay_penalty,
-            "penalizacion_retorno_prioridad_casa": home_priority_return_penalty,
-            "piezas_fuera_antes": float(outside_before_count),
-            "piezas_fuera_despues": float(outside_after_count),
-            "piezas_casa_antes": float(home_before_count),
-            "piezas_casa_despues": float(home_after_count),
-            "piezas_prioridad_casa_antes": float(home_priority_before_count),
-            "piezas_prioridad_casa_despues": float(home_priority_after_count),
-            "origen_en_casa": 1.0 if origin_in_home else 0.0,
-            "destino_en_casa": 1.0 if dest_in_home else 0.0,
-            "origen_prioridad_casa": 1.0 if origin_in_home_priority else 0.0,
-            "destino_prioridad_casa": 1.0 if dest_in_home_priority else 0.0,
-            "entro_meta": 1.0 if entered_goal else 0.0,
-            "reacomodo_meta": 1.0 if rearranging_goal else 0.0,
-            "progreso_externo_disponible": 1.0 if outside_progress_available else 0.0,
-            "prioridad_meta": 1.0 if goal_priority_bonus > 0 else 0.0,
-            "relleno_prioridad": 1.0 if priority_fill_bonus > 0 else 0.0,
-            "prioridades_vacias_antes": float(priority_missing_before),
-            "prioridades_vacias_despues": float(priority_missing_after),
-            "piezas_barrera_meta": float(priority_blockers_after),
-            "piezas_barrera_meta_antes": float(priority_blockers_before),
-            "penalizacion_prioridad_antes": -priority_penalty_before,
-            "penalizacion_prioridad_despues": -priority_penalty_after,
-            "factor_supresion_meta": goal_bonus_scale,
+            "dist_total": dist_total, "dist_min": min_distance, "blocked": blocked, "en_punta_inicial": home_in_home,
+            "dist_before": dist_before, "dist_after": dist_after, "progreso_pieza": piece_progress, "penalizacion_lejania": far_penalty,
+            "penalizacion_meta": goal_move_penalty, "penalizacion_reubicacion_meta": goal_reloc_penalty, "penalizacion_permanencia_meta": goal_stay_penalty,
+            "penalizacion_prioridad_meta": -priority_penalty_after, "bonus_entrada_meta": goal_entry_bonus, "bonus_reacomodo_meta": goal_rearrange_bonus,
+            "bonus_prioridad_meta": goal_priority_bonus, "bonus_relleno_prioridad": priority_fill_bonus, "bonus_victoria": win_bonus,
+            "bonus_pieza_sola": lone_piece_bonus, "bonus_profundidad_meta": goal_depth_bonus, "bonus_cadena_meta": goal_chain_bonus,
+            "bonus_fuera_meta": outside_move_bonus, "bonus_salida_casa": home_exit_bonus, "penalizacion_permanecer_casa": home_stay_penalty,
+            "penalizacion_retorno_casa": home_return_penalty, "penalizacion_ignorar_casa": home_ignore_penalty, "bonus_progreso_casa": home_progress_bonus,
+            "penalizacion_distraccion_casa": home_outside_ignore_penalty, "bonus_salida_prioridad_casa": home_priority_leave_bonus,
+            "penalizacion_permanecer_prioridad_casa": home_priority_stay_penalty, "penalizacion_retorno_prioridad_casa": home_priority_return_penalty,
+            "piezas_fuera_antes": float(outside_before_count), "piezas_fuera_despues": float(outside_after_count),
+            "piezas_casa_antes": float(home_before_count), "piezas_casa_despues": float(home_after_count),
+            "piezas_prioridad_casa_antes": float(home_priority_before_count), "piezas_prioridad_casa_despues": float(home_priority_after_count),
+            "origen_en_casa": 1.0 if origin_in_home else 0.0, "destino_en_casa": 1.0 if dest_in_home else 0.0,
+            "origen_prioridad_casa": 1.0 if origin_in_home_priority else 0.0, "destino_prioridad_casa": 1.0 if dest_in_home_priority else 0.0,
+            "entro_meta": 1.0 if entered_goal else 0.0, "reacomodo_meta": 1.0 if rearranging_goal else 0.0,
+            "progreso_externo_disponible": 1.0 if outside_progress_available else 0.0, "prioridad_meta": 1.0 if goal_priority_bonus > 0 else 0.0,
+            "relleno_prioridad": 1.0 if priority_fill_bonus > 0 else 0.0, "prioridades_vacias_antes": float(priority_missing_before),
+            "prioridades_vacias_despues": float(priority_missing_after), "piezas_barrera_meta": float(priority_blockers_after),
+            "piezas_barrera_meta_antes": float(priority_blockers_before), "penalizacion_prioridad_antes": -priority_penalty_before,
+            "penalizacion_prioridad_despues": -priority_penalty_after, "factor_supresion_meta": goal_bonus_scale,
         }
         return score, detail
 
@@ -797,69 +680,46 @@ class MaxHeuristicAgent:
         jugador_id: str,
         target_punta: int,
         return_detail: bool = False,
-    ) -> float | Tuple[float, float, float, int]:
+    ) -> Union[float, Tuple[float, float, float, int, int]]:
         """
         Heurística Max: menor distancia total y punta más adelantada, penaliza bloqueos, sólo evalúa el estado actual.
         """
         goal_positions = GOAL_POSITIONS.get(target_punta, [])
-        goal_coords = [_axial_from_key(pos) for pos in goal_positions]
-        goal_coords = [c for c in goal_coords if c is not None]
+        goal_coords = [c for c in (_axial_from_key(pos) for pos in goal_positions) if c is not None]
         if not goal_coords:
-            return float("-inf") if not return_detail else (float("-inf"), float("inf"), float("inf"), 0, 0)
+            return (float("-inf"), float("inf"), float("inf"), 0, 0) if return_detail else float("-inf")
 
-        total_distance = 0.0
-        min_distance = None
-        piezas_count = 0
-        home_in_home = 0
-
+        total_distance, min_distance, piezas_count, blocked, home_in_home = 0.0, None, 0, 0, 0
         piezas_list = list(piezas)
-        occupied = {pos for (_, jug_id, _tipo, pos) in piezas_list if pos}
-
-        blocked = 0
+        occupied = {pos for _, _, _, pos in piezas_list if pos}
 
         for _, jug_id, tipo, pos in piezas_list:
-            # Saltar piezas de otros jugadores
-            if str(jug_id) != str(jugador_id):
+            if str(jug_id) != str(jugador_id) or not pos:
                 continue
+            
             punta = _parse_punta(tipo)
-            if punta is None or not pos:
-                continue
             axial = _axial_from_key(pos)
-            if not axial:
+            if punta is None or not axial:
                 continue
 
-            # Distancia mínima de esta pieza a la meta
-            min_dist = min(_hex_distance(axial, goal) for goal in goal_coords)
-            total_distance += float(min_dist)
-            if min_distance is None or min_dist < min_distance:
-                min_distance = min_dist
+            dist = min(_hex_distance(axial, goal) for goal in goal_coords)
+            total_distance += float(dist)
+            if min_distance is None or dist < min_distance:
+                min_distance = dist
             piezas_count += 1
 
-            # Penalización por seguir dentro de la punta inicial
-            home_positions = GOAL_POSITIONS.get(punta, [])
-            if pos in home_positions:
+            if pos in GOAL_POSITIONS.get(punta, []):
                 home_in_home += 1
-
-            # Bloqueos: piezas sin movimientos legales (permitimos simples y saltos)
-            moves = self._get_valid_moves(pos, occupied, allow_simple=True)
-            if len(moves) == 0:
+            if not self._get_valid_moves(pos, occupied, allow_simple=True):
                 blocked += 1
 
         if piezas_count == 0:
-            return float("-inf") if not return_detail else (float("-inf"), float("inf"), float("inf"), blocked, home_in_home)
+            return (float("-inf"), float("inf"), float("inf"), blocked, home_in_home) if return_detail else float("-inf")
 
-        min_distance = float(min_distance if min_distance is not None else 0)
-
-        # Puntuación: distancias y bloqueos (se restan porque son "costes")
-        score = 0.0
-        score -= W_TOTAL_DIST * float(total_distance)
-        score -= W_FRONT_DIST * min_distance
-        score -= W_BLOCKED * float(blocked)
-        score -= W_HOME_PENALTY * float(home_in_home)
-
-        if return_detail:
-            return score, total_distance, min_distance, blocked, home_in_home
-        return score
+        min_dist_val = float(min_distance if min_distance is not None else 0)
+        score = -(W_TOTAL_DIST * total_distance + W_FRONT_DIST * min_dist_val + W_BLOCKED * blocked + W_HOME_PENALTY * home_in_home)
+        
+        return (score, total_distance, min_dist_val, blocked, home_in_home) if return_detail else score
 
     def _get_valid_moves(
         self,
@@ -872,48 +732,26 @@ class MaxHeuristicAgent:
         return list({*simple, *jumps})
 
     def _compute_simple_moves(self, origin_key: str, occupied_positions: Set[str]) -> List[str]:
+        # Calcula movimientos a casillas adyacentes no ocupadas
         origin_coord = _axial_from_key(origin_key)
         if not origin_coord:
             return []
-
-        moves: List[str] = []
-        for direction in AXIAL_DIRECTIONS:
-            neighbor_q = origin_coord[0] + direction["dq"]
-            neighbor_r = origin_coord[1] + direction["dr"]
-            neighbor_key = _key_from_axial(neighbor_q, neighbor_r)
-            if neighbor_key and neighbor_key not in occupied_positions:
-                moves.append(neighbor_key)
-        return moves
+        return [key for key in (_key_from_axial(origin_coord[0] + d["dq"], origin_coord[1] + d["dr"]) for d in AXIAL_DIRECTIONS) if key and key not in occupied_positions]
 
     def _compute_jump_moves(self, origin_key: str, occupied_positions: Set[str]) -> List[str]:
+        # Calcula todos los aterrizajes posibles desde una posición mediante saltos
         origin_coord = _axial_from_key(origin_key)
         if not origin_coord:
             return []
-
+        
         landings: Set[str] = set()
-
-        def dfs(coord: Tuple[int, int]) -> None:
-            for direction in AXIAL_DIRECTIONS:
-                middle_q = coord[0] + direction["dq"]
-                middle_r = coord[1] + direction["dr"]
-                landing_q = coord[0] + 2 * direction["dq"]
-                landing_r = coord[1] + 2 * direction["dr"]
-
-                middle_key = _key_from_axial(middle_q, middle_r)
-                landing_key = _key_from_axial(landing_q, landing_r)
-
-                if not middle_key or not landing_key:
-                    continue
-                if middle_key not in occupied_positions:
-                    continue
-                if landing_key in occupied_positions:
-                    continue
-                if landing_key in landings:
-                    continue
-
-                landings.add(landing_key)
-                dfs((landing_q, landing_r))
-
+        def dfs(coord: Tuple[int, int]):
+            for d in AXIAL_DIRECTIONS:
+                middle_key = _key_from_axial(coord[0] + d["dq"], coord[1] + d["dr"])
+                landing_key = _key_from_axial(coord[0] + 2 * d["dq"], coord[1] + 2 * d["dr"])
+                if middle_key and landing_key and middle_key in occupied_positions and landing_key not in occupied_positions and landing_key not in landings:
+                    landings.add(landing_key)
+                    dfs(_axial_from_key(landing_key))
         dfs(origin_coord)
         return list(landings)
 
@@ -923,36 +761,21 @@ class MaxHeuristicAgent:
         if not origin_coord:
             return []
 
-        occupied_wo_origin = set(occupied_positions)
-        occupied_wo_origin.discard(origin_key)
-
+        occupied_wo_origin = occupied_positions - {origin_key}
         sequences: List[List[str]] = []
 
-        def dfs(coord: Tuple[int, int], path: List[str], visited_landings: Set[str]) -> None:
+        def dfs(coord: Tuple[int, int], path: List[str], visited_landings: Set[str]):
             extended = False
-            for direction in AXIAL_DIRECTIONS:
-                middle_q = coord[0] + direction["dq"]
-                middle_r = coord[1] + direction["dr"]
-                landing_q = coord[0] + 2 * direction["dq"]
-                landing_r = coord[1] + 2 * direction["dr"]
-
-                middle_key = _key_from_axial(middle_q, middle_r)
-                landing_key = _key_from_axial(landing_q, landing_r)
-
-                if not middle_key or not landing_key:
+            for d in AXIAL_DIRECTIONS:
+                middle_key = _key_from_axial(coord[0] + d["dq"], coord[1] + d["dr"])
+                landing_key = _key_from_axial(coord[0] + 2 * d["dq"], coord[1] + 2 * d["dr"])
+                
+                if not (middle_key and landing_key and middle_key in occupied_positions and landing_key not in occupied_wo_origin and landing_key != origin_key and landing_key not in visited_landings):
                     continue
-                if middle_key not in occupied_positions:
-                    continue
-                if landing_key in occupied_wo_origin:
-                    continue
-                if landing_key == origin_key:
-                    continue
-                if landing_key in visited_landings:
-                    continue
-
+                
                 extended = True
                 visited_landings.add(landing_key)
-                dfs((landing_q, landing_r), path + [landing_key], visited_landings)
+                dfs(_axial_from_key(landing_key), path + [landing_key], visited_landings)
                 visited_landings.remove(landing_key)
 
             if not extended and len(path) >= 2:
