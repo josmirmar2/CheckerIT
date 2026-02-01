@@ -317,7 +317,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
         occupied_positions = get_occupied_positions(partida.id_partida)
 
         created = []
-        piece_positions = {}  # Mapeo pieza_id -> último destino
+        pieza_turno_id = None
 
         for idx, m in enumerate(movimientos_data, start=1):
             try:
@@ -334,9 +334,23 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 if str(partida_id) != str(partida.id_partida):
                     return Response({ 'error': f'partida_id no coincide con la partida de la ruta: {partida_id} != {partida.id_partida}' }, status=status.HTTP_400_BAD_REQUEST)
 
-                jugador = Jugador.objects.get(id_jugador=jugador_id)
                 turno = Turno.objects.get(id_turno=turno_id)
                 pieza = Pieza.objects.get(id_pieza=pieza_id)
+
+                turno_actual = Turno.objects.filter(partida=partida, fin__isnull=True).order_by('numero').first()
+                if not turno_actual:
+                    return Response({ 'error': 'No hay un turno activo para la partida' }, status=status.HTTP_400_BAD_REQUEST)
+                if str(turno_actual.id_turno) != str(turno.id_turno):
+                    return Response({ 'error': 'turno_id no coincide con el turno activo' }, status=status.HTTP_400_BAD_REQUEST)
+                jugador = turno_actual.jugador
+                if str(pieza.jugador_id) != str(jugador.id_jugador):
+                    return Response({ 'error': 'La pieza no pertenece al jugador' }, status=status.HTTP_400_BAD_REQUEST)
+                if pieza_turno_id is None:
+                    pieza_turno_id = pieza.id_pieza
+                elif str(pieza.id_pieza) != str(pieza_turno_id):
+                    return Response({ 'error': 'Solo se permiten movimientos con una única pieza por turno' }, status=status.HTTP_400_BAD_REQUEST)
+                if pieza.partida_id != partida.id_partida:
+                    return Response({ 'error': 'La pieza no pertenece a la partida' }, status=status.HTTP_400_BAD_REQUEST)
 
                 allow_simple = (idx == 1)
                 es_valido, mensaje_error = validate_move(origen, destino, occupied_positions, allow_simple)
@@ -361,8 +375,8 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 )
                 created.append(mov)
                 
-                # Guardar el último destino de esta pieza (en caso de movimientos encadenados)
-                piece_positions[pieza_id] = (pieza, destino)
+                pieza.posicion = destino
+                pieza.save(update_fields=['posicion'])
                 
             except Jugador.DoesNotExist:
                 return Response({ 'error': f'Jugador no encontrado: {jugador_id}' }, status=status.HTTP_400_BAD_REQUEST)
@@ -372,11 +386,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 return Response({ 'error': f'Pieza no encontrada: {pieza_id}' }, status=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
                 return Response({ 'error': str(e) }, status=status.HTTP_400_BAD_REQUEST)
-
-        # Guardar posiciones finales de TODAS las piezas movidas
-        for pieza, destino in piece_positions.values():
-            pieza.posicion = destino
-            pieza.save()
 
         serializer = MovimientoSerializer(created, many=True)
         return Response({ 'registrados': serializer.data }, status=status.HTTP_201_CREATED)
@@ -621,6 +630,15 @@ class IAViewSet(viewsets.ModelViewSet):
         permitir_simples_raw = request.data.get('permitir_simples', True)
 
         allow_simple = bool(permitir_simples_raw) if isinstance(permitir_simples_raw, bool) else str(permitir_simples_raw).lower() != 'false'
+
+        if not partida_id:
+            return Response({'error': 'partida_id es requerido'}, status=status.HTTP_400_BAD_REQUEST)
+
+        turno_actual = Turno.objects.filter(partida_id=partida_id, fin__isnull=True).order_by('numero').first()
+        if turno_actual is None:
+            return Response({'error': 'No hay un turno activo para la partida'}, status=status.HTTP_400_BAD_REQUEST)
+        if str(turno_actual.jugador_id) != str(ia_obj.jugador_id):
+            return Response({'error': 'No es el turno de esta IA'}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             if ia_obj.nivel == 2:
