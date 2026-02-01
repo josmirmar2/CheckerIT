@@ -634,6 +634,23 @@ class IAViewSet(viewsets.ModelViewSet):
         if not partida_id:
             return Response({'error': 'partida_id es requerido'}, status=status.HTTP_400_BAD_REQUEST)
 
+        estado_piezas = request.data.get('estado_piezas')
+        if isinstance(estado_piezas, list) and estado_piezas:
+            piezas_ids = [p.get('id_pieza') for p in estado_piezas if p.get('id_pieza') and p.get('posicion')]
+            if piezas_ids:
+                piezas_qs = Pieza.objects.filter(partida_id=partida_id, id_pieza__in=piezas_ids)
+                piezas_map = {p.id_pieza: p for p in piezas_qs}
+                actualizar = []
+                for item in estado_piezas:
+                    pieza_id = item.get('id_pieza')
+                    posicion = item.get('posicion')
+                    pieza = piezas_map.get(pieza_id)
+                    if pieza and posicion and pieza.posicion != posicion:
+                        pieza.posicion = posicion
+                        actualizar.append(pieza)
+                if actualizar:
+                    Pieza.objects.bulk_update(actualizar, ['posicion'])
+
         turno_actual = Turno.objects.filter(partida_id=partida_id, fin__isnull=True).order_by('numero').first()
         if turno_actual is None:
             return Response({'error': 'No hay un turno activo para la partida'}, status=status.HTTP_400_BAD_REQUEST)
@@ -642,7 +659,7 @@ class IAViewSet(viewsets.ModelViewSet):
 
         try:
             if ia_obj.nivel == 2:
-                agent = MCTSAgent()
+                agent = MCTSAgent.for_player(partida_id, ia_obj.jugador_id)
             else:
                 agent = MaxHeuristicAgent()
 

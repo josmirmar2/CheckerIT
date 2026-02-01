@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from copy import deepcopy
 import random
-from typing import Dict, Iterable, List, Optional
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from montecarlo.node import Node
 from montecarlo.montecarlo import MonteCarlo
@@ -122,10 +122,25 @@ class ChineseCheckersState:
         return landings
 
 
+_MCTS_AGENTS_BY_PLAYER: Dict[Tuple[str, str], "MCTSAgent"] = {}
+_MCTS_ALLOWED_PIECES: Dict[Tuple[str, str], Set[str]] = {}
+
+
 class MCTSAgent:
-    def __init__(self, simulations: int = 12, rollout_depth: int = 25) -> None:
+    def __init__(self, partida_id: str, jugador_id: str, simulations: int = 10, rollout_depth: int = 21) -> None:
+        self.partida_id = str(partida_id)
+        self.jugador_id = str(jugador_id)
         self.simulations = simulations
         self.rollout_depth = rollout_depth
+
+    @classmethod
+    def for_player(cls, partida_id: str, jugador_id: str) -> "MCTSAgent":
+        key = (str(partida_id), str(jugador_id))
+        agent = _MCTS_AGENTS_BY_PLAYER.get(key)
+        if agent is None:
+            agent = cls(partida_id=key[0], jugador_id=key[1])
+            _MCTS_AGENTS_BY_PLAYER[key] = agent
+        return agent
 
     def suggest_move(
         self,
@@ -134,6 +149,8 @@ class MCTSAgent:
         allow_simple: bool = True,
         simulations: Optional[int] = None,
     ) -> Dict[str, object]:
+        if str(jugador_id) != self.jugador_id or str(partida_id) != self.partida_id:
+            raise ValueError("El agente no corresponde a este jugador")
         if not partida_id or not jugador_id:
             raise ValueError("partida_id y jugador_id son requeridos")
 
@@ -154,6 +171,11 @@ class MCTSAgent:
         positions: Dict[str, str] = {}
         piece_owner: Dict[str, str] = {}
         piece_type: Dict[str, str] = {}
+        allowed_key = (str(partida_id), str(jugador_id))
+        allowed_piece_ids = _MCTS_ALLOWED_PIECES.get(allowed_key)
+        if allowed_piece_ids is None:
+            allowed_piece_ids = {p.id_pieza for p in piezas if str(p.jugador_id) == str(jugador_id)}
+            _MCTS_ALLOWED_PIECES[allowed_key] = allowed_piece_ids
         target_by_player: Dict[str, int] = {}
 
         for pieza in piezas:
@@ -161,15 +183,16 @@ class MCTSAgent:
             piece_owner[pieza.id_pieza] = str(pieza.jugador_id)
             piece_type[pieza.id_pieza] = pieza.tipo
 
-        for player_id in players_order:
-            pieza_player = next((p for p in piezas if str(p.jugador_id) == player_id and p.tipo), None)
-            punta = _parse_punta(pieza_player.tipo) if pieza_player else None
-            target = _target_punta(punta)
-            if target is None:
-                raise ValueError("No se pudo determinar la punta objetivo para el jugador")
-            target_by_player[player_id] = target
+        player_id = str(jugador_id)
+        pieza_player = next((p for p in piezas if str(p.jugador_id) == player_id and p.tipo), None)
+        punta = _parse_punta(pieza_player.tipo) if pieza_player else None
+        target = _target_punta(punta)
+        if target is None:
+            raise ValueError("No se pudo determinar la punta objetivo para el jugador")
+        target_by_player[player_id] = target
 
-        current_index = players_order.index(str(jugador_id))
+        current_index = 0
+        players_order = [player_id]
         state = ChineseCheckersState(
             positions=positions,
             piece_owner=piece_owner,
@@ -181,7 +204,7 @@ class MCTSAgent:
         )
 
         root_moves = state.get_possible_moves()
-        root_moves = [m for m in root_moves if str(piece_owner.get(m.pieza_id)) == str(jugador_id)]
+        root_moves = [m for m in root_moves if m.pieza_id in allowed_piece_ids]
         if not root_moves:
             raise ValueError("No hay movimientos validos disponibles")
 
@@ -204,7 +227,7 @@ class MCTSAgent:
         def child_finder(node: Node, mc: MonteCarlo) -> None:
             moves = node.state.get_possible_moves()
             for move in moves:
-                if str(node.state.piece_owner.get(move.pieza_id)) != str(node.state.current_player_id()):
+                if move.pieza_id not in allowed_piece_ids:
                     continue
                 child_state = deepcopy(node.state)
                 child_state.move(move)
@@ -260,7 +283,7 @@ class MCTSAgent:
             raise ValueError("No hay movimientos validos disponibles")
 
         move = chosen.state.last_move
-        if str(piece_owner.get(move.pieza_id)) != str(jugador_id):
+        if move.pieza_id not in allowed_piece_ids:
             move = root_moves[0]
         payload: Dict[str, object] = {
             "pieza_id": move.pieza_id,
