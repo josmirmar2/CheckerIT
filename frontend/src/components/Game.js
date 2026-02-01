@@ -497,10 +497,15 @@ function Game() {
     setAiThinking(true);
     setAiError(null);
     try {
+      const estado_piezas = Array.from(pieceByPos.entries()).map(([posicion, id_pieza]) => ({
+        id_pieza,
+        posicion,
+      }));
+
       const res = await fetch(`http://localhost:8000/api/ia/${jugadorDb.id_jugador}/sugerir_movimiento/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ partida_id: partida.id_partida, permitir_simples: true })
+        body: JSON.stringify({ partida_id: partida.id_partida, permitir_simples: true, estado_piezas })
       });
 
       if (!res.ok) {
