@@ -241,18 +241,31 @@ class MCTSAgent:
         capped_simulations = min(requested_simulations, 10 + 2 * len(root_moves))
         montecarlo.simulate(capped_simulations)
 
-        chosen = montecarlo.make_choice()
+        chosen = None
+        root_children = list(getattr(root, "children", []) or [])
+        if root_children:
+            def _child_key(child):
+                return (
+                    getattr(child, "visits", 0),
+                    getattr(child, "win_value", 0.0),
+                )
+            chosen = max(root_children, key=_child_key)
+        else:
+            chosen = montecarlo.make_choice()
+
         if not chosen or not getattr(chosen.state, "last_move", None):
             raise ValueError("No hay movimientos validos disponibles")
 
         move = chosen.state.last_move
+        if str(piece_owner.get(move.pieza_id)) != str(jugador_id):
+            move = root_moves[0]
         payload: Dict[str, object] = {
             "pieza_id": move.pieza_id,
             "origen": move.origen,
             "destino": move.destino,
             "heuristica": "mcts",
             "simulaciones": capped_simulations,
-            "puntuacion": float(getattr(chosen, "win_value", 0.0)),
+            "puntuacion": float(getattr(chosen, "win_value", 0.0)) if chosen else 0.0,
         }
 
         return payload
