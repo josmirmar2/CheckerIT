@@ -5,6 +5,7 @@ from django.utils import timezone
 from datetime import datetime
 from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida
 from .ai.max_agent import MaxHeuristicAgent
+from .ai.mcts_agent import MCTSAgent
 from .serializers import (
     JugadorSerializer, PartidaSerializer, PartidaListSerializer,
     PiezaSerializer, TurnoSerializer, 
@@ -621,8 +622,12 @@ class IAViewSet(viewsets.ModelViewSet):
 
         allow_simple = bool(permitir_simples_raw) if isinstance(permitir_simples_raw, bool) else str(permitir_simples_raw).lower() != 'false'
 
-        agent = MaxHeuristicAgent()
         try:
+            if ia_obj.nivel == 2:
+                agent = MCTSAgent()
+            else:
+                agent = MaxHeuristicAgent()
+
             sugerencia = agent.suggest_move(
                 partida_id=partida_id,
                 jugador_id=ia_obj.jugador_id,
