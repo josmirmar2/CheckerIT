@@ -123,7 +123,7 @@ class ChineseCheckersState:
 
 
 class MCTSAgent:
-    def __init__(self, simulations: int = 25, rollout_depth: int = 40) -> None:
+    def __init__(self, simulations: int = 12, rollout_depth: int = 25) -> None:
         self.simulations = simulations
         self.rollout_depth = rollout_depth
 
@@ -181,6 +181,7 @@ class MCTSAgent:
         )
 
         root_moves = state.get_possible_moves()
+        root_moves = [m for m in root_moves if str(piece_owner.get(m.pieza_id)) == str(jugador_id)]
         if not root_moves:
             raise ValueError("No hay movimientos validos disponibles")
 
@@ -203,6 +204,8 @@ class MCTSAgent:
         def child_finder(node: Node, mc: MonteCarlo) -> None:
             moves = node.state.get_possible_moves()
             for move in moves:
+                if str(node.state.piece_owner.get(move.pieza_id)) != str(node.state.current_player_id()):
+                    continue
                 child_state = deepcopy(node.state)
                 child_state.move(move)
                 child_state.last_move = move
@@ -238,7 +241,7 @@ class MCTSAgent:
         montecarlo.node_evaluator = node_evaluator
 
         requested_simulations = simulations if simulations is not None else self.simulations
-        capped_simulations = min(requested_simulations, 10 + 2 * len(root_moves))
+        capped_simulations = min(requested_simulations, 6 + len(root_moves))
         montecarlo.simulate(capped_simulations)
 
         chosen = None
