@@ -67,19 +67,13 @@ class ChineseCheckersState:
                 for dest in self._compute_simple_moves(origin, occupied):
                     moves.append(Move(pieza_id=pieza_id, origen=origin, destino=dest))
 
-            for seq in self._compute_jump_sequences(origin, occupied):
-                if len(seq) >= 2:
-                    moves.append(Move(pieza_id=pieza_id, origen=seq[0], destino=seq[-1], sequence=seq))
+            for dest in self._compute_jump_moves(origin, occupied):
+                moves.append(Move(pieza_id=pieza_id, origen=origin, destino=dest))
 
         return moves
 
     def move(self, move: Move) -> None:
-        if move.sequence and len(move.sequence) >= 2:
-            final_dest = move.sequence[-1]
-        else:
-            final_dest = move.destino
-
-        self.positions[move.pieza_id] = final_dest
+        self.positions[move.pieza_id] = move.destino
         self.last_move = move
         self.current_index = (self.current_index + 1) % len(self.players_order)
 
@@ -112,44 +106,24 @@ class ChineseCheckersState:
             if key and key not in occupied_set
         ]
 
-    def _compute_jump_sequences(self, origin_key: str, occupied_positions: Iterable[str]) -> List[List[str]]:
+    def _compute_jump_moves(self, origin_key: str, occupied_positions: Iterable[str]) -> List[str]:
         origin_coord = _axial_from_key(origin_key)
         if not origin_coord:
             return []
 
         occupied_set = set(occupied_positions)
-        occupied_wo_origin = occupied_set - {origin_key}
-        sequences: List[List[str]] = []
+        landings: List[str] = []
+        for d in AXIAL_DIRECTIONS:
+            middle_key = _key_from_axial(origin_coord[0] + d["dq"], origin_coord[1] + d["dr"])
+            landing_key = _key_from_axial(origin_coord[0] + 2 * d["dq"], origin_coord[1] + 2 * d["dr"])
+            if middle_key and landing_key and middle_key in occupied_set and landing_key not in occupied_set:
+                landings.append(landing_key)
 
-        def dfs(coord, path: List[str], visited_landings: set) -> None:
-            extended = False
-            for d in AXIAL_DIRECTIONS:
-                middle_key = _key_from_axial(coord[0] + d["dq"], coord[1] + d["dr"])
-                landing_key = _key_from_axial(coord[0] + 2 * d["dq"], coord[1] + 2 * d["dr"])
-                if not (
-                    middle_key
-                    and landing_key
-                    and middle_key in occupied_set
-                    and landing_key not in occupied_wo_origin
-                    and landing_key != origin_key
-                    and landing_key not in visited_landings
-                ):
-                    continue
-
-                extended = True
-                visited_landings.add(landing_key)
-                dfs(_axial_from_key(landing_key), path + [landing_key], visited_landings)
-                visited_landings.remove(landing_key)
-
-            if not extended and len(path) >= 2:
-                sequences.append(path)
-
-        dfs(origin_coord, [origin_key], set())
-        return sequences
+        return landings
 
 
 class MCTSAgent:
-    def __init__(self, simulations: int = 40, rollout_depth: int = 80) -> None:
+    def __init__(self, simulations: int = 25, rollout_depth: int = 40) -> None:
         self.simulations = simulations
         self.rollout_depth = rollout_depth
 
@@ -206,6 +180,21 @@ class MCTSAgent:
             allow_simple=allow_simple,
         )
 
+        root_moves = state.get_possible_moves()
+        if not root_moves:
+            raise ValueError("No hay movimientos validos disponibles")
+
+        if len(root_moves) == 1:
+            move = root_moves[0]
+            return {
+                "pieza_id": move.pieza_id,
+                "origen": move.origen,
+                "destino": move.destino,
+                "heuristica": "mcts",
+                "simulaciones": 0,
+                "puntuacion": 0.0,
+            }
+
         root = Node(state)
         root.player_number = current_index + 1
 
@@ -247,7 +236,10 @@ class MCTSAgent:
 
         montecarlo.child_finder = child_finder
         montecarlo.node_evaluator = node_evaluator
-        montecarlo.simulate(simulations or self.simulations)
+
+        requested_simulations = simulations if simulations is not None else self.simulations
+        capped_simulations = min(requested_simulations, 10 + 2 * len(root_moves))
+        montecarlo.simulate(capped_simulations)
 
         chosen = montecarlo.make_choice()
         if not chosen or not getattr(chosen.state, "last_move", None):
@@ -259,14 +251,8 @@ class MCTSAgent:
             "origen": move.origen,
             "destino": move.destino,
             "heuristica": "mcts",
-            "simulaciones": simulations or self.simulations,
+            "simulaciones": capped_simulations,
             "puntuacion": float(getattr(chosen, "win_value", 0.0)),
         }
-
-        if move.sequence and len(move.sequence) >= 2:
-            payload["secuencia"] = [
-                {"origen": move.sequence[i], "destino": move.sequence[i + 1]}
-                for i in range(len(move.sequence) - 1)
-            ]
 
         return payload
