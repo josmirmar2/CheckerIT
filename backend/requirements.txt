@@ -1,5 +1,6 @@
 Django==5.0
 djangorestframework==3.14.0
 django-cors-headers==4.3.1
+imparaai-montecarlo @ git+https://github.com/ImparaAI/monte-carlo-tree-search.git@d9a8bc9e1575fb2cd7c84b5a5ff910f7f38a31bd
 psycopg2-binary==2.9.9
 python-dotenv==1.0.0

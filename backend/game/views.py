@@ -128,10 +128,51 @@ def validate_move(origin_key, destination_key, occupied_positions, allow_simple=
     """
     Valida si un movimiento de origen a destino es válido.
     Retorna (es_válido: bool, mensaje_error: str)
-    VALIDACIONES DESHABILITADAS - Acepta cualquier movimiento
+    Reglas (GUIA_MOVIMIENTOS_PERMITIDOS.md):
+    - Movimiento simple: a un nodo adyacente vacío (6 direcciones)
+    - Movimiento por salto: A->C válido si existe B adyacente ocupado y C (alineado) vacío
+    - No se puede avanzar más de 1 nodo sin salto
+    - No se puede aterrizar en un nodo ocupado
+    Nota: esta función valida UN PASO (simple o salto). Los saltos en cadena se validan paso a paso.
     """
-    # Validaciones deshabilitadas - acepta todos los movimientos
-    return True, ""
+
+    if not origin_key or not destination_key:
+        return False, "Origen o destino vacío"
+    if origin_key == destination_key:
+        return False, "Origen y destino no pueden ser iguales"
+
+    origin_coord = coord_from_key(origin_key)
+    dest_coord = coord_from_key(destination_key)
+    if not origin_coord or not dest_coord:
+        return False, "Origen o destino fuera del tablero"
+
+    occupied = set(occupied_positions)
+    if destination_key in occupied:
+        return False, "El destino está ocupado"
+
+    dq = dest_coord["q"] - origin_coord["q"]
+    dr = dest_coord["r"] - origin_coord["r"]
+
+    # Movimiento simple: destino es un vecino directo
+    if allow_simple:
+        for d in AXIAL_DIRECTIONS:
+            if dq == d["dq"] and dr == d["dr"]:
+                return True, ""
+
+    # Movimiento por salto: destino es exactamente a 2 pasos en una dirección axial,
+    # y la casilla intermedia está ocupada.
+    for d in AXIAL_DIRECTIONS:
+        if dq == 2 * d["dq"] and dr == 2 * d["dr"]:
+            middle_q = origin_coord["q"] + d["dq"]
+            middle_r = origin_coord["r"] + d["dr"]
+            middle_key = key_from_coord(middle_q, middle_r)
+            if not middle_key:
+                return False, "Salto no colineal en el tablero"
+            if middle_key not in occupied:
+                return False, "No hay pieza en la casilla intermedia para saltar"
+            return True, ""
+
+    return False, "Movimiento no permitido (debe ser adyacente o un salto válido)"
 
 
 
@@ -351,6 +392,18 @@ class PartidaViewSet(viewsets.ModelViewSet):
                     return Response({ 'error': 'Solo se permiten movimientos con una única pieza por turno' }, status=status.HTTP_400_BAD_REQUEST)
                 if pieza.partida_id != partida.id_partida:
                     return Response({ 'error': 'La pieza no pertenece a la partida' }, status=status.HTTP_400_BAD_REQUEST)
+
+                # La pieza debe estar en el origen indicado (evita desincronización y movimientos ilegales).
+                if str(pieza.posicion) != str(origen):
+                    return Response(
+                        {
+                            'error': 'El origen no coincide con la posición actual de la pieza',
+                            'pieza_id': pieza.id_pieza,
+                            'posicion_actual': pieza.posicion,
+                            'origen_recibido': origen,
+                        },
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
 
                 allow_simple = (idx == 1)
                 es_valido, mensaje_error = validate_move(origen, destino, occupied_positions, allow_simple)
@@ -659,7 +712,7 @@ class IAViewSet(viewsets.ModelViewSet):
 
         try:
             if ia_obj.nivel == 2:
-                agent = MCTSAgent.for_player(partida_id, ia_obj.jugador_id)
+                agent = MCTSAgent()
             else:
                 agent = MaxHeuristicAgent()
 

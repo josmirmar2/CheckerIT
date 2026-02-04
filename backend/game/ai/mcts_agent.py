@@ -8,7 +8,7 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 from montecarlo.node import Node
 from montecarlo.montecarlo import MonteCarlo
 
-from ..models import JugadorPartida, Pieza
+from ..models import JugadorPartida, Pieza, Turno
 from .max_agent import (
     AXIAL_DIRECTIONS,
     GOAL_POSITIONS,
@@ -59,20 +59,33 @@ class ChineseCheckersState:
         for pieza_id, owner_id in self.piece_owner.items():
             if owner_id != current_player:
                 continue
+            
             origin = self.positions.get(pieza_id)
             if not origin:
                 continue
+
+            # Saltos en cadena: una secuencia completa cuenta como un único movimiento/turno.
+            jump_sequences = self._compute_jump_sequences(origin, occupied)
+            for seq in jump_sequences:
+                # seq incluye el origen como primer elemento
+                if len(seq) >= 2:
+                    moves.append(
+                        Move(
+                            pieza_id=pieza_id,
+                            origen=origin,
+                            destino=seq[-1],
+                            sequence=seq,
+                        )
+                    )
 
             if self.allow_simple:
                 for dest in self._compute_simple_moves(origin, occupied):
                     moves.append(Move(pieza_id=pieza_id, origen=origin, destino=dest))
 
-            for dest in self._compute_jump_moves(origin, occupied):
-                moves.append(Move(pieza_id=pieza_id, origen=origin, destino=dest))
-
         return moves
 
     def move(self, move: Move) -> None:
+        # Si hay secuencia, mover directamente al destino final.
         self.positions[move.pieza_id] = move.destino
         self.last_move = move
         self.current_index = (self.current_index + 1) % len(self.players_order)
@@ -121,26 +134,53 @@ class ChineseCheckersState:
 
         return landings
 
+    def _compute_jump_sequences(self, origin_key: str, occupied_positions: Iterable[str]) -> List[List[str]]:
+        """Devuelve secuencias completas de saltos (origen ... landing_final)."""
+        origin_coord = _axial_from_key(origin_key)
+        if not origin_coord:
+            return []
 
-_MCTS_AGENTS_BY_PLAYER: Dict[Tuple[str, str], "MCTSAgent"] = {}
-_MCTS_ALLOWED_PIECES: Dict[Tuple[str, str], Set[str]] = {}
+        occupied_set = set(occupied_positions)
+        occupied_wo_origin = occupied_set - {origin_key}
+        sequences: List[List[str]] = []
+
+        def dfs(coord: Tuple[int, int], path: List[str], visited_landings: Set[str]) -> None:
+            extended = False
+            for d in AXIAL_DIRECTIONS:
+                middle_key = _key_from_axial(coord[0] + d["dq"], coord[1] + d["dr"])
+                landing_key = _key_from_axial(coord[0] + 2 * d["dq"], coord[1] + 2 * d["dr"])
+
+                if not (middle_key and landing_key):
+                    continue
+                if middle_key not in occupied_set:
+                    continue
+                if landing_key in occupied_wo_origin:
+                    continue
+                if landing_key == origin_key:
+                    continue
+                if landing_key in visited_landings:
+                    continue
+
+                landing_coord = _axial_from_key(landing_key)
+                if not landing_coord:
+                    continue
+
+                extended = True
+                visited_landings.add(landing_key)
+                dfs(landing_coord, path + [landing_key], visited_landings)
+                visited_landings.remove(landing_key)
+
+            if not extended and len(path) >= 2:
+                sequences.append(path)
+
+        dfs(origin_coord, [origin_key], set())
+        return sequences
 
 
 class MCTSAgent:
-    def __init__(self, partida_id: str, jugador_id: str, simulations: int = 10, rollout_depth: int = 21) -> None:
-        self.partida_id = str(partida_id)
-        self.jugador_id = str(jugador_id)
+    def __init__(self, simulations: int = 10, rollout_depth: int = 21) -> None:
         self.simulations = simulations
         self.rollout_depth = rollout_depth
-
-    @classmethod
-    def for_player(cls, partida_id: str, jugador_id: str) -> "MCTSAgent":
-        key = (str(partida_id), str(jugador_id))
-        agent = _MCTS_AGENTS_BY_PLAYER.get(key)
-        if agent is None:
-            agent = cls(partida_id=key[0], jugador_id=key[1])
-            _MCTS_AGENTS_BY_PLAYER[key] = agent
-        return agent
 
     def suggest_move(
         self,
@@ -149,15 +189,26 @@ class MCTSAgent:
         allow_simple: bool = True,
         simulations: Optional[int] = None,
     ) -> Dict[str, object]:
-        if str(jugador_id) != self.jugador_id or str(partida_id) != self.partida_id:
-            raise ValueError("El agente no corresponde a este jugador")
         if not partida_id or not jugador_id:
             raise ValueError("partida_id y jugador_id son requeridos")
 
+        # Seguridad extra: no sugerir si no es el turno del jugador.
+        turno_actual = (
+            Turno.objects.filter(partida_id=partida_id, fin__isnull=True)
+            .order_by("numero")
+            .first()
+        )
+        if turno_actual is None:
+            raise ValueError("No hay un turno activo para la partida")
+        if str(turno_actual.jugador_id) != str(jugador_id):
+            raise ValueError("No es el turno de este jugador")
+
+        # Obtener el estado actual del tablero desde la base de datos
         piezas = list(Pieza.objects.filter(partida_id=partida_id))
         if not piezas:
             raise ValueError("No hay piezas registradas para la partida")
 
+        # Obtener el orden de los jugadores
         participaciones = list(
             JugadorPartida.objects.filter(partida_id=partida_id).order_by("orden_participacion")
         )
@@ -165,35 +216,26 @@ class MCTSAgent:
             raise ValueError("No hay jugadores registrados en la partida")
 
         players_order = [str(p.jugador_id) for p in participaciones]
-        if str(jugador_id) not in players_order:
+        try:
+            current_index = players_order.index(str(jugador_id))
+        except ValueError:
             raise ValueError("El jugador no participa en la partida")
 
-        positions: Dict[str, str] = {}
-        piece_owner: Dict[str, str] = {}
-        piece_type: Dict[str, str] = {}
-        allowed_key = (str(partida_id), str(jugador_id))
-        allowed_piece_ids = _MCTS_ALLOWED_PIECES.get(allowed_key)
-        if allowed_piece_ids is None:
-            allowed_piece_ids = {p.id_pieza for p in piezas if str(p.jugador_id) == str(jugador_id)}
-            _MCTS_ALLOWED_PIECES[allowed_key] = allowed_piece_ids
+        # Construir el estado para MCTS
+        positions: Dict[str, str] = {p.id_pieza: p.posicion for p in piezas if p.posicion}
+        piece_owner: Dict[str, str] = {p.id_pieza: str(p.jugador_id) for p in piezas}
+        piece_type: Dict[str, str] = {p.id_pieza: p.tipo for p in piezas}
+        
         target_by_player: Dict[str, int] = {}
+        for p_id in players_order:
+            pieza_jugador = next((p for p in piezas if str(p.jugador_id) == p_id and p.tipo), None)
+            if pieza_jugador:
+                punta = _parse_punta(pieza_jugador.tipo)
+                target = _target_punta(punta)
+                if target is not None:
+                    target_by_player[p_id] = target
 
-        for pieza in piezas:
-            positions[pieza.id_pieza] = pieza.posicion
-            piece_owner[pieza.id_pieza] = str(pieza.jugador_id)
-            piece_type[pieza.id_pieza] = pieza.tipo
-
-        player_id = str(jugador_id)
-        pieza_player = next((p for p in piezas if str(p.jugador_id) == player_id and p.tipo), None)
-        punta = _parse_punta(pieza_player.tipo) if pieza_player else None
-        target = _target_punta(punta)
-        if target is None:
-            raise ValueError("No se pudo determinar la punta objetivo para el jugador")
-        target_by_player[player_id] = target
-
-        current_index = 0
-        players_order = [player_id]
-        state = ChineseCheckersState(
+        initial_state = ChineseCheckersState(
             positions=positions,
             piece_owner=piece_owner,
             piece_type=piece_type,
@@ -203,10 +245,15 @@ class MCTSAgent:
             allow_simple=allow_simple,
         )
 
-        root_moves = state.get_possible_moves()
-        root_moves = [m for m in root_moves if m.pieza_id in allowed_piece_ids]
+        # El agente solo puede mover sus propias piezas
+        piezas_jugador_ids = {p.id_pieza for p in piezas if str(p.jugador_id) == str(jugador_id)}
+
+        root_moves = [
+            m for m in initial_state.get_possible_moves() 
+            if m.pieza_id in piezas_jugador_ids
+        ]
         if not root_moves:
-            raise ValueError("No hay movimientos validos disponibles")
+            raise ValueError("No hay movimientos validos disponibles para el jugador actual")
 
         if len(root_moves) == 1:
             move = root_moves[0]
@@ -219,19 +266,19 @@ class MCTSAgent:
                 "puntuacion": 0.0,
             }
 
-        root = Node(state)
-        root.player_number = current_index + 1
+        root = Node(initial_state)
+        root.player_number = initial_state.current_index + 1
 
         montecarlo = MonteCarlo(root)
 
         def child_finder(node: Node, mc: MonteCarlo) -> None:
             moves = node.state.get_possible_moves()
+            if node.state.current_player_id() == str(jugador_id):
+                moves = [m for m in moves if m.pieza_id in piezas_jugador_ids]
+
             for move in moves:
-                if move.pieza_id not in allowed_piece_ids:
-                    continue
                 child_state = deepcopy(node.state)
                 child_state.move(move)
-                child_state.last_move = move
                 child = Node(child_state)
                 child.player_number = child_state.current_index + 1
                 node.add_child(child)
@@ -239,24 +286,22 @@ class MCTSAgent:
         def node_evaluator(node: Node, mc: MonteCarlo) -> float:
             winner = node.state.winner()
             if winner is not None:
-                current_player = node.state.current_player_id()
-                return 1.0 if winner == current_player else -1.0
+                return 1.0 if winner == str(jugador_id) else -1.0
 
             rollout_state = deepcopy(node.state)
-            max_rollout_depth = self.rollout_depth
-
-            for _ in range(max_rollout_depth):
+            for _ in range(self.rollout_depth):
                 winner = rollout_state.winner()
                 if winner is not None:
-                    current_player = node.state.current_player_id()
-                    return 1.0 if winner == current_player else -1.0
+                    return 1.0 if winner == str(jugador_id) else -1.0
 
                 moves = rollout_state.get_possible_moves()
+                if rollout_state.current_player_id() == str(jugador_id):
+                    moves = [m for m in moves if m.pieza_id in piezas_jugador_ids]
+
                 if not moves:
                     return -1.0
 
-                move = random.choice(moves)
-                rollout_state.move(move)
+                rollout_state.move(random.choice(moves))
 
             return 0.0
 
@@ -267,31 +312,39 @@ class MCTSAgent:
         capped_simulations = min(requested_simulations, 6 + len(root_moves))
         montecarlo.simulate(capped_simulations)
 
-        chosen = None
         root_children = list(getattr(root, "children", []) or [])
+        chosen_child: Optional[Node] = None
         if root_children:
-            def _child_key(child):
+            def _child_key(child: Node):
                 return (
                     getattr(child, "visits", 0),
-                    getattr(child, "win_value", 0.0),
+                    float(getattr(child, "win_value", 0.0)),
                 )
-            chosen = max(root_children, key=_child_key)
+
+            chosen_child = max(root_children, key=_child_key)
+
+        if chosen_child is not None and getattr(chosen_child.state, "last_move", None) is not None:
+            move = chosen_child.state.last_move
         else:
-            chosen = montecarlo.make_choice()
+            move = random.choice(root_moves)
 
-        if not chosen or not getattr(chosen.state, "last_move", None):
-            raise ValueError("No hay movimientos validos disponibles")
-
-        move = chosen.state.last_move
-        if move.pieza_id not in allowed_piece_ids:
-            move = root_moves[0]
+        # Verificación final: nunca devolver un movimiento con pieza ajena.
+        if move.pieza_id not in piezas_jugador_ids:
+            move = random.choice(root_moves)
         payload: Dict[str, object] = {
             "pieza_id": move.pieza_id,
             "origen": move.origen,
             "destino": move.destino,
             "heuristica": "mcts",
             "simulaciones": capped_simulations,
-            "puntuacion": float(getattr(chosen, "win_value", 0.0)) if chosen else 0.0,
+            "puntuacion": float(getattr(chosen_child, "win_value", 0.0)) if chosen_child else 0.0,
         }
+
+        # Si es un salto en cadena, devolver también la secuencia paso a paso (como la heurística).
+        if move.sequence and len(move.sequence) >= 2:
+            payload["secuencia"] = [
+                {"origen": move.sequence[i], "destino": move.sequence[i + 1]}
+                for i in range(len(move.sequence) - 1)
+            ]
 
         return payload
