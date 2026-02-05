@@ -10,11 +10,30 @@ from montecarlo.node import Node
 from ..models import JugadorPartida, Movimiento, Pieza, Turno
 from .max_agent import (AXIAL_DIRECTIONS,GOAL_POSITIONS,POSITION_TO_CARTESIAN,_axial_from_key,_distance_to_goal,_key_from_axial,_parse_punta,_target_punta)
 
+# Nota de diseño
+# --------------
+# Este agente modela una *acción* como un turno completo: mover exactamente 1 pieza.
+# Ese turno puede ser:
+# - Un movimiento simple (adyacente a casilla vacía)
+# - Una cadena de saltos con la misma pieza (cada salto colineal y cayendo en casilla vacía)
+#
+# Es decir, una cadena de saltos cuenta como "un único movimiento" a ojos del MCTS.
+# La legalidad real de cada paso se valida en backend (ver views.py); aquí generamos
+# candidatos legales en memoria para que el MCTS explore opciones válidas.
+
 
 @dataclass(frozen=True)
 class TurnMove:
+    """Un turno completo aplicado a una sola pieza.
+
+    `sequence` siempre incluye el origen y 1..N destinos.
+
+    Esta estructura se traduce al payload del endpoint como `secuencia` para que
+    el backend registre todos los saltos del turno como una sola jugada.
+    """
+
     pieza_id: str
-    sequence: Tuple[str, ...]  # incluye origen y destinos intermedios; último es destino final
+    sequence: Tuple[str, ...]  # [origen, destino1, destino2, ...] (último = destino final)
 
     @property
     def origen(self) -> str:
@@ -27,6 +46,8 @@ class TurnMove:
 
 @dataclass(frozen=True)
 class _PieceTuple:
+    """Snapshot inmutable de una pieza (solo lo necesario para buscar jugadas)."""
+
     pieza_id: str
     jugador_id: str
     tipo: str
@@ -35,7 +56,12 @@ class _PieceTuple:
 
 @dataclass(frozen=True)
 class GameState:
-    """Estado inmutable para MCTS: una acción = un turno (simple o cadena de saltos)."""
+    """Estado inmutable del juego usado por el MCTS.
+
+    - Es *inmutable* para poder compartirlo en el árbol de búsqueda.
+    - El índice `current_player_index` determina quién mueve en este estado.
+    - Los movimientos generados por `legal_turn_moves()` siempre mueven 1 sola pieza.
+    """
 
     player_order: Tuple[str, ...]
     current_player_index: int
@@ -53,6 +79,7 @@ class GameState:
         return None
 
     def occupied(self) -> frozenset[str]:
+        """Conjunto de casillas ocupadas (claves de tablero)."""
         return frozenset(p.posicion for p in self.pieces if p.posicion)
 
     def piece_by_id(self) -> Dict[str, _PieceTuple]:
@@ -62,6 +89,7 @@ class GameState:
         return [p for p in self.pieces if p.jugador_id == jugador_id and p.posicion]
 
     def is_win(self, jugador_id: str) -> bool:
+        """Condición de victoria: todas las piezas del jugador están en su zona objetivo."""
         target = self._target_for(jugador_id)
         if target is None:
             return False
@@ -77,6 +105,12 @@ class GameState:
         return winners
 
     def evaluate(self, root_player_id: str) -> float:
+        """Heurística normalizada en [-1, 1] desde la perspectiva de `root_player_id`.
+
+        - +1 si el jugador raíz ya ha ganado.
+        - -1 si gana un rival.
+        - En caso contrario: compara la distancia media del rival vs la propia.
+        """
         winners = self.any_winners()
         if winners:
             if root_player_id in winners:
@@ -107,6 +141,7 @@ class GameState:
         return max(-1.0, min(1.0, score))
 
     def apply(self, move: TurnMove) -> "GameState":
+        """Aplica un `TurnMove` (mover 1 pieza) y avanza el turno al siguiente jugador."""
         pieces_list = list(self.pieces)
         for idx, p in enumerate(pieces_list):
             if p.pieza_id == move.pieza_id:
@@ -137,12 +172,16 @@ class _LibState:
 
     game: GameState
     last_move: Optional[TurnMove] = None
+    # Profundidad (en turnos) desde la raíz del árbol. Es informativa y permite
+    # extender el agente fácilmente (p.ej. para limitar rollouts) sin tocar GameState.
+    ply: int = 0
 
     def apply(self, move: TurnMove) -> "_LibState":
-        return _LibState(game=self.game.apply(move), last_move=move)
+        return _LibState(game=self.game.apply(move), last_move=move, ply=self.ply + 1)
 
 
 def _simple_moves(origin_key: str, occupied: frozenset[str]) -> List[str]:
+    """Genera destinos simples (adyacentes) desde `origin_key` a casillas vacías."""
     origin_coord = POSITION_TO_CARTESIAN.get(origin_key)
     if not origin_coord:
         return []
@@ -157,6 +196,15 @@ def _simple_moves(origin_key: str, occupied: frozenset[str]) -> List[str]:
 
 
 def _jump_sequences(origin_key: str, occupied: frozenset[str]) -> List[Tuple[str, ...]]:
+    """Genera todas las cadenas de salto posibles desde `origin_key`.
+
+    Reglas (alineadas con GUIA_MOVIMIENTOS_PERMITIDOS.md):
+    - Un salto es colineal: se salta sobre una casilla adyacente ocupada y se cae en la
+      casilla inmediatamente posterior (que debe estar vacía).
+    - Se pueden encadenar saltos con la misma pieza en el mismo turno.
+
+    Nota: evitamos ciclos marcando `visited_landings`.
+    """
     origin_coord = _axial_from_key(origin_key)
     if not origin_coord:
         return []
@@ -205,6 +253,7 @@ def _rank_moves(
     state: GameState,
     jugador_id: str,
 ) -> List[TurnMove]:
+    """Ordena movimientos priorizando progreso hacia la meta y (ligeramente) cadenas."""
     target = state._target_for(jugador_id)
     if target is None:
         return list(moves)
@@ -225,6 +274,12 @@ def legal_turn_moves(
     allow_simple: bool,
     max_moves: int = 60,
 ) -> List[TurnMove]:
+    """Devuelve las mejores `max_moves` jugadas legales para el jugador actual.
+
+    Importante: cada `TurnMove` representa 1 turno sobre 1 pieza.
+    - Si `allow_simple` es False, solo se devuelven cadenas de salto.
+    - Si es True, se incluyen tanto simples como saltos.
+    """
     occupied = state.occupied()
     all_moves: List[TurnMove] = []
 
@@ -241,7 +296,16 @@ def legal_turn_moves(
 
 
 class MCTSAgent:
-    """IA 'Difícil' basada en MCTS, compatible con el backend actual."""
+    """IA 'Difícil' basada en MCTS.
+
+    Integra la librería `imparaai-montecarlo` mediante:
+    - `child_finder`: genera los hijos (jugadas posibles) de un nodo.
+    - `node_evaluator`: evalúa un estado desde la perspectiva del jugador raíz.
+
+    La salida está pensada para `IAViewSet.sugerir_movimiento`: si el `TurnMove`
+    incluye una cadena, se emite `secuencia` para que el backend registre todos los
+    saltos como un único movimiento de turno.
+    """
 
     def suggest_move(
         self,
@@ -253,6 +317,16 @@ class MCTSAgent:
         exploration: float = 1.35,
         seed: Optional[int] = None,
     ) -> Dict[str, object]:
+        """Sugiere una jugada para `jugador_id` en la `partida_id`.
+
+                - Respeta turno activo (si no es el turno del jugador, lanza error).
+                - Genera *jugadas legales* (simples y/o saltos) para alimentar al MCTS.
+                - `iterations` controla cuántas simulaciones ejecuta el MCTS.
+                - `exploration` intenta mapearse al factor de exploración de la librería (si el
+                    atributo existe en `Node`).
+                - `rollout_depth` se conserva como parámetro público (útil si más adelante se
+                    decide limitar la profundidad de evaluación/rollouts).
+            """
         if not partida_id or not jugador_id:
             raise ValueError("partida_id y jugador_id son requeridos")
 
@@ -331,6 +405,12 @@ class MCTSAgent:
         root_node = Node(root_lib_state)
         root_node.player_number = root_state.current_player_id
 
+        # Algunas versiones de la librería exponen `discovery_factor` para el término
+        # de exploración (tipo UCT). Lo conectamos si existe para que el parámetro
+        # `exploration` del endpoint tenga efecto sin romper compatibilidad.
+        if hasattr(root_node, "discovery_factor"):
+            setattr(root_node, "discovery_factor", float(exploration))
+
         montecarlo = MonteCarlo(root_node)
 
         def child_finder(node: Node, _mc: MonteCarlo) -> None:
@@ -344,6 +424,8 @@ class MCTSAgent:
                 child_state = state.apply(move)
                 child = Node(child_state)
                 child.player_number = child_state.game.current_player_id
+                if hasattr(child, "discovery_factor"):
+                    setattr(child, "discovery_factor", float(exploration))
                 node.add_child(child)
 
         def node_evaluator(node: Node, _mc: MonteCarlo) -> float:
