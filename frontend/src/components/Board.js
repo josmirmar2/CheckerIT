@@ -361,7 +361,6 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
 
     const occupant = boardPieces[fromFila]?.[fromCol];
     if (occupant === undefined || occupant === null) {
-      console.warn('AI move inválido: origen vacío', aiMove);
       return;
     }
 

@@ -5,6 +5,7 @@ from django.utils import timezone
 from datetime import datetime
 from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida
 from .ai.max_agent import MaxHeuristicAgent
+from .ai.mcts_agent import MCTSAgent
 from .serializers import (
     JugadorSerializer, PartidaSerializer, PartidaListSerializer,
     PiezaSerializer, TurnoSerializer, 
@@ -127,10 +128,53 @@ def validate_move(origin_key, destination_key, occupied_positions, allow_simple=
     """
     Valida si un movimiento de origen a destino es válido.
     Retorna (es_válido: bool, mensaje_error: str)
-    VALIDACIONES DESHABILITADAS - Acepta cualquier movimiento
+    Reglas (GUIA_MOVIMIENTOS_PERMITIDOS):
+    - Movimiento simple: a un nodo adyacente vacío (solo si allow_simple)
+    - Salto: sobre una pieza (propia o rival) a un nodo vacío colineal detrás
+    - No se permite avanzar más de un nodo sin salto
     """
-    # Validaciones deshabilitadas - acepta todos los movimientos
-    return True, ""
+    if not origin_key or not destination_key:
+        return False, "Origen y destino son obligatorios"
+    if origin_key == destination_key:
+        return False, "Origen y destino no pueden ser iguales"
+
+    origin_coord = coord_from_key(origin_key)
+    dest_coord = coord_from_key(destination_key)
+    if not origin_coord:
+        return False, f"Origen fuera del tablero: {origin_key}"
+    if not dest_coord:
+        return False, f"Destino fuera del tablero: {destination_key}"
+
+    if origin_key not in occupied_positions:
+        return False, "No hay pieza en el origen"
+    if destination_key in occupied_positions:
+        return False, "El destino está ocupado"
+
+    oq, or_ = origin_coord["q"], origin_coord["r"]
+    dq, dr = dest_coord["q"], dest_coord["r"]
+
+    for direction in AXIAL_DIRECTIONS:
+        step_q = oq + direction["dq"]
+        step_r = or_ + direction["dr"]
+        step_key = key_from_coord(step_q, step_r)
+
+        if allow_simple and step_key == destination_key:
+            return True, ""
+
+        landing_q = oq + 2 * direction["dq"]
+        landing_r = or_ + 2 * direction["dr"]
+        landing_key = key_from_coord(landing_q, landing_r)
+        if landing_key != destination_key:
+            continue
+        if not step_key:
+            continue
+        if step_key not in occupied_positions:
+            continue
+        return True, ""
+
+    if allow_simple:
+        return False, "Movimiento inválido: no es adyacente ni salto legal"
+    return False, "Movimiento inválido: en cadena solo se permiten saltos legales"
 
 
 
@@ -315,8 +359,17 @@ class PartidaViewSet(viewsets.ModelViewSet):
 
         occupied_positions = get_occupied_positions(partida.id_partida)
 
+        turno_actual = partida.turnos.filter(fin__isnull=True).order_by('numero').first()
+        if not turno_actual:
+            return Response({ 'error': 'No hay turno activo para la partida' }, status=status.HTTP_400_BAD_REQUEST)
+
         created = []
-        piece_positions = {}  # Mapeo pieza_id -> último destino
+        piece_positions = {}
+        moved_piece_id = None
+        expected_jugador_id = None
+        expected_turno_id = None
+        expected_partida_id = str(partida.id_partida)
+        chain_mode = len(movimientos_data) > 1
 
         for idx, m in enumerate(movimientos_data, start=1):
             try:
@@ -330,14 +383,54 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 if not all([jugador_id, turno_id, pieza_id, origen, destino, partida_id]):
                     return Response({ 'error': f'Movimiento incompleto en índice {idx-1}' }, status=status.HTTP_400_BAD_REQUEST)
 
-                if str(partida_id) != str(partida.id_partida):
+                if str(partida_id) != expected_partida_id:
                     return Response({ 'error': f'partida_id no coincide con la partida de la ruta: {partida_id} != {partida.id_partida}' }, status=status.HTTP_400_BAD_REQUEST)
+
+                if expected_jugador_id is None:
+                    expected_jugador_id = str(jugador_id)
+                elif str(jugador_id) != expected_jugador_id:
+                    return Response({ 'error': 'Todos los movimientos deben pertenecer al mismo jugador' }, status=status.HTTP_400_BAD_REQUEST)
+
+                if expected_turno_id is None:
+                    expected_turno_id = str(turno_id)
+                elif str(turno_id) != expected_turno_id:
+                    return Response({ 'error': 'Todos los movimientos deben pertenecer al mismo turno' }, status=status.HTTP_400_BAD_REQUEST)
+
+                if moved_piece_id is None:
+                    moved_piece_id = str(pieza_id)
+                elif str(pieza_id) != moved_piece_id:
+                    return Response({ 'error': 'No se permite mover varias piezas en un mismo turno' }, status=status.HTTP_400_BAD_REQUEST)
 
                 jugador = Jugador.objects.get(id_jugador=jugador_id)
                 turno = Turno.objects.get(id_turno=turno_id)
                 pieza = Pieza.objects.get(id_pieza=pieza_id)
 
-                allow_simple = (idx == 1)
+                # Validaciones de turno/jugador/pieza
+                if str(turno.partida_id) != expected_partida_id:
+                    return Response({ 'error': 'El turno no pertenece a la partida' }, status=status.HTTP_400_BAD_REQUEST)
+                if turno.fin is not None:
+                    return Response({ 'error': 'El turno ya está finalizado' }, status=status.HTTP_400_BAD_REQUEST)
+                if str(turno_actual.id_turno) != str(turno.id_turno):
+                    return Response({ 'error': 'No es el turno activo de la partida' }, status=status.HTTP_400_BAD_REQUEST)
+                if str(turno.jugador_id) != str(jugador.id_jugador):
+                    return Response({ 'error': 'El jugador del movimiento no coincide con el jugador del turno' }, status=status.HTTP_400_BAD_REQUEST)
+                if str(pieza.partida_id) != expected_partida_id:
+                    return Response({ 'error': 'La pieza no pertenece a la partida' }, status=status.HTTP_400_BAD_REQUEST)
+                if str(pieza.jugador_id) != str(jugador.id_jugador):
+                    return Response({ 'error': 'La pieza no pertenece al jugador' }, status=status.HTTP_400_BAD_REQUEST)
+
+                expected_origin = pieza.posicion
+                if pieza_id in piece_positions:
+                    expected_origin = piece_positions[pieza_id][1]
+                if str(origen) != str(expected_origin):
+                    return Response({
+                        'error': 'El origen no coincide con la posición actual de la pieza',
+                        'origen_recibido': origen,
+                        'origen_esperado': expected_origin,
+                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                # Si hay cadena, todas las acciones deben ser saltos (una pieza por turno).
+                allow_simple = (not chain_mode and idx == 1)
                 es_valido, mensaje_error = validate_move(origen, destino, occupied_positions, allow_simple)
                 if not es_valido:
                     return Response({ 
@@ -615,22 +708,53 @@ class IAViewSet(viewsets.ModelViewSet):
         - partida_id: id de la partida
         - permitir_simples (opcional, bool): si True incluye movimientos simples en el primer salto
         """
-        ia_obj = self.get_object()  # asegura que la IA exista
+        ia_obj = self.get_object() 
         partida_id = request.data.get('partida_id')
         permitir_simples_raw = request.data.get('permitir_simples', True)
 
+        if not partida_id:
+            return Response({'error': 'partida_id es requerido'}, status=status.HTTP_400_BAD_REQUEST)
+
+        turno_actual = Turno.objects.filter(partida_id=partida_id, fin__isnull=True).order_by('numero').first()
+        if not turno_actual:
+            return Response({'error': 'No hay turno activo para la partida'}, status=status.HTTP_400_BAD_REQUEST)
+        if str(turno_actual.jugador_id) != str(ia_obj.jugador_id):
+            return Response({'error': 'No es el turno de esta IA'}, status=status.HTTP_409_CONFLICT)
+
         allow_simple = bool(permitir_simples_raw) if isinstance(permitir_simples_raw, bool) else str(permitir_simples_raw).lower() != 'false'
 
-        agent = MaxHeuristicAgent()
         try:
-            sugerencia = agent.suggest_move(
-                partida_id=partida_id,
-                jugador_id=ia_obj.jugador_id,
-                allow_simple=allow_simple,
-            )
+            # Nivel 1: heurística Max (actual). Nivel 2: MCTS (DIFICIL).
+            if int(getattr(ia_obj, 'nivel', 1) or 1) >= 2:
+                iterations_raw = request.data.get('simulaciones', request.data.get('iterations', 250))
+                depth_raw = request.data.get('rollout_depth', 10)
+                try:
+                    iterations = int(iterations_raw)
+                except Exception:
+                    iterations = 250
+                try:
+                    rollout_depth = int(depth_raw)
+                except Exception:
+                    rollout_depth = 10
+
+                agent = MCTSAgent()
+                sugerencia = agent.suggest_move(
+                    partida_id=partida_id,
+                    jugador_id=ia_obj.jugador_id,
+                    allow_simple=allow_simple,
+                    iterations=max(1, min(iterations, 2000)),
+                    rollout_depth=max(1, min(rollout_depth, 60)),
+                )
+            else:
+                agent = MaxHeuristicAgent()
+                sugerencia = agent.suggest_move(
+                    partida_id=partida_id,
+                    jugador_id=ia_obj.jugador_id,
+                    allow_simple=allow_simple,
+                )
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as exc:  # pragma: no cover - fallback de seguridad
+        except Exception as exc: 
             return Response({'error': f'No se pudo calcular la jugada: {exc}'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
         return Response(sugerencia, status=status.HTTP_200_OK)
