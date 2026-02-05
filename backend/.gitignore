@@ -64,6 +64,10 @@ verificar*.py
 # Sensitive files - Already covered above
 # .env is already in the Environment variables section
 
+# Archivos de prueba
+mcts_agent_basic.py
+mcts_pure.py
+
 # Cache and temporary files
 *.cache
 .pytest_cache/

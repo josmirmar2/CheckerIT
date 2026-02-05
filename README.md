@@ -1,238 +1,126 @@
-# CheckerIT - Juego de Damas Chinas
+# CheckerIT
 
-Aplicación web full-stack para jugar a las Damas Chinas, desarrollada con React (frontend) y Django (backend) con base de datos PostgreSQL.
+CheckerIT es una aplicación web full-stack para jugar a Damas Chinas. El frontend está desarrollado con React y el backend con Django y Django REST Framework.
 
-## 🎮 Características
+## Alcance y características principales
 
-- Pantalla de inicio con opciones de Tutorial y Empezar Partida
-- Sistema de juego de Damas Chinas para 2 jugadores
-- Tutorial interactivo con reglas del juego
-- API REST para gestión de partidas y movimientos
-- Interfaz moderna y responsiva
+- Gestión de partidas: creación, finalización y control de turnos.
+- Registro de movimientos con validación de reglas en el backend.
+- Interfaz de usuario con tablero, tutorial y pantallas de juego.
+- Soporte de jugadores humanos e inteligencia artificial.
+- IA con dos niveles: heurística y MCTS (dificultad “Difícil”).
 
-## 🛠️ Tecnologías
+## Arquitectura
 
-### Frontend
-- React 18
-- React Router DOM
-- Axios
-- CSS3
+- Frontend: React 18, React Router, Axios.
+- Backend: Django 5.0, Django REST Framework, django-cors-headers.
+- Persistencia:
+    - Por defecto: SQLite (configuración de desarrollo).
+    - Opcional: PostgreSQL mediante variables de entorno.
 
-### Backend
-- Django 5.0
-- Django REST Framework
-- PostgreSQL
-- CORS Headers
+## Requisitos
 
-## 📋 Requisitos Previos
-
-- Node.js (v14 o superior)
 - Python 3.8 o superior
-- PostgreSQL 12 o superior
-- npm o yarn
+- Node.js 14 o superior
+- npm
+- (Opcional) PostgreSQL 12 o superior
 
-## 🚀 Instalación
+## Instalación y ejecución (Windows)
 
-### 1. Configurar la Base de Datos
+### Backend (Django)
 
-Primero, crea la base de datos PostgreSQL:
-
-```sql
-CREATE DATABASE checkerit_db;
-CREATE USER postgres WITH PASSWORD 'postgres';
-GRANT ALL PRIVILEGES ON DATABASE checkerit_db TO postgres;
-```
-
-### 2. Configurar el Backend (Django)
+Desde la raíz del proyecto:
 
 ```powershell
-# Navegar a la carpeta backend
 cd backend
-
-# Crear entorno virtual
-python -m venv venv
-
-# Activar entorno virtual
-.\venv\Scripts\Activate.ps1
-
-# Instalar dependencias
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-
-# Copiar archivo de configuración
-copy .env.example .env
-
-# Editar .env con tus credenciales de PostgreSQL
-
-# Ejecutar migraciones
-python manage.py makemigrations
 python manage.py migrate
-
-# Crear superusuario (opcional)
-python manage.py createsuperuser
-
-# Iniciar servidor de desarrollo
 python manage.py runserver
 ```
 
-El backend estará disponible en: `http://localhost:8000`
+El backend queda disponible en `http://localhost:8000` y la API en `http://localhost:8000/api/`.
 
-### 3. Configurar el Frontend (React)
+### Frontend (React)
+
+En una terminal independiente, desde la raíz del proyecto:
 
 ```powershell
-# Abrir una nueva terminal y navegar a la carpeta frontend
 cd frontend
-
-# Instalar dependencias
 npm install
-
-# Copiar archivo de configuración
-copy .env.example .env
-
-# Iniciar servidor de desarrollo
 npm start
 ```
 
-El frontend estará disponible en: `http://localhost:3000`
+El frontend queda disponible en `http://localhost:3000`.
 
-## 📁 Estructura del Proyecto
+## Configuración (opcional) de PostgreSQL
 
-```
-TFG/
-├── backend/
-│   ├── checkerit/          # Configuración del proyecto Django
-│   │   ├── settings.py     # Configuración principal
-│   │   ├── urls.py         # URLs principales
-│   │   └── ...
-│   ├── game/               # App del juego
-│   │   ├── models.py       # Modelos de Game y Move
-│   │   ├── views.py        # ViewSets para la API
-│   │   ├── serializers.py  # Serializadores
-│   │   ├── urls.py         # URLs de la app
-│   │   └── admin.py        # Configuración del admin
-│   ├── manage.py
-│   ├── requirements.txt
-│   └── .env.example
-│
-└── frontend/
-    ├── public/
-    │   └── index.html
-    ├── src/
-    │   ├── components/
-    │   │   ├── Home.js         # Pantalla de inicio
-    │   │   ├── Game.js         # Componente del juego
-    │   │   ├── Tutorial.js     # Tutorial del juego
-    │   │   └── *.css          # Estilos
-    │   ├── App.js
-    │   ├── index.js
-    │   └── ...
-    ├── package.json
-    └── .env.example
-```
-
-## 🎯 API Endpoints
-
-### Juegos (Games)
-
-- `GET /api/games/` - Listar todas las partidas
-- `POST /api/games/` - Crear una partida
-- `GET /api/games/{id}/` - Obtener detalles de una partida
-- `POST /api/games/start_game/` - Iniciar nueva partida
-- `POST /api/games/{id}/make_move/` - Realizar un movimiento
-- `POST /api/games/{id}/end_game/` - Finalizar partida
-
-### Movimientos (Moves)
-
-- `GET /api/moves/` - Listar movimientos
-- `GET /api/moves/?game_id={id}` - Movimientos de una partida específica
-
-## 🎲 Modelos de Datos
-
-### Game (Partida)
-- `id`: ID único
-- `status`: Estado (waiting, in_progress, finished)
-- `current_player`: Jugador actual (1 o 2)
-- `board_state`: Estado del tablero (JSON)
-- `winner`: Ganador (opcional)
-- `created_at`: Fecha de creación
-- `updated_at`: Última actualización
-
-### Move (Movimiento)
-- `id`: ID único
-- `game`: Relación con la partida
-- `player`: Jugador que realizó el movimiento
-- `from_position`: Posición inicial (JSON)
-- `to_position`: Posición final (JSON)
-- `created_at`: Fecha del movimiento
-
-## 🔧 Configuración
-
-### Variables de Entorno - Backend (.env)
+El backend utiliza SQLite por defecto. Para usar PostgreSQL, definir las siguientes variables de entorno:
 
 ```env
+USE_POSTGRESQL=True
 DB_NAME=checkerit_db
 DB_USER=postgres
 DB_PASSWORD=tu_contraseña
 DB_HOST=localhost
 DB_PORT=5432
-SECRET_KEY=tu_clave_secreta_django
+SECRET_KEY=django-insecure-change-this-in-production
 DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1
 ```
 
-### Variables de Entorno - Frontend (.env)
 
-```env
-REACT_APP_API_URL=http://localhost:8000/api
+
+## Reglas de movimiento
+
+Las reglas de movimiento se validan en el backend al registrar movimientos. De forma resumida:
+
+- Movimiento simple: desplazamiento a una casilla adyacente vacía.
+- Movimiento por salto: salto colineal sobre una pieza (propia o rival) aterrizando en una casilla vacía.
+- Saltos encadenados: posibilidad de concatenar varios saltos consecutivos en el mismo turno con la misma pieza.
+
+## Inteligencia artificial
+
+- Nivel 1: heurística (selección de jugada por evaluación directa).
+- Nivel 2 (dificultad “Difícil”): MCTS mediante la librería `imparaai-montecarlo`.
+    - La acción que explora el MCTS es un turno completo sobre una única pieza.
+    - Una cadena de saltos se representa como una secuencia y se devuelve como `secuencia`.
+
+## API (resumen)
+
+Base URL: `http://localhost:8000/api/`
+
+Recursos principales (CRUD):
+
+- `/api/jugadores/`
+- `/api/partidas/`
+- `/api/piezas/`
+- `/api/turnos/`
+- `/api/movimientos/`
+- `/api/participaciones/`
+- `/api/ia/`
+- `/api/chatbot/`
+
+Acciones relevantes:
+
+- `POST /api/partidas/start_game/` crea una partida e inicializa jugadores, piezas y turno.
+- `POST /api/partidas/{id_partida}/registrar_movimientos/` registra uno o varios pasos (cadena) de un turno, validando reglas.
+- `POST /api/partidas/{id_partida}/avanzar_turno/` finaliza el turno actual y crea el siguiente.
+- `POST /api/partidas/{id_partida}/end_game/` finaliza la partida.
+- `POST /api/ia/{id}/sugerir_movimiento/` devuelve una sugerencia de jugada para una IA.
+
+## Estructura del proyecto
+
+```text
+backend/
+    checkerit/              Configuración de Django
+    game/                   App principal (modelos, API, validación, IA)
+    manage.py
+    requirements.txt
+frontend/
+    public/
+    src/
+        components/
+    package.json
 ```
-
-## 🎨 Características Implementadas
-
-✅ Pantalla de inicio con navegación
-✅ Sistema de routing con React Router
-✅ Tutorial completo con reglas del juego
-✅ API REST completa para gestión de partidas
-✅ Modelos de base de datos para Game y Move
-✅ Interfaz responsiva y moderna
-✅ Configuración CORS para comunicación frontend-backend
-
-## 🚧 Pendiente de Implementar
-
-- [ ] Lógica completa del tablero de Damas Chinas
-- [ ] Validación de movimientos según reglas del juego
-- [ ] Sistema de detección de victoria
-- [ ] Animaciones de movimientos de piezas
-- [ ] Historial de partidas
-- [ ] Estadísticas de jugadores
-
-## 🐛 Solución de Problemas
-
-### Error de conexión a PostgreSQL
-- Verifica que PostgreSQL esté ejecutándose
-- Comprueba las credenciales en el archivo `.env`
-- Asegúrate de que la base de datos existe
-
-### Error de CORS
-- Verifica que el backend esté corriendo en el puerto 8000
-- Comprueba la configuración de CORS_ALLOWED_ORIGINS en settings.py
-
-### Errores de npm
-- Elimina la carpeta `node_modules` y ejecuta `npm install` de nuevo
-- Limpia el cache con `npm cache clean --force`
-
-## 📝 Notas de Desarrollo
-
-- No incluye sistema de autenticación (según especificaciones)
-- La lógica del tablero está preparada para ser implementada en `views.py`
-- El estado del tablero se guarda en formato JSON en PostgreSQL
-
-## 👥 Contribuir
-
-Este es un proyecto académico (TFG). 
-
-## 📄 Licencia
-
-Este proyecto es un Trabajo Fin de Grado (TFG).
-
----
-
-Desarrollado con ❤️ para el TFG
