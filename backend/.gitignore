@@ -59,7 +59,7 @@ GUIA_*.md
 MODELOS_*.md
 RELACIONES_*.md
 probar_endpoints.py
-verificar_db.py
+verificar*.py
 
 # Sensitive files - Already covered above
 # .env is already in the Environment variables section
