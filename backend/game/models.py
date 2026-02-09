@@ -1,5 +1,33 @@
+from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+
+ROW_LENGTHS = (1,2,3,4,13,12,11,10,9,10,11,12,13,4,3,2,1,)
+
+
+def is_valid_position_key(key: str) -> bool:
+    if not isinstance(key, str):
+        return False
+    if "-" not in key:
+        return False
+
+    col_str, row_str = key.split("-", 1)
+    try:
+        col = int(col_str)
+        row = int(row_str)
+    except Exception:
+        return False
+
+    if row < 0 or row >= len(ROW_LENGTHS):
+        return False
+
+    row_len = ROW_LENGTHS[row]
+    return 0 <= col < row_len
+
+
+def validate_position_key(key: str) -> None:
+    if not is_valid_position_key(key):
+        raise ValidationError("Posición inválida: fuera del tablero")
 
 
 class Jugador(models.Model):
@@ -70,7 +98,10 @@ class Pieza(models.Model):
     """
     id_pieza = models.CharField(max_length=50, primary_key=True)
     tipo = models.CharField(max_length=50)
-    posicion = models.CharField(max_length=10)  # Ej: "A3", "B10", coordenadas del tablero
+    posicion = models.CharField(
+        max_length=10,
+        validators=[validate_position_key],
+    )
     jugador = models.ForeignKey(
         Jugador, 
         on_delete=models.CASCADE, 

@@ -2,6 +2,7 @@ import pytest
 from datetime import timedelta
 
 from django.db import IntegrityError, transaction
+from django.core.exceptions import ValidationError
 from django.utils import timezone
 
 from game.models import Jugador, Partida, JugadorPartida, Pieza
@@ -135,3 +136,17 @@ def test_pieza_requires_tipo_and_posicion_not_null():
                 posicion=None,
                 jugador=j,
             )
+
+
+@pytest.mark.django_db
+def test_pieza_posicion_must_be_on_board_full_clean():
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    pieza = Pieza(
+        id_pieza="X_BAD_POS",
+        tipo="punta-0",
+        posicion="99-99",
+        jugador=j,
+    )
+
+    with pytest.raises(ValidationError):
+        pieza.full_clean()

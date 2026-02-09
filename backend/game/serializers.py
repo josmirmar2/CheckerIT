@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida
+from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida, is_valid_position_key
 
 
 class JugadorSerializer(serializers.ModelSerializer):
@@ -42,6 +42,11 @@ class JugadorPartidaSerializer(serializers.ModelSerializer):
 
 class PiezaSerializer(serializers.ModelSerializer):
     jugador_nombre = serializers.CharField(source='jugador.nombre', read_only=True)
+
+    def validate_posicion(self, value):
+        if not is_valid_position_key(str(value)):
+            raise serializers.ValidationError('Posición inválida: fuera del tablero')
+        return value
     
     class Meta:
         model = Pieza

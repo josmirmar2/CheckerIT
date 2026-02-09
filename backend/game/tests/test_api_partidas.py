@@ -1,5 +1,7 @@
 import pytest
 
+from game.models import Jugador
+
 
 @pytest.mark.django_db
 def test_api_root_ok(api_client):
@@ -67,4 +69,21 @@ def test_start_game_rejects_duplicate_player_numbers(api_client):
     }
 
     res = api_client.post("/api/partidas/start_game/", payload, format="json")
+    assert res.status_code == 400
+
+
+@pytest.mark.django_db
+def test_create_pieza_rejects_invalid_position(api_client):
+    jugador = Jugador.objects.create(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
+    payload = {
+        "id_pieza": "PX1",
+        "tipo": "punta-0",
+        "posicion": "99-99",
+        "jugador": jugador.id_jugador,
+        "ia": None,
+        "chatbot": None,
+        "partida": None,
+    }
+
+    res = api_client.post("/api/piezas/", payload, format="json")
     assert res.status_code == 400
