@@ -1,3 +1,4 @@
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
@@ -33,7 +34,9 @@ class Partida(models.Model):
     fecha_fin = models.DateTimeField(null=True, blank=True)
     tiempo_sobrante = models.IntegerField(default=0) 
     estado = models.CharField(max_length=20, choices=ESTADOS, default='EN_CURSO')
-    numero_jugadores = models.IntegerField()
+    numero_jugadores = models.IntegerField(
+        validators=[MinValueValidator(2), MaxValueValidator(6)]
+    )
     jugadores = models.ManyToManyField(
         Jugador,
         related_name='partidas',  # Relación: Jugador 2..6 --> 0..* Partida
@@ -42,6 +45,12 @@ class Partida(models.Model):
 
     class Meta:
         verbose_name_plural = "Partidas"
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(numero_jugadores__gte=2) & models.Q(numero_jugadores__lte=6),
+                name="partida_numero_jugadores_between_2_6",
+            )
+        ]
 
     def __str__(self):
         return f"Partida {self.id_partida}"

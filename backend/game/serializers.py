@@ -10,6 +10,30 @@ class JugadorSerializer(serializers.ModelSerializer):
 
 class JugadorPartidaSerializer(serializers.ModelSerializer):
     jugador_nombre = serializers.CharField(source='jugador.nombre', read_only=True)
+
+    def validate(self, attrs):
+        partida = attrs.get('partida')
+        jugador = attrs.get('jugador')
+
+        if partida is not None:
+            # Máximo 6 jugadores por partida
+            qs = JugadorPartida.objects.filter(partida=partida)
+            if self.instance is not None:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.count() >= 6:
+                raise serializers.ValidationError({'partida': 'Una partida no puede tener más de 6 jugadores'})
+
+        if partida is not None and jugador is not None:
+            # Evitar duplicar el numero de jugador dentro de la misma partida.
+            numero = getattr(jugador, 'numero', None)
+            if numero is not None:
+                existing = JugadorPartida.objects.filter(partida=partida, jugador__numero=numero)
+                if self.instance is not None:
+                    existing = existing.exclude(pk=self.instance.pk)
+                if existing.exists():
+                    raise serializers.ValidationError({'jugador': f'Ya existe un jugador con numero={numero} en esta partida'})
+
+        return attrs
     
     class Meta:
         model = JugadorPartida

@@ -233,20 +233,51 @@ class PartidaViewSet(viewsets.ModelViewSet):
             ]
         }
         """
-        numero_jugadores = request.data.get('numero_jugadores', 2)
         jugadores_data = request.data.get('jugadores', [])
+        numero_jugadores_raw = request.data.get('numero_jugadores', None)
         
         if not jugadores_data or len(jugadores_data) == 0:
             return Response(
                 {'error': 'Se requieren datos de jugadores'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Determinar/validar numero_jugadores
+        if numero_jugadores_raw is None:
+            numero_jugadores = len(jugadores_data)
+        else:
+            try:
+                numero_jugadores = int(numero_jugadores_raw)
+            except Exception:
+                return Response({'error': 'numero_jugadores debe ser un entero'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if numero_jugadores < 2 or numero_jugadores > 6:
+            return Response({'error': 'Una partida debe tener entre 2 y 6 jugadores'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if len(jugadores_data) != numero_jugadores:
+            return Response(
+                {'error': 'numero_jugadores no coincide con la cantidad de jugadores enviada'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validar que no se repitan numeros de jugador dentro de la partida (p.ej. dos numero=1)
+        numeros = []
+        for idx, jugador_data in enumerate(jugadores_data):
+            numero_raw = jugador_data.get('numero', idx + 1)
+            try:
+                numero = int(numero_raw)
+            except Exception:
+                return Response({'error': f'El campo numero del jugador {idx + 1} debe ser un entero'}, status=status.HTTP_400_BAD_REQUEST)
+            numeros.append(numero)
+
+        if len(set(numeros)) != len(numeros):
+            return Response({'error': 'No puede haber dos jugadores con el mismo numero en la misma partida'}, status=status.HTTP_400_BAD_REQUEST)
         
         jugadores_list = []
         
         for idx, jugador_data in enumerate(jugadores_data):
             es_humano = jugador_data.get('tipo', 'humano') == 'humano'
-            numero = jugador_data.get('numero', idx + 1)
+            numero = numeros[idx]
             dificultad = jugador_data.get('dificultad', 'Fácil')
 
             if es_humano:
