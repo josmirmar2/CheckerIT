@@ -5,7 +5,7 @@ from django.db import IntegrityError, transaction
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from game.models import Jugador, Partida, JugadorPartida, Pieza
+from game.models import Jugador, Partida, JugadorPartida, Pieza, Turno
 
 
 @pytest.mark.django_db
@@ -150,3 +150,52 @@ def test_pieza_posicion_must_be_on_board_full_clean():
 
     with pytest.raises(ValidationError):
         pieza.full_clean()
+
+
+@pytest.mark.django_db
+def test_turno_str():
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+    t = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
+    assert str(t) == "Turno 1 de Ana"
+
+
+@pytest.mark.django_db
+def test_turno_inicio_is_set_and_fin_nullable():
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+    t = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
+
+    assert t.inicio is not None
+    assert t.fin is None
+
+    t.fin = t.inicio + timedelta(seconds=5)
+    t.save(update_fields=["fin"])
+    t.refresh_from_db()
+    assert t.fin is not None
+    assert t.fin > t.inicio
+
+
+@pytest.mark.django_db
+def test_turno_requires_jugador_and_partida():
+    p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            Turno.objects.create(id_turno="T_NO_PLAYER", jugador=None, numero=1, partida=p)
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            Turno.objects.create(id_turno="T_NO_PARTIDA", jugador=j, numero=1, partida=None)
+
+
+@pytest.mark.django_db
+def test_turno_related_names_work():
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+    Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
+    Turno.objects.create(id_turno="T2", jugador=j, numero=2, partida=p)
+
+    assert j.turnos.count() == 2
+    assert p.turnos.count() == 2
