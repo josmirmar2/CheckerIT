@@ -177,6 +177,18 @@ def test_turno_inicio_is_set_and_fin_nullable():
 
 
 @pytest.mark.django_db
+def test_turno_fin_must_be_after_inicio_enforced_by_db():
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+    t = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            t.fin = t.inicio - timedelta(seconds=1)
+            t.save(update_fields=["fin"])
+
+
+@pytest.mark.django_db
 def test_turno_requires_jugador_and_partida():
     p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)

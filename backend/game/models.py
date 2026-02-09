@@ -161,6 +161,12 @@ class Turno(models.Model):
 
     class Meta:
         verbose_name_plural = "Turnos"
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(fin__isnull=True) | models.Q(fin__gt=models.F('inicio')),
+                name="turno_fin_after_inicio",
+            )
+        ]
 
     def __str__(self):
         return f"Turno {self.numero} de {self.jugador}"
