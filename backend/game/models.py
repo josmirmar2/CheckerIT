@@ -202,8 +202,8 @@ class Movimiento(models.Model):
         null=True,
         blank=True
     )
-    origen = models.CharField(max_length=10)
-    destino = models.CharField(max_length=10)
+    origen = models.CharField(max_length=10, validators=[validate_position_key])
+    destino = models.CharField(max_length=10, validators=[validate_position_key])
 
     class Meta:
         verbose_name_plural = "Movimientos"

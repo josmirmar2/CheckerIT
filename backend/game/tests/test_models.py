@@ -365,3 +365,41 @@ def test_movimiento_related_names_work():
     assert pieza.movimientos.count() == 1
     assert t.movimientos.count() == 1
     assert p.movimientos.count() == 1
+
+
+@pytest.mark.django_db
+def test_movimiento_origen_y_destino_must_be_on_board():
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+    pieza = Pieza.objects.create(
+        id_pieza="X1",
+        tipo="punta-0",
+        posicion="0-0",
+        jugador=j,
+        partida=p,
+    )
+    t = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
+
+    m1 = Movimiento(
+        id_movimiento="M_BAD_ORIGEN",
+        jugador=j,
+        pieza=pieza,
+        turno=t,
+        partida=p,
+        origen="99-99",
+        destino="0-1",
+    )
+    with pytest.raises(ValidationError):
+        m1.full_clean()
+
+    m2 = Movimiento(
+        id_movimiento="M_BAD_DESTINO",
+        jugador=j,
+        pieza=pieza,
+        turno=t,
+        partida=p,
+        origen="0-0",
+        destino="99-99",
+    )
+    with pytest.raises(ValidationError):
+        m2.full_clean()

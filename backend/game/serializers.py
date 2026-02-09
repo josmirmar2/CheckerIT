@@ -56,6 +56,16 @@ class PiezaSerializer(serializers.ModelSerializer):
 class MovimientoSerializer(serializers.ModelSerializer):
     jugador_nombre = serializers.CharField(source='jugador.nombre', read_only=True)
     pieza_tipo = serializers.CharField(source='pieza.tipo', read_only=True)
+
+    def validate_origen(self, value):
+        if not is_valid_position_key(str(value)):
+            raise serializers.ValidationError('Posición inválida: fuera del tablero')
+        return value
+
+    def validate_destino(self, value):
+        if not is_valid_position_key(str(value)):
+            raise serializers.ValidationError('Posición inválida: fuera del tablero')
+        return value
     
     class Meta:
         model = Movimiento
