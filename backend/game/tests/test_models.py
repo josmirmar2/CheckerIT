@@ -429,6 +429,29 @@ class TestPropiedadesYValidaciones:
         )
         m.full_clean()
 
+    @pytest.mark.django_db
+    def test_ia_nivel_solo_puede_ser_1_o_2_full_clean(self):
+        j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=False, numero=1)
+
+        ia_bad_0 = IA(jugador=j, nivel=0)
+        with pytest.raises(ValidationError):
+            ia_bad_0.full_clean()
+
+        ia_bad_3 = IA(jugador=j, nivel=3)
+        with pytest.raises(ValidationError):
+            ia_bad_3.full_clean()
+
+        ia_ok_1 = IA(jugador=j, nivel=1)
+        ia_ok_1.full_clean()
+
+    @pytest.mark.django_db
+    def test_ia_nivel_solo_puede_ser_1_o_2_forzado_por_bd(self):
+        j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=False, numero=1)
+
+        with pytest.raises(IntegrityError):
+            with transaction.atomic():
+                IA.objects.create(jugador=j, nivel=3)
+
 
     # ============================================================================
     # 3) TESTEO DE RELACIONES ENTRE ENTIDADES

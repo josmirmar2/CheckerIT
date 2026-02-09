@@ -253,11 +253,19 @@ class IA(models.Model):
         primary_key=True,
         related_name='ia'  # Jugador 1 --> 0..1 IA
     )
-    nivel = models.IntegerField()
+    nivel = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(2)]
+    )
 
     class Meta:
         verbose_name = "IA"
         verbose_name_plural = "IAs"
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(nivel__gte=1) & models.Q(nivel__lte=2),
+                name="ia_nivel_between_1_2",
+            )
+        ]
 
     def __str__(self):
         return f"IA Nivel {self.nivel} del jugador {self.jugador}"
