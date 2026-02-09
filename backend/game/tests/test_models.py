@@ -452,6 +452,15 @@ class TestPropiedadesYValidaciones:
             with transaction.atomic():
                 IA.objects.create(jugador=j, nivel=3)
 
+    @pytest.mark.django_db
+    def test_jugador_partida_orden_participacion_debe_ser_entre_1_y_6_full_clean(self):
+        j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+        jp = JugadorPartida(jugador=j, partida=p, orden_participacion=0)
+
+        with pytest.raises(ValidationError):
+            jp.full_clean()
+
 
     # ============================================================================
     # 3) TESTEO DE RELACIONES ENTRE ENTIDADES
@@ -479,6 +488,18 @@ class TestRelacionesEntreEntidades:
         JugadorPartida.objects.create(jugador=j2, partida=p, orden_participacion=2)
 
         assert JugadorPartida.objects.filter(partida=p).count() == 2
+
+    @pytest.mark.django_db
+    def test_jugador_partida_no_permite_orden_participacion_duplicado_en_partida(self):
+        j1 = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        j2 = Jugador.objects.create(id_jugador="J2", nombre="Pedro", humano=True, numero=2)
+        p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+
+        JugadorPartida.objects.create(jugador=j1, partida=p, orden_participacion=1)
+
+        with pytest.raises(IntegrityError):
+            with transaction.atomic():
+                JugadorPartida.objects.create(jugador=j2, partida=p, orden_participacion=1)
 
     @pytest.mark.django_db
     def test_turno_related_name_funciona(self):
@@ -544,7 +565,7 @@ class TestRelacionesEntreEntidades:
     @pytest.mark.django_db
     def test_one_to_one_jugador_ia_se_accede_y_pk_coincide(self):
         j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=False, numero=1)
-        ia = IA.objects.create(jugador=j, nivel=3)
+        ia = IA.objects.create(jugador=j, nivel=2)
 
         assert j.ia == ia
         assert ia.pk == j.pk

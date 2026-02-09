@@ -14,14 +14,24 @@ class JugadorPartidaSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         partida = attrs.get('partida')
         jugador = attrs.get('jugador')
+        orden = attrs.get('orden_participacion')
 
         if partida is not None:
-            # Máximo 6 jugadores por partida
+            limit = getattr(partida, 'numero_jugadores', None) or 6
             qs = JugadorPartida.objects.filter(partida=partida)
             if self.instance is not None:
                 qs = qs.exclude(pk=self.instance.pk)
-            if qs.count() >= 6:
-                raise serializers.ValidationError({'partida': 'Una partida no puede tener más de 6 jugadores'})
+            if qs.count() >= limit:
+                raise serializers.ValidationError({'partida': f'Una partida no puede tener más de {limit} jugadores'})
+
+            if orden is not None:
+                try:
+                    orden_int = int(orden)
+                except Exception:
+                    raise serializers.ValidationError({'orden_participacion': 'orden_participacion debe ser un entero'})
+
+                if orden_int < 1 or orden_int > limit:
+                    raise serializers.ValidationError({'orden_participacion': f'orden_participacion debe estar entre 1 y {limit}'})
 
         if partida is not None and jugador is not None:
             # Evitar duplicar el numero de jugador dentro de la misma partida.

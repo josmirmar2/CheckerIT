@@ -221,3 +221,45 @@ def test_crear_movimiento_no_rechaza_destino_ocupado_en_otra_partida(api_client)
     }
     res = api_client.post("/api/movimientos/", payload, format="json")
     assert res.status_code == 201
+
+
+@pytest.mark.django_db
+def test_crear_participacion_rechaza_exceder_numero_jugadores_de_partida(api_client):
+    p = Partida.objects.create(id_partida="P_API", numero_jugadores=2)
+    j1 = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    j2 = Jugador.objects.create(id_jugador="J2", nombre="Pedro", humano=True, numero=2)
+    j3 = Jugador.objects.create(id_jugador="J3", nombre="Luis", humano=True, numero=3)
+
+    res1 = api_client.post(
+        "/api/participaciones/",
+        {"jugador": j1.id_jugador, "partida": p.id_partida, "orden_participacion": 1},
+        format="json",
+    )
+    assert res1.status_code == 201
+
+    res2 = api_client.post(
+        "/api/participaciones/",
+        {"jugador": j2.id_jugador, "partida": p.id_partida, "orden_participacion": 2},
+        format="json",
+    )
+    assert res2.status_code == 201
+
+    res3 = api_client.post(
+        "/api/participaciones/",
+        {"jugador": j3.id_jugador, "partida": p.id_partida, "orden_participacion": 3},
+        format="json",
+    )
+    assert res3.status_code == 400
+
+
+@pytest.mark.django_db
+def test_crear_participacion_rechaza_orden_participacion_fuera_de_rango(api_client):
+    p = Partida.objects.create(id_partida="P_API", numero_jugadores=2)
+    j1 = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+
+    res = api_client.post(
+        "/api/participaciones/",
+        {"jugador": j1.id_jugador, "partida": p.id_partida, "orden_participacion": 3},
+        format="json",
+    )
+    assert res.status_code == 400

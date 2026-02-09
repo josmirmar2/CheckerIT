@@ -301,11 +301,23 @@ class JugadorPartida(models.Model):
     jugador = models.ForeignKey(Jugador, on_delete=models.CASCADE)
     partida = models.ForeignKey(Partida, on_delete=models.CASCADE)
     fecha_union = models.DateTimeField(auto_now_add=True)
-    orden_participacion = models.IntegerField()
+    orden_participacion = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(6)]
+    )
 
     class Meta:
         verbose_name_plural = "Participaciones en Partida"
         unique_together = ('jugador', 'partida')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['partida', 'orden_participacion'],
+                name='jugadorpartida_unique_orden_por_partida',
+            ),
+            models.CheckConstraint(
+                check=models.Q(orden_participacion__gte=1) & models.Q(orden_participacion__lte=6),
+                name='jugadorpartida_orden_between_1_6',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.jugador} en {self.partida}"
