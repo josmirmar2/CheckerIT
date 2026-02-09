@@ -82,3 +82,56 @@ def test_pieza_str():
     )
     assert "punta-0" in str(pieza)
     assert "Ana" in str(pieza)
+
+
+@pytest.mark.django_db
+def test_pieza_minimal_create_allows_nullable_foreign_keys():
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    pieza = Pieza.objects.create(
+        id_pieza="X_MIN",
+        tipo="punta-0",
+        posicion="0-0",
+        jugador=j,
+        partida=None,
+        ia=None,
+        chatbot=None,
+    )
+    assert pieza.jugador_id == "J1"
+    assert pieza.partida_id is None
+    assert pieza.ia_id is None
+    assert pieza.chatbot_id is None
+
+
+@pytest.mark.django_db
+def test_pieza_requires_jugador():
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            Pieza.objects.create(
+                id_pieza="X_NO_PLAYER",
+                tipo="punta-0",
+                posicion="0-0",
+                jugador=None,
+            )
+
+
+@pytest.mark.django_db
+def test_pieza_requires_tipo_and_posicion_not_null():
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            Pieza.objects.create(
+                id_pieza="X_NO_TIPO",
+                tipo=None,
+                posicion="0-0",
+                jugador=j,
+            )
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            Pieza.objects.create(
+                id_pieza="X_NO_POS",
+                tipo="punta-0",
+                posicion=None,
+                jugador=j,
+            )
