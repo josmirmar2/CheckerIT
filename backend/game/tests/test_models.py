@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from game.models import Jugador, JugadorPartida, Movimiento, Partida, Pieza, Turno
+from game.models import Chatbot, IA, Jugador, JugadorPartida, Movimiento, Partida, Pieza, Turno
 
 
 # ============================================================================
@@ -493,3 +493,203 @@ class TestRelacionesEntreEntidades:
         assert pieza.movimientos.count() == 1
         assert t.movimientos.count() == 1
         assert p.movimientos.count() == 1
+
+    @pytest.mark.django_db
+    def test_m2m_partida_jugadores_y_jugador_partidas_via_through(self):
+        j1 = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        j2 = Jugador.objects.create(id_jugador="J2", nombre="Pedro", humano=True, numero=2)
+        p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+
+        JugadorPartida.objects.create(jugador=j1, partida=p, orden_participacion=1)
+        JugadorPartida.objects.create(jugador=j2, partida=p, orden_participacion=2)
+
+        assert set(p.jugadores.all()) == {j1, j2}
+        assert list(j1.partidas.all()) == [p]
+        assert list(j2.partidas.all()) == [p]
+
+    @pytest.mark.django_db
+    def test_related_name_piezas_desde_jugador_funciona(self):
+        j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+
+        Pieza.objects.create(id_pieza="X1", tipo="punta-0", posicion="0-0", jugador=j, partida=p)
+        Pieza.objects.create(id_pieza="X2", tipo="punta-0", posicion="0-1", jugador=j, partida=None)
+
+        assert j.piezas.count() == 2
+        assert p.piezas.count() == 1
+
+    @pytest.mark.django_db
+    def test_one_to_one_jugador_ia_se_accede_y_pk_coincide(self):
+        j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=False, numero=1)
+        ia = IA.objects.create(jugador=j, nivel=3)
+
+        assert j.ia == ia
+        assert ia.pk == j.pk
+
+    @pytest.mark.django_db
+    def test_one_to_one_chatbot_desde_ia_y_chatbot_puede_ser_null(self):
+        j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=False, numero=1)
+        ia = IA.objects.create(jugador=j, nivel=1)
+
+        chatbot = Chatbot.objects.create(ia=ia, memoria={"a": 1}, contexto={"b": 2})
+        assert ia.chatbot == chatbot
+
+        chatbot_sin_ia = Chatbot.objects.create(ia=None, memoria={}, contexto={})
+        assert chatbot_sin_ia.ia is None
+
+    @pytest.mark.django_db
+    def test_related_name_piezas_desde_ia_y_chatbot_funciona(self):
+        j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=False, numero=1)
+        ia = IA.objects.create(jugador=j, nivel=2)
+        chatbot = Chatbot.objects.create(ia=ia, memoria={}, contexto={})
+        p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+
+        Pieza.objects.create(
+            id_pieza="X_IA",
+            tipo="punta-0",
+            posicion="0-0",
+            jugador=j,
+            partida=p,
+            ia=ia,
+            chatbot=None,
+        )
+        Pieza.objects.create(
+            id_pieza="X_CB",
+            tipo="punta-0",
+            posicion="0-1",
+            jugador=j,
+            partida=p,
+            ia=None,
+            chatbot=chatbot,
+        )
+
+        assert ia.piezas.count() == 1
+        assert chatbot.piezas.count() == 1
+
+    @pytest.mark.django_db
+    def test_borrado_partida_hace_cascade_a_turnos_movimientos_piezas_y_through(self):
+        j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+        JugadorPartida.objects.create(jugador=j, partida=p, orden_participacion=1)
+
+        pieza = Pieza.objects.create(
+            id_pieza="X1",
+            tipo="punta-0",
+            posicion="0-0",
+            jugador=j,
+            partida=p,
+        )
+        t = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
+        Movimiento.objects.create(
+            id_movimiento="M1",
+            jugador=j,
+            pieza=pieza,
+            turno=t,
+            partida=p,
+            origen="0-0",
+            destino="0-1",
+        )
+
+        assert Turno.objects.filter(partida=p).count() == 1
+        assert Pieza.objects.filter(partida=p).count() == 1
+        assert Movimiento.objects.filter(partida=p).count() == 1
+        assert JugadorPartida.objects.filter(partida=p).count() == 1
+
+        p.delete()
+
+        assert Turno.objects.filter(id_turno="T1").count() == 0
+        assert Pieza.objects.filter(id_pieza="X1").count() == 0
+        assert Movimiento.objects.filter(id_movimiento="M1").count() == 0
+        assert JugadorPartida.objects.filter(jugador=j).count() == 0
+
+    @pytest.mark.django_db
+    def test_borrado_jugador_hace_cascade_a_ia_chatbot_y_dependencias(self):
+        j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=False, numero=1)
+        ia = IA.objects.create(jugador=j, nivel=2)
+        Chatbot.objects.create(ia=ia, memoria={}, contexto={})
+        p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+        JugadorPartida.objects.create(jugador=j, partida=p, orden_participacion=1)
+
+        pieza = Pieza.objects.create(
+            id_pieza="X1",
+            tipo="punta-0",
+            posicion="0-0",
+            jugador=j,
+            partida=p,
+        )
+        t = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
+        Movimiento.objects.create(
+            id_movimiento="M1",
+            jugador=j,
+            pieza=pieza,
+            turno=t,
+            partida=p,
+            origen="0-0",
+            destino="0-1",
+        )
+
+        j.delete()
+
+        assert IA.objects.filter(pk="J1").count() == 0
+        assert Chatbot.objects.count() == 0
+        assert Pieza.objects.count() == 0
+        assert Turno.objects.count() == 0
+        assert Movimiento.objects.count() == 0
+        assert JugadorPartida.objects.count() == 0
+
+    @pytest.mark.django_db
+    def test_borrado_ia_hace_cascade_a_chatbot_y_piezas_asociadas(self):
+        j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=False, numero=1)
+        ia = IA.objects.create(jugador=j, nivel=2)
+        Chatbot.objects.create(ia=ia, memoria={}, contexto={})
+
+        pieza_ia = Pieza.objects.create(
+            id_pieza="X_IA",
+            tipo="punta-0",
+            posicion="0-0",
+            jugador=j,
+            ia=ia,
+            partida=None,
+        )
+        pieza_sin_ia = Pieza.objects.create(
+            id_pieza="X_NO_IA",
+            tipo="punta-0",
+            posicion="0-1",
+            jugador=j,
+            ia=None,
+            partida=None,
+        )
+
+        ia.delete()
+
+        assert Chatbot.objects.count() == 0
+        assert Pieza.objects.filter(id_pieza=pieza_ia.id_pieza).count() == 0
+        assert Pieza.objects.filter(id_pieza=pieza_sin_ia.id_pieza).count() == 1
+
+    @pytest.mark.django_db
+    def test_borrado_chatbot_hace_cascade_a_piezas_asociadas(self):
+        j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        ia = IA.objects.create(jugador=j, nivel=2)
+        chatbot = Chatbot.objects.create(ia=ia, memoria={}, contexto={})
+
+        pieza_cb = Pieza.objects.create(
+            id_pieza="X_CB",
+            tipo="punta-0",
+            posicion="0-0",
+            jugador=j,
+            chatbot=chatbot,
+            partida=None,
+        )
+        pieza_sin_cb = Pieza.objects.create(
+            id_pieza="X_NO_CB",
+            tipo="punta-0",
+            posicion="0-1",
+            jugador=j,
+            chatbot=None,
+            partida=None,
+        )
+
+        chatbot.delete()
+
+        assert Pieza.objects.filter(id_pieza=pieza_cb.id_pieza).count() == 0
+        assert Pieza.objects.filter(id_pieza=pieza_sin_cb.id_pieza).count() == 1
