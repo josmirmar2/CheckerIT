@@ -66,6 +66,38 @@ class MovimientoSerializer(serializers.ModelSerializer):
         if not is_valid_position_key(str(value)):
             raise serializers.ValidationError('Posición inválida: fuera del tablero')
         return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        pieza = attrs.get('pieza') if 'pieza' in attrs else getattr(self.instance, 'pieza', None)
+        origen = attrs.get('origen') if 'origen' in attrs else getattr(self.instance, 'origen', None)
+        destino = attrs.get('destino') if 'destino' in attrs else getattr(self.instance, 'destino', None)
+        turno = attrs.get('turno') if 'turno' in attrs else getattr(self.instance, 'turno', None)
+        partida = attrs.get('partida') if 'partida' in attrs else getattr(self.instance, 'partida', None)
+
+        if pieza is not None and origen is not None:
+            if str(origen) != str(pieza.posicion):
+                raise serializers.ValidationError({
+                    'origen': 'El origen debe coincidir con la posición actual de la pieza'
+                })
+
+        # La ocupación del destino debe comprobarse en la misma partida del movimiento.
+        # Priorizamos turno.partida (contexto real del movimiento) y, solo si no existe,
+        # usamos partida o pieza.partida.
+        partida_ctx = None
+        if turno is not None:
+            partida_ctx = turno.partida
+        if partida_ctx is None:
+            partida_ctx = partida
+        if partida_ctx is None and pieza is not None:
+            partida_ctx = pieza.partida
+
+        if partida_ctx is not None and destino is not None and pieza is not None:
+            if Pieza.objects.filter(partida=partida_ctx, posicion=str(destino)).exclude(pk=pieza.pk).exists():
+                raise serializers.ValidationError({'destino': 'El destino está ocupado por otra pieza'})
+
+        return attrs
     
     class Meta:
         model = Movimiento

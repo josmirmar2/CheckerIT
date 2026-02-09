@@ -208,6 +208,34 @@ class Movimiento(models.Model):
     class Meta:
         verbose_name_plural = "Movimientos"
 
+    def clean(self):
+        super().clean()
+
+        if self.pieza_id and self.origen:
+            pieza_pos = str(self.pieza.posicion)
+            if str(self.origen) != pieza_pos:
+                raise ValidationError({
+                    'origen': 'El origen debe coincidir con la posición actual de la pieza'
+                })
+
+        partida_ctx = None
+        if self.turno_id:
+            partida_ctx = self.turno.partida
+        if partida_ctx is None:
+            partida_ctx = self.partida
+        if partida_ctx is None and self.pieza_id:
+            partida_ctx = self.pieza.partida
+
+        if partida_ctx is not None and self.destino:
+            occupied = (
+                Pieza.objects
+                .filter(partida=partida_ctx, posicion=str(self.destino))
+                .exclude(pk=self.pieza_id)
+                .exists()
+            )
+            if occupied:
+                raise ValidationError({'destino': 'El destino está ocupado por otra pieza'})
+
     def __str__(self):
         return f"{self.pieza} de {self.origen} a {self.destino}"
 

@@ -4,7 +4,7 @@ from game.models import Jugador, Partida, Pieza, Turno
 
 
 @pytest.mark.django_db
-def test_api_root_ok(api_client):
+def test_api_root_responde_ok(api_client):
     res = api_client.get("/")
     assert res.status_code == 200
     data = res.json()
@@ -13,7 +13,7 @@ def test_api_root_ok(api_client):
 
 
 @pytest.mark.django_db
-def test_start_game_creates_partida_and_turno(api_client):
+def test_start_game_crea_partida_y_turno(api_client):
     payload = {
         "numero_jugadores": 2,
         "jugadores": [
@@ -33,7 +33,7 @@ def test_start_game_creates_partida_and_turno(api_client):
 
 
 @pytest.mark.django_db
-def test_start_game_rejects_less_than_two_players(api_client):
+def test_start_game_rechaza_menos_de_dos_jugadores(api_client):
     payload = {
         "numero_jugadores": 1,
         "jugadores": [
@@ -46,7 +46,7 @@ def test_start_game_rejects_less_than_two_players(api_client):
 
 
 @pytest.mark.django_db
-def test_start_game_rejects_more_than_six_players(api_client):
+def test_start_game_rechaza_mas_de_seis_jugadores(api_client):
     payload = {
         "numero_jugadores": 7,
         "jugadores": [
@@ -59,7 +59,7 @@ def test_start_game_rejects_more_than_six_players(api_client):
 
 
 @pytest.mark.django_db
-def test_start_game_rejects_duplicate_player_numbers(api_client):
+def test_start_game_rechaza_numeros_de_jugador_duplicados(api_client):
     payload = {
         "numero_jugadores": 2,
         "jugadores": [
@@ -73,7 +73,7 @@ def test_start_game_rejects_duplicate_player_numbers(api_client):
 
 
 @pytest.mark.django_db
-def test_create_pieza_rejects_invalid_position(api_client):
+def test_crear_pieza_rechaza_posicion_invalida(api_client):
     jugador = Jugador.objects.create(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
     payload = {
         "id_pieza": "PX1",
@@ -90,7 +90,7 @@ def test_create_pieza_rejects_invalid_position(api_client):
 
 
 @pytest.mark.django_db
-def test_create_movimiento_rejects_invalid_origen_or_destino(api_client):
+def test_crear_movimiento_rechaza_origen_o_destino_fuera_del_tablero(api_client):
     jugador = Jugador.objects.create(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
     partida = Partida.objects.create(id_partida="P_API", numero_jugadores=2)
     pieza = Pieza.objects.create(
@@ -125,3 +125,99 @@ def test_create_movimiento_rejects_invalid_origen_or_destino(api_client):
     }
     res2 = api_client.post("/api/movimientos/", payload_bad_destino, format="json")
     assert res2.status_code == 400
+
+
+@pytest.mark.django_db
+def test_crear_movimiento_rechaza_origen_que_no_coincide_con_posicion_de_pieza(api_client):
+    jugador = Jugador.objects.create(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
+    partida = Partida.objects.create(id_partida="P_API", numero_jugadores=2)
+    pieza = Pieza.objects.create(
+        id_pieza="PX1",
+        tipo="punta-0",
+        posicion="0-0",
+        jugador=jugador,
+        partida=partida,
+    )
+    turno = Turno.objects.create(id_turno="T_API", jugador=jugador, numero=1, partida=partida)
+
+    payload = {
+        "id_movimiento": "M_API_ORIGEN_MAL",
+        "jugador": jugador.id_jugador,
+        "pieza": pieza.id_pieza,
+        "turno": turno.id_turno,
+        "partida": partida.id_partida,
+        "origen": "0-1",
+        "destino": "0-2",
+    }
+    res = api_client.post("/api/movimientos/", payload, format="json")
+    assert res.status_code == 400
+
+
+@pytest.mark.django_db
+def test_crear_movimiento_rechaza_destino_ocupado(api_client):
+    jugador = Jugador.objects.create(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
+    partida = Partida.objects.create(id_partida="P_API", numero_jugadores=2)
+    pieza = Pieza.objects.create(
+        id_pieza="PX1",
+        tipo="punta-0",
+        posicion="0-0",
+        jugador=jugador,
+        partida=partida,
+    )
+    Pieza.objects.create(
+        id_pieza="PX2",
+        tipo="punta-0",
+        posicion="0-1",
+        jugador=jugador,
+        partida=partida,
+    )
+    turno = Turno.objects.create(id_turno="T_API", jugador=jugador, numero=1, partida=partida)
+
+    payload = {
+        "id_movimiento": "M_API_DESTINO_OCUPADO",
+        "jugador": jugador.id_jugador,
+        "pieza": pieza.id_pieza,
+        "turno": turno.id_turno,
+        "partida": partida.id_partida,
+        "origen": "0-0",
+        "destino": "0-1",
+    }
+    res = api_client.post("/api/movimientos/", payload, format="json")
+    assert res.status_code == 400
+
+
+@pytest.mark.django_db
+def test_crear_movimiento_no_rechaza_destino_ocupado_en_otra_partida(api_client):
+    jugador = Jugador.objects.create(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
+    partida1 = Partida.objects.create(id_partida="P_API_1", numero_jugadores=2)
+    partida2 = Partida.objects.create(id_partida="P_API_2", numero_jugadores=2)
+
+    # En la otra partida existe una pieza en el destino
+    Pieza.objects.create(
+        id_pieza="PX_OTHER",
+        tipo="punta-0",
+        posicion="0-1",
+        jugador=jugador,
+        partida=partida2,
+    )
+
+    pieza = Pieza.objects.create(
+        id_pieza="PX1",
+        tipo="punta-0",
+        posicion="0-0",
+        jugador=jugador,
+        partida=partida1,
+    )
+    turno = Turno.objects.create(id_turno="T_API", jugador=jugador, numero=1, partida=partida1)
+
+    payload = {
+        "id_movimiento": "M_API_OK_OTRA_PARTIDA",
+        "jugador": jugador.id_jugador,
+        "pieza": pieza.id_pieza,
+        "turno": turno.id_turno,
+        "partida": partida1.id_partida,
+        "origen": "0-0",
+        "destino": "0-1",
+    }
+    res = api_client.post("/api/movimientos/", payload, format="json")
+    assert res.status_code == 201

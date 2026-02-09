@@ -9,19 +9,19 @@ from game.models import Jugador, Partida, JugadorPartida, Pieza, Turno, Movimien
 
 
 @pytest.mark.django_db
-def test_jugador_str():
+def test_jugador_str_devuelve_nombre():
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
     assert str(j) == "Ana"
 
 
 @pytest.mark.django_db
-def test_partida_str():
+def test_partida_str_devuelve_id():
     p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
     assert str(p) == "Partida P1"
 
 
 @pytest.mark.django_db
-def test_jugador_partida_unique_together():
+def test_jugador_partida_no_permite_duplicados_misma_partida():
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
     p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
 
@@ -32,7 +32,7 @@ def test_jugador_partida_unique_together():
 
 
 @pytest.mark.django_db
-def test_jugador_partida():
+def test_jugador_partida_creacion_y_conteo():
     j1 = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
     j2 = Jugador.objects.create(id_jugador="J2", nombre="Pedro", humano=True, numero=2)
     p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
@@ -44,7 +44,7 @@ def test_jugador_partida():
 
 
 @pytest.mark.django_db
-def test_partida_numero_jugadores_between_2_and_6_enforced_by_db():
+def test_partida_numero_jugadores_entre_2_y_6_forzado_por_bd():
     with pytest.raises(IntegrityError):
         with transaction.atomic():
             Partida.objects.create(id_partida="P_BAD_1", numero_jugadores=1)
@@ -55,7 +55,7 @@ def test_partida_numero_jugadores_between_2_and_6_enforced_by_db():
 
 
 @pytest.mark.django_db
-def test_partida_fecha_fin_after_fecha_inicio_enforced_by_db():
+def test_partida_fecha_fin_posterior_a_fecha_inicio_forzada_por_bd():
     # fecha_fin antes de la fecha_inicio (auto_now_add) debe fallar
     with pytest.raises(IntegrityError):
         with transaction.atomic():
@@ -71,7 +71,7 @@ def test_partida_fecha_fin_after_fecha_inicio_enforced_by_db():
     p.save(update_fields=["fecha_fin"])
 
 @pytest.mark.django_db
-def test_pieza_str():
+def test_pieza_str_incluye_tipo_y_jugador():
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
     partida = Partida.objects.create(id_partida="P1", numero_jugadores=2)
     pieza = Pieza.objects.create(
@@ -86,7 +86,7 @@ def test_pieza_str():
 
 
 @pytest.mark.django_db
-def test_pieza_minimal_create_allows_nullable_foreign_keys():
+def test_pieza_creacion_minima_permite_fk_nulas():
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
     pieza = Pieza.objects.create(
         id_pieza="X_MIN",
@@ -104,7 +104,7 @@ def test_pieza_minimal_create_allows_nullable_foreign_keys():
 
 
 @pytest.mark.django_db
-def test_pieza_requires_jugador():
+def test_pieza_requiere_jugador():
     with pytest.raises(IntegrityError):
         with transaction.atomic():
             Pieza.objects.create(
@@ -116,7 +116,7 @@ def test_pieza_requires_jugador():
 
 
 @pytest.mark.django_db
-def test_pieza_requires_tipo_and_posicion_not_null():
+def test_pieza_requiere_tipo_y_posicion_no_nulos():
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
 
     with pytest.raises(IntegrityError):
@@ -139,7 +139,7 @@ def test_pieza_requires_tipo_and_posicion_not_null():
 
 
 @pytest.mark.django_db
-def test_pieza_posicion_must_be_on_board_full_clean():
+def test_pieza_posicion_debe_estar_en_tablero_full_clean():
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
     pieza = Pieza(
         id_pieza="X_BAD_POS",
@@ -153,7 +153,7 @@ def test_pieza_posicion_must_be_on_board_full_clean():
 
 
 @pytest.mark.django_db
-def test_turno_str():
+def test_turno_str_formato():
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
     p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
     t = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
@@ -161,7 +161,7 @@ def test_turno_str():
 
 
 @pytest.mark.django_db
-def test_turno_inicio_is_set_and_fin_nullable():
+def test_turno_inicio_se_asigna_y_fin_es_nullable():
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
     p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
     t = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
@@ -177,7 +177,7 @@ def test_turno_inicio_is_set_and_fin_nullable():
 
 
 @pytest.mark.django_db
-def test_turno_fin_must_be_after_inicio_enforced_by_db():
+def test_turno_fin_posterior_a_inicio_forzado_por_bd():
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
     p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
     t = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
@@ -189,7 +189,7 @@ def test_turno_fin_must_be_after_inicio_enforced_by_db():
 
 
 @pytest.mark.django_db
-def test_turno_requires_jugador_and_partida():
+def test_turno_requiere_jugador_y_partida():
     p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
 
@@ -203,7 +203,7 @@ def test_turno_requires_jugador_and_partida():
 
 
 @pytest.mark.django_db
-def test_turno_related_names_work():
+def test_turno_related_name_funciona():
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
     p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
     Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
@@ -214,7 +214,7 @@ def test_turno_related_names_work():
 
 
 @pytest.mark.django_db
-def test_movimiento_str():
+def test_movimiento_str_incluye_origen_destino_y_pieza():
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
     p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
     pieza = Pieza.objects.create(
@@ -242,7 +242,7 @@ def test_movimiento_str():
 
 
 @pytest.mark.django_db
-def test_movimiento_partida_nullable():
+def test_movimiento_partida_es_nullable():
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
     p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
     pieza = Pieza.objects.create(
@@ -266,7 +266,7 @@ def test_movimiento_partida_nullable():
 
 
 @pytest.mark.django_db
-def test_movimiento_requires_foreign_keys_and_origen_destino_not_null():
+def test_movimiento_requiere_fk_y_origen_destino_no_nulos():
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
     p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
     pieza = Pieza.objects.create(
@@ -340,7 +340,7 @@ def test_movimiento_requires_foreign_keys_and_origen_destino_not_null():
 
 
 @pytest.mark.django_db
-def test_movimiento_related_names_work():
+def test_movimiento_related_names_funcionan():
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
     p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
     pieza = Pieza.objects.create(
@@ -368,7 +368,7 @@ def test_movimiento_related_names_work():
 
 
 @pytest.mark.django_db
-def test_movimiento_origen_y_destino_must_be_on_board():
+def test_movimiento_origen_y_destino_deben_estar_en_tablero():
     j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
     p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
     pieza = Pieza.objects.create(
@@ -403,3 +403,99 @@ def test_movimiento_origen_y_destino_must_be_on_board():
     )
     with pytest.raises(ValidationError):
         m2.full_clean()
+
+
+@pytest.mark.django_db
+def test_movimiento_origen_debe_coincidir_con_posicion_de_pieza():
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+    pieza = Pieza.objects.create(
+        id_pieza="X1",
+        tipo="punta-0",
+        posicion="0-0",
+        jugador=j,
+        partida=p,
+    )
+    t = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
+
+    m = Movimiento(
+        id_movimiento="M_BAD_ORIGEN_MATCH",
+        jugador=j,
+        pieza=pieza,
+        turno=t,
+        partida=p,
+        origen="0-1",
+        destino="0-2",
+    )
+    with pytest.raises(ValidationError):
+        m.full_clean()
+
+
+@pytest.mark.django_db
+def test_movimiento_destino_no_debe_estar_ocupado_en_misma_partida():
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+    pieza = Pieza.objects.create(
+        id_pieza="X1",
+        tipo="punta-0",
+        posicion="0-0",
+        jugador=j,
+        partida=p,
+    )
+    Pieza.objects.create(
+        id_pieza="X2",
+        tipo="punta-0",
+        posicion="0-1",
+        jugador=j,
+        partida=p,
+    )
+    t = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
+
+    m = Movimiento(
+        id_movimiento="M_DESTINO_OCUPADO",
+        jugador=j,
+        pieza=pieza,
+        turno=t,
+        partida=p,
+        origen="0-0",
+        destino="0-1",
+    )
+    with pytest.raises(ValidationError):
+        m.full_clean()
+
+
+@pytest.mark.django_db
+def test_movimiento_destino_ocupado_en_otra_partida_no_debe_fallar():
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    p1 = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+    p2 = Partida.objects.create(id_partida="P2", numero_jugadores=2)
+
+    # En la partida 2 hay una pieza ocupando 0-1
+    Pieza.objects.create(
+        id_pieza="X_OTHER",
+        tipo="punta-0",
+        posicion="0-1",
+        jugador=j,
+        partida=p2,
+    )
+
+    pieza_p1 = Pieza.objects.create(
+        id_pieza="X1",
+        tipo="punta-0",
+        posicion="0-0",
+        jugador=j,
+        partida=p1,
+    )
+    t1 = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p1)
+
+    m = Movimiento(
+        id_movimiento="M_OK_OTRA_PARTIDA",
+        jugador=j,
+        pieza=pieza_p1,
+        turno=t1,
+        partida=p1,
+        origen="0-0",
+        destino="0-1",
+    )
+    # No debe fallar porque el destino solo está ocupado en otra partida.
+    m.full_clean()
