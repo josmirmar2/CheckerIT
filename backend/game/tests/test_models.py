@@ -5,7 +5,7 @@ from django.db import IntegrityError, transaction
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 
-from game.models import Jugador, Partida, JugadorPartida, Pieza, Turno
+from game.models import Jugador, Partida, JugadorPartida, Pieza, Turno, Movimiento
 
 
 @pytest.mark.django_db
@@ -211,3 +211,157 @@ def test_turno_related_names_work():
 
     assert j.turnos.count() == 2
     assert p.turnos.count() == 2
+
+
+@pytest.mark.django_db
+def test_movimiento_str():
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+    pieza = Pieza.objects.create(
+        id_pieza="X1",
+        tipo="punta-0",
+        posicion="0-0",
+        jugador=j,
+        partida=p,
+    )
+    t = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
+    m = Movimiento.objects.create(
+        id_movimiento="M1",
+        jugador=j,
+        pieza=pieza,
+        turno=t,
+        partida=p,
+        origen="0-0",
+        destino="0-1",
+    )
+
+    s = str(m)
+    assert "0-0" in s
+    assert "0-1" in s
+    assert "punta-0" in s
+
+
+@pytest.mark.django_db
+def test_movimiento_partida_nullable():
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+    pieza = Pieza.objects.create(
+        id_pieza="X1",
+        tipo="punta-0",
+        posicion="0-0",
+        jugador=j,
+        partida=p,
+    )
+    t = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
+    m = Movimiento.objects.create(
+        id_movimiento="M1",
+        jugador=j,
+        pieza=pieza,
+        turno=t,
+        partida=None,
+        origen="0-0",
+        destino="0-1",
+    )
+    assert m.partida_id is None
+
+
+@pytest.mark.django_db
+def test_movimiento_requires_foreign_keys_and_origen_destino_not_null():
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+    pieza = Pieza.objects.create(
+        id_pieza="X1",
+        tipo="punta-0",
+        posicion="0-0",
+        jugador=j,
+        partida=p,
+    )
+    t = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            Movimiento.objects.create(
+                id_movimiento="M_NO_PLAYER",
+                jugador=None,
+                pieza=pieza,
+                turno=t,
+                partida=p,
+                origen="0-0",
+                destino="0-1",
+            )
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            Movimiento.objects.create(
+                id_movimiento="M_NO_PIEZA",
+                jugador=j,
+                pieza=None,
+                turno=t,
+                partida=p,
+                origen="0-0",
+                destino="0-1",
+            )
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            Movimiento.objects.create(
+                id_movimiento="M_NO_TURNO",
+                jugador=j,
+                pieza=pieza,
+                turno=None,
+                partida=p,
+                origen="0-0",
+                destino="0-1",
+            )
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            Movimiento.objects.create(
+                id_movimiento="M_NO_ORIGEN",
+                jugador=j,
+                pieza=pieza,
+                turno=t,
+                partida=p,
+                origen=None,
+                destino="0-1",
+            )
+
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            Movimiento.objects.create(
+                id_movimiento="M_NO_DESTINO",
+                jugador=j,
+                pieza=pieza,
+                turno=t,
+                partida=p,
+                origen="0-0",
+                destino=None,
+            )
+
+
+@pytest.mark.django_db
+def test_movimiento_related_names_work():
+    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    p = Partida.objects.create(id_partida="P1", numero_jugadores=2)
+    pieza = Pieza.objects.create(
+        id_pieza="X1",
+        tipo="punta-0",
+        posicion="0-0",
+        jugador=j,
+        partida=p,
+    )
+    t = Turno.objects.create(id_turno="T1", jugador=j, numero=1, partida=p)
+    Movimiento.objects.create(
+        id_movimiento="M1",
+        jugador=j,
+        pieza=pieza,
+        turno=t,
+        partida=p,
+        origen="0-0",
+        destino="0-1",
+    )
+
+    assert j.movimientos.count() == 1
+    assert pieza.movimientos.count() == 1
+    assert t.movimientos.count() == 1
+    assert p.movimientos.count() == 1
