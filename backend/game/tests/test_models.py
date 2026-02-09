@@ -1,5 +1,8 @@
 import pytest
+from datetime import timedelta
+
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 
 from game.models import Jugador, Partida, JugadorPartida, Pieza
 
@@ -48,6 +51,23 @@ def test_partida_numero_jugadores_between_2_and_6_enforced_by_db():
     with pytest.raises(IntegrityError):
         with transaction.atomic():
             Partida.objects.create(id_partida="P_BAD_7", numero_jugadores=7)
+
+
+@pytest.mark.django_db
+def test_partida_fecha_fin_after_fecha_inicio_enforced_by_db():
+    # fecha_fin antes de la fecha_inicio (auto_now_add) debe fallar
+    with pytest.raises(IntegrityError):
+        with transaction.atomic():
+            Partida.objects.create(
+                id_partida="P_BAD_DATE",
+                numero_jugadores=2,
+                fecha_fin=timezone.now() - timedelta(days=1),
+            )
+
+    # Caso válido: se puede cerrar la partida en el futuro (o simplemente dejar fecha_fin en null)
+    p = Partida.objects.create(id_partida="P_OK_DATE", numero_jugadores=2)
+    p.fecha_fin = p.fecha_inicio + timedelta(seconds=1)
+    p.save(update_fields=["fecha_fin"])
 
 @pytest.mark.django_db
 def test_pieza_str():

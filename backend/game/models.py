@@ -50,6 +50,11 @@ class Partida(models.Model):
                 check=models.Q(numero_jugadores__gte=2) & models.Q(numero_jugadores__lte=6),
                 name="partida_numero_jugadores_between_2_6",
             )
+            ,
+            models.CheckConstraint(
+                check=models.Q(fecha_fin__isnull=True) | models.Q(fecha_fin__gt=models.F('fecha_inicio')),
+                name="partida_fecha_fin_after_fecha_inicio",
+            )
         ]
 
     def __str__(self):
