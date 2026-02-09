@@ -33,7 +33,19 @@ class JugadorPartidaSerializer(serializers.ModelSerializer):
                 if orden_int < 1 or orden_int > limit:
                     raise serializers.ValidationError({'orden_participacion': f'orden_participacion debe estar entre 1 y {limit}'})
 
+                existing_orden = JugadorPartida.objects.filter(partida=partida, orden_participacion=orden_int)
+                if self.instance is not None:
+                    existing_orden = existing_orden.exclude(pk=self.instance.pk)
+                if existing_orden.exists():
+                    raise serializers.ValidationError({'orden_participacion': 'Ese orden_participacion ya está ocupado en la partida'})
+
         if partida is not None and jugador is not None:
+            existing_pair = JugadorPartida.objects.filter(partida=partida, jugador=jugador)
+            if self.instance is not None:
+                existing_pair = existing_pair.exclude(pk=self.instance.pk)
+            if existing_pair.exists():
+                raise serializers.ValidationError({'jugador': 'El jugador ya está inscrito en esta partida'})
+
             # Evitar duplicar el numero de jugador dentro de la misma partida.
             numero = getattr(jugador, 'numero', None)
             if numero is not None:
