@@ -384,6 +384,38 @@ class TestRegistrarMovimientos:
         pieza.refresh_from_db()
         assert pieza.posicion == "4-4"
 
+    def test_registrar_movimientos_ok_salto_encadenado_en_un_solo_movimiento_humano(
+        self, api_client, make_jugador, make_partida, make_turno, make_pieza
+    ):
+        j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        p = make_partida(id_partida="P1", numero_jugadores=2)
+        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
+
+        pieza = make_pieza(id_pieza="X1", jugador=j, partida=p, posicion="0-4")
+        make_pieza(id_pieza="B1", jugador=j, partida=p, posicion="1-4")
+        make_pieza(id_pieza="B2", jugador=j, partida=p, posicion="3-4")
+
+        # El frontend puede enviar directamente el destino final de un salto encadenado.
+        payload = {
+            "movimientos": [
+                {
+                    "jugador_id": j.id_jugador,
+                    "turno_id": t.id_turno,
+                    "partida_id": p.id_partida,
+                    "pieza_id": pieza.id_pieza,
+                    "origen": "0-4",
+                    "destino": "4-4",
+                }
+            ]
+        }
+
+        res = api_client.post(f"/api/partidas/{p.id_partida}/registrar_movimientos/", payload, format="json")
+        assert res.status_code == 201
+        assert Movimiento.objects.filter(partida=p).count() == 2
+
+        pieza.refresh_from_db()
+        assert pieza.posicion == "4-4"
+
     def test_registrar_movimientos_falla_si_turno_finalizado(self, api_client, make_jugador, make_partida, make_turno, make_pieza):
         from django.utils import timezone
         from datetime import timedelta

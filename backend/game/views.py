@@ -3,6 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
 from datetime import datetime
+from collections import deque
 from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida
 from .ai.max_agent import MaxHeuristicAgent
 from .ai.mcts_agent import MCTSAgent
@@ -115,6 +116,91 @@ def compute_jump_moves(origin_key, occupied_positions):
     
     dfs(origin_coord)
     return list(landings)
+
+
+def _jump_neighbors(current_key, base_occupied_without_piece):
+    """Devuelve destinos alcanzables con UN salto legal desde `current_key`.
+
+    `base_occupied_without_piece` debe ser el conjunto de ocupadas EXCLUYENDO la posición
+    original de la pieza (para poder simular el movimiento durante el encadenado).
+    """
+    current_coord = coord_from_key(current_key)
+    if not current_coord:
+        return []
+
+    occupied = set(base_occupied_without_piece)
+    occupied.add(current_key)
+
+    neighbors = []
+    for direction in AXIAL_DIRECTIONS:
+        middle_q = current_coord["q"] + direction["dq"]
+        middle_r = current_coord["r"] + direction["dr"]
+        landing_q = current_coord["q"] + 2 * direction["dq"]
+        landing_r = current_coord["r"] + 2 * direction["dr"]
+
+        middle_key = key_from_coord(middle_q, middle_r)
+        landing_key = key_from_coord(landing_q, landing_r)
+
+        if not middle_key or not landing_key:
+            continue
+        if middle_key not in occupied:
+            continue
+        if landing_key in occupied:
+            continue
+        neighbors.append(landing_key)
+
+    return neighbors
+
+
+def find_jump_chain_path(origin_key, destination_key, occupied_positions):
+    """Encuentra una ruta de saltos (encadenada) desde origen a destino.
+
+    Retorna lista de claves [origen, ..., destino] si existe, si no None.
+    La ruta está compuesta SOLO por saltos legales (no movimientos simples).
+    """
+    if not origin_key or not destination_key:
+        return None
+    if origin_key == destination_key:
+        return None
+
+    origin_coord = coord_from_key(origin_key)
+    dest_coord = coord_from_key(destination_key)
+    if not origin_coord or not dest_coord:
+        return None
+    if origin_key not in occupied_positions:
+        return None
+    if destination_key in occupied_positions:
+        return None
+
+    base_occupied_without_piece = set(occupied_positions)
+    base_occupied_without_piece.discard(origin_key)
+
+    queue = deque([origin_key])
+    prev = {origin_key: None}
+
+    while queue:
+        current = queue.popleft()
+        if current == destination_key:
+            break
+        for nxt in _jump_neighbors(current, base_occupied_without_piece):
+            if nxt in prev:
+                continue
+            prev[nxt] = current
+            queue.append(nxt)
+
+    if destination_key not in prev:
+        return None
+
+    path = []
+    cur = destination_key
+    while cur is not None:
+        path.append(cur)
+        cur = prev[cur]
+    path.reverse()
+
+    if len(path) < 2:
+        return None
+    return path
 
 
 def get_valid_moves_from(origin_key, occupied_positions, allow_simple=True):
@@ -464,7 +550,42 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 allow_simple = (not chain_mode and idx == 1)
                 es_valido, mensaje_error = validate_move(origen, destino, occupied_positions, allow_simple)
                 if not es_valido:
-                    return Response({ 
+                    # Caso especial: jugador humano puede enviar un salto encadenado en un solo "movimiento"
+                    # (origen -> destino final). Si existe una ruta válida de saltos, la expandimos.
+                    if bool(getattr(jugador, 'humano', False)) and (not chain_mode) and idx == 1:
+                        path = find_jump_chain_path(origen, destino, occupied_positions)
+                        if path and len(path) >= 2:
+                            # Expandir en saltos consecutivos (solo saltos; no permitir simples en cadena)
+                            for step_i in range(len(path) - 1):
+                                step_origen = path[step_i]
+                                step_destino = path[step_i + 1]
+
+                                step_ok, step_err = validate_move(step_origen, step_destino, occupied_positions, allow_simple=False)
+                                if not step_ok:
+                                    return Response({
+                                        'error': f'Movimiento {idx} inválido: {step_err}',
+                                        'origen': step_origen,
+                                        'destino': step_destino,
+                                    }, status=status.HTTP_400_BAD_REQUEST)
+
+                                occupied_positions.discard(step_origen)
+                                occupied_positions.add(step_destino)
+
+                                mov = Movimiento.objects.create(
+                                    id_movimiento=f"M_{turno.id_turno}_{idx}_{step_i + 1}_{datetime.now().timestamp()}",
+                                    jugador=jugador,
+                                    pieza=pieza,
+                                    turno=turno,
+                                    partida=partida,
+                                    origen=step_origen,
+                                    destino=step_destino,
+                                )
+                                created.append(mov)
+
+                            piece_positions[pieza_id] = (pieza, destino)
+                            continue
+
+                    return Response({
                         'error': f'Movimiento {idx} inválido: {mensaje_error}',
                         'origen': origen,
                         'destino': destino
@@ -483,7 +604,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
                     destino=destino,
                 )
                 created.append(mov)
-                
+
                 # Guardar el último destino de esta pieza (en caso de movimientos encadenados)
                 piece_positions[pieza_id] = (pieza, destino)
                 
