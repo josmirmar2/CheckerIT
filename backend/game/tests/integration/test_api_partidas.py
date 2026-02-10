@@ -143,8 +143,8 @@ def test_start_game_crea_ia_con_nivel_correcto(api_client):
 
 
 @pytest.mark.django_db
-def test_crear_pieza_rechaza_posicion_invalida(api_client):
-    jugador = Jugador.objects.create(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
+def test_crear_pieza_rechaza_posicion_invalida(api_client, make_jugador):
+    jugador = make_jugador(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
     payload = {
         "id_pieza": "PX1",
         "tipo": "punta-0",
@@ -160,17 +160,17 @@ def test_crear_pieza_rechaza_posicion_invalida(api_client):
 
 
 @pytest.mark.django_db
-def test_crear_movimiento_rechaza_origen_o_destino_fuera_del_tablero(api_client):
-    jugador = Jugador.objects.create(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
-    partida = Partida.objects.create(id_partida="P_API", numero_jugadores=2)
-    pieza = Pieza.objects.create(
+def test_crear_movimiento_rechaza_origen_o_destino_fuera_del_tablero(api_client, make_jugador, make_partida, make_turno, make_pieza):
+    jugador = make_jugador(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
+    partida = make_partida(id_partida="P_API", numero_jugadores=2)
+    pieza = make_pieza(
         id_pieza="PX1",
         tipo="punta-0",
         posicion="0-0",
         jugador=jugador,
         partida=partida,
     )
-    turno = Turno.objects.create(id_turno="T_API", jugador=jugador, numero=1, partida=partida)
+    turno = make_turno(id_turno="T_API", jugador=jugador, numero=1, partida=partida)
 
     payload_bad_origen = {
         "id_movimiento": "M_API_1",
@@ -198,17 +198,17 @@ def test_crear_movimiento_rechaza_origen_o_destino_fuera_del_tablero(api_client)
 
 
 @pytest.mark.django_db
-def test_crear_movimiento_rechaza_origen_que_no_coincide_con_posicion_de_pieza(api_client):
-    jugador = Jugador.objects.create(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
-    partida = Partida.objects.create(id_partida="P_API", numero_jugadores=2)
-    pieza = Pieza.objects.create(
+def test_crear_movimiento_rechaza_origen_que_no_coincide_con_posicion_de_pieza(api_client, make_jugador, make_partida, make_turno, make_pieza):
+    jugador = make_jugador(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
+    partida = make_partida(id_partida="P_API", numero_jugadores=2)
+    pieza = make_pieza(
         id_pieza="PX1",
         tipo="punta-0",
         posicion="0-0",
         jugador=jugador,
         partida=partida,
     )
-    turno = Turno.objects.create(id_turno="T_API", jugador=jugador, numero=1, partida=partida)
+    turno = make_turno(id_turno="T_API", jugador=jugador, numero=1, partida=partida)
 
     payload = {
         "id_movimiento": "M_API_ORIGEN_MAL",
@@ -224,24 +224,24 @@ def test_crear_movimiento_rechaza_origen_que_no_coincide_con_posicion_de_pieza(a
 
 
 @pytest.mark.django_db
-def test_crear_movimiento_rechaza_destino_ocupado(api_client):
-    jugador = Jugador.objects.create(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
-    partida = Partida.objects.create(id_partida="P_API", numero_jugadores=2)
-    pieza = Pieza.objects.create(
+def test_crear_movimiento_rechaza_destino_ocupado(api_client, make_jugador, make_partida, make_turno, make_pieza):
+    jugador = make_jugador(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
+    partida = make_partida(id_partida="P_API", numero_jugadores=2)
+    pieza = make_pieza(
         id_pieza="PX1",
         tipo="punta-0",
         posicion="0-0",
         jugador=jugador,
         partida=partida,
     )
-    Pieza.objects.create(
+    make_pieza(
         id_pieza="PX2",
         tipo="punta-0",
         posicion="0-1",
         jugador=jugador,
         partida=partida,
     )
-    turno = Turno.objects.create(id_turno="T_API", jugador=jugador, numero=1, partida=partida)
+    turno = make_turno(id_turno="T_API", jugador=jugador, numero=1, partida=partida)
 
     payload = {
         "id_movimiento": "M_API_DESTINO_OCUPADO",
@@ -257,13 +257,12 @@ def test_crear_movimiento_rechaza_destino_ocupado(api_client):
 
 
 @pytest.mark.django_db
-def test_crear_movimiento_no_rechaza_destino_ocupado_en_otra_partida(api_client):
-    jugador = Jugador.objects.create(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
-    partida1 = Partida.objects.create(id_partida="P_API_1", numero_jugadores=2)
-    partida2 = Partida.objects.create(id_partida="P_API_2", numero_jugadores=2)
+def test_crear_movimiento_no_rechaza_destino_ocupado_en_otra_partida(api_client, make_jugador, make_partida, make_turno, make_pieza):
+    jugador = make_jugador(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
+    partida1 = make_partida(id_partida="P_API_1", numero_jugadores=2)
+    partida2 = make_partida(id_partida="P_API_2", numero_jugadores=2)
 
-    # En la otra partida existe una pieza en el destino
-    Pieza.objects.create(
+    make_pieza(
         id_pieza="PX_OTHER",
         tipo="punta-0",
         posicion="0-1",
@@ -271,14 +270,14 @@ def test_crear_movimiento_no_rechaza_destino_ocupado_en_otra_partida(api_client)
         partida=partida2,
     )
 
-    pieza = Pieza.objects.create(
+    pieza = make_pieza(
         id_pieza="PX1",
         tipo="punta-0",
         posicion="0-0",
         jugador=jugador,
         partida=partida1,
     )
-    turno = Turno.objects.create(id_turno="T_API", jugador=jugador, numero=1, partida=partida1)
+    turno = make_turno(id_turno="T_API", jugador=jugador, numero=1, partida=partida1)
 
     payload = {
         "id_movimiento": "M_API_OK_OTRA_PARTIDA",
@@ -294,11 +293,11 @@ def test_crear_movimiento_no_rechaza_destino_ocupado_en_otra_partida(api_client)
 
 
 @pytest.mark.django_db
-def test_crear_participacion_rechaza_exceder_numero_jugadores_de_partida(api_client):
-    p = Partida.objects.create(id_partida="P_API", numero_jugadores=2)
-    j1 = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
-    j2 = Jugador.objects.create(id_jugador="J2", nombre="Pedro", humano=True, numero=2)
-    j3 = Jugador.objects.create(id_jugador="J3", nombre="Luis", humano=True, numero=3)
+def test_crear_participacion_rechaza_exceder_numero_jugadores_de_partida(api_client, make_jugador, make_partida):
+    p = make_partida(id_partida="P_API", numero_jugadores=2)
+    j1 = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    j2 = make_jugador(id_jugador="J2", nombre="Pedro", humano=True, numero=2)
+    j3 = make_jugador(id_jugador="J3", nombre="Luis", humano=True, numero=3)
 
     res1 = api_client.post(
         "/api/participaciones/",
@@ -323,9 +322,9 @@ def test_crear_participacion_rechaza_exceder_numero_jugadores_de_partida(api_cli
 
 
 @pytest.mark.django_db
-def test_crear_participacion_rechaza_orden_participacion_fuera_de_rango(api_client):
-    p = Partida.objects.create(id_partida="P_API", numero_jugadores=2)
-    j1 = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+def test_crear_participacion_rechaza_orden_participacion_fuera_de_rango(api_client, make_jugador, make_partida):
+    p = make_partida(id_partida="P_API", numero_jugadores=2)
+    j1 = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
 
     res = api_client.post(
         "/api/participaciones/",
@@ -336,10 +335,10 @@ def test_crear_participacion_rechaza_orden_participacion_fuera_de_rango(api_clie
 
 
 @pytest.mark.django_db
-def test_crear_participacion_rechaza_orden_duplicado_en_partida(api_client):
-    p = Partida.objects.create(id_partida="P_API", numero_jugadores=3)
-    j1 = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
-    j2 = Jugador.objects.create(id_jugador="J2", nombre="Pedro", humano=True, numero=2)
+def test_crear_participacion_rechaza_orden_duplicado_en_partida(api_client, make_jugador, make_partida):
+    p = make_partida(id_partida="P_API", numero_jugadores=3)
+    j1 = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    j2 = make_jugador(id_jugador="J2", nombre="Pedro", humano=True, numero=2)
 
     res1 = api_client.post(
         "/api/participaciones/",
@@ -357,9 +356,9 @@ def test_crear_participacion_rechaza_orden_duplicado_en_partida(api_client):
 
 
 @pytest.mark.django_db
-def test_crear_participacion_rechaza_jugador_duplicado_en_partida(api_client):
-    p = Partida.objects.create(id_partida="P_API", numero_jugadores=3)
-    j1 = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+def test_crear_participacion_rechaza_jugador_duplicado_en_partida(api_client, make_jugador, make_partida):
+    p = make_partida(id_partida="P_API", numero_jugadores=3)
+    j1 = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
 
     res1 = api_client.post(
         "/api/participaciones/",
@@ -447,8 +446,8 @@ def test_delete_partida_elimina_partida_y_jugadores_asociados(api_client):
 
 
 @pytest.mark.django_db
-def test_crear_ia_rechaza_nivel_fuera_de_1_2(api_client):
-    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=False, numero=1)
+def test_crear_ia_rechaza_nivel_fuera_de_1_2(api_client, make_jugador):
+    j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
     res = api_client.post("/api/ia/", {"jugador": j.id_jugador, "nivel": 3}, format="json")
     assert res.status_code == 400
 
@@ -466,9 +465,9 @@ def test_crear_jugador_ia_normaliza_nombre(api_client):
 
 
 @pytest.mark.django_db
-def test_chatbot_send_message_responde(api_client):
-    j = Jugador.objects.create(id_jugador="J1", nombre="Ana", humano=False, numero=1)
-    ia = IA.objects.create(jugador=j, nivel=1)
+def test_chatbot_send_message_responde(api_client, make_jugador, make_ia):
+    j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
+    ia = make_ia(jugador=j, nivel=1)
     chatbot = Chatbot.objects.create(ia=ia, memoria={}, contexto={})
 
     res = api_client.post(f"/api/chatbot/{chatbot.pk}/send_message/", {"mensaje": "hola"}, format="json")
