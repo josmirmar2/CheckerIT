@@ -880,7 +880,7 @@ function Game() {
           </div>
 
           <div className="game-controls">
-            {partida?.estado === 'EN_CURSO' && (
+            {partida?.estado === 'EN_CURSO' && !isAITurn && (
               <>
                 {moveMade ? (
                   <>
