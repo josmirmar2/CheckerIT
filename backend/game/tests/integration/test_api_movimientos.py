@@ -180,7 +180,7 @@ class TestRegistrarMovimientos:
         assert res.status_code == 400
 
     def test_registrar_movimientos_falla_cadena_no_permite_simples(self, api_client, make_jugador, make_partida, make_turno, make_pieza):
-        j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        j = make_jugador(id_jugador="J1", nombre="IA 1", humano=False, numero=1)
         p = make_partida(id_partida="P1", numero_jugadores=2)
         t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
         make_pieza(id_pieza="X1", jugador=j, partida=p, posicion="0-4")
@@ -212,7 +212,7 @@ class TestRegistrarMovimientos:
     def test_registrar_movimientos_falla_avanzar_mas_de_un_nodo_sin_saltar(
         self, api_client, make_jugador, make_partida, make_turno, make_pieza
     ):
-        j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        j = make_jugador(id_jugador="J1", nombre="IA 1", humano=False, numero=1)
         p = make_partida(id_partida="P1", numero_jugadores=2)
         t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
 
@@ -236,7 +236,7 @@ class TestRegistrarMovimientos:
         assert res.status_code == 400
 
     def test_registrar_movimientos_falla_salto_sin_casilla_libre_detras(self, api_client, make_jugador, make_partida, make_turno, make_pieza):
-        j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        j = make_jugador(id_jugador="J1", nombre="IA 1", humano=False, numero=1)
         p = make_partida(id_partida="P1", numero_jugadores=2)
         t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
 
@@ -262,7 +262,7 @@ class TestRegistrarMovimientos:
         assert res.status_code == 400
 
     def test_registrar_movimientos_falla_salto_no_colineal(self, api_client, make_jugador, make_partida, make_turno, make_pieza):
-        j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        j = make_jugador(id_jugador="J1", nombre="IA 1", humano=False, numero=1)
         p = make_partida(id_partida="P1", numero_jugadores=2)
         t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
 
@@ -310,7 +310,7 @@ class TestRegistrarMovimientos:
         assert res.status_code == 400
 
     def test_registrar_movimientos_falla_cadena_con_salto_invalido(self, api_client, make_jugador, make_partida, make_turno, make_pieza):
-        j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        j = make_jugador(id_jugador="J1", nombre="IA 1", humano=False, numero=1)
         p = make_partida(id_partida="P1", numero_jugadores=2)
         t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
 

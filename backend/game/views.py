@@ -2,6 +2,7 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
+from django.conf import settings
 from datetime import datetime
 from collections import deque
 from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida
@@ -522,6 +523,8 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 turno = Turno.objects.get(id_turno=turno_id)
                 pieza = Pieza.objects.get(id_pieza=pieza_id)
 
+                enforce_move_rules = (not bool(getattr(jugador, 'humano', False))) or bool(getattr(settings, 'ENFORCE_MOVE_VALIDATION_FOR_HUMANS', False))
+
                 # Validaciones de turno/jugador/pieza
                 if str(turno.partida_id) != expected_partida_id:
                     return Response({ 'error': 'El turno no pertenece a la partida' }, status=status.HTTP_400_BAD_REQUEST)
@@ -546,27 +549,71 @@ class PartidaViewSet(viewsets.ModelViewSet):
                         'origen_esperado': expected_origin,
                     }, status=status.HTTP_400_BAD_REQUEST)
 
-                # Si hay cadena, todas las acciones deben ser saltos (una pieza por turno).
-                allow_simple = (not chain_mode and idx == 1)
-                es_valido, mensaje_error = validate_move(origen, destino, occupied_positions, allow_simple)
-                if not es_valido:
-                    # Caso especial: jugador humano puede enviar un salto encadenado en un solo "movimiento"
-                    # (origen -> destino final). Si existe una ruta válida de saltos, la expandimos.
-                    if bool(getattr(jugador, 'humano', False)) and (not chain_mode) and idx == 1:
+                if enforce_move_rules:
+                    allow_simple = (not chain_mode and idx == 1)
+                    es_valido, mensaje_error = validate_move(origen, destino, occupied_positions, allow_simple)
+                    if not es_valido:
+                        if bool(getattr(jugador, 'humano', False)) and (not chain_mode) and idx == 1:
+                            path = find_jump_chain_path(origen, destino, occupied_positions)
+                            if path and len(path) >= 2:
+                                for step_i in range(len(path) - 1):
+                                    step_origen = path[step_i]
+                                    step_destino = path[step_i + 1]
+
+                                    step_ok, step_err = validate_move(step_origen, step_destino, occupied_positions, allow_simple=False)
+                                    if not step_ok:
+                                        return Response({
+                                            'error': f'Movimiento {idx} inválido: {step_err}',
+                                            'origen': step_origen,
+                                            'destino': step_destino,
+                                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                                    occupied_positions.discard(step_origen)
+                                    occupied_positions.add(step_destino)
+
+                                    mov = Movimiento.objects.create(
+                                        id_movimiento=f"M_{turno.id_turno}_{idx}_{step_i + 1}_{datetime.now().timestamp()}",
+                                        jugador=jugador,
+                                        pieza=pieza,
+                                        turno=turno,
+                                        partida=partida,
+                                        origen=step_origen,
+                                        destino=step_destino,
+                                    )
+                                    created.append(mov)
+
+                                piece_positions[pieza_id] = (pieza, destino)
+                                continue
+
+                        return Response({
+                            'error': f'Movimiento {idx} inválido: {mensaje_error}',
+                            'origen': origen,
+                            'destino': destino
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    # Humanos: validación mínima de consistencia (las reglas se validan en frontend)
+                    if not coord_from_key(origen):
+                        return Response({ 'error': f'Origen fuera del tablero: {origen}', 'origen': origen }, status=status.HTTP_400_BAD_REQUEST)
+                    if not coord_from_key(destino):
+                        return Response({ 'error': f'Destino fuera del tablero: {destino}', 'destino': destino }, status=status.HTTP_400_BAD_REQUEST)
+                    if origen not in occupied_positions:
+                        return Response({ 'error': 'No hay pieza en el origen', 'origen': origen }, status=status.HTTP_400_BAD_REQUEST)
+                    if destino in occupied_positions:
+                        return Response({ 'error': 'El destino está ocupado', 'destino': destino }, status=status.HTTP_400_BAD_REQUEST)
+
+                    # Si el humano envía un destino final de una cadena de saltos, intentamos expandirla.
+                    if (not chain_mode) and idx == 1:
                         path = find_jump_chain_path(origen, destino, occupied_positions)
                         if path and len(path) >= 2:
-                            # Expandir en saltos consecutivos (solo saltos; no permitir simples en cadena)
                             for step_i in range(len(path) - 1):
                                 step_origen = path[step_i]
                                 step_destino = path[step_i + 1]
 
-                                step_ok, step_err = validate_move(step_origen, step_destino, occupied_positions, allow_simple=False)
-                                if not step_ok:
-                                    return Response({
-                                        'error': f'Movimiento {idx} inválido: {step_err}',
-                                        'origen': step_origen,
-                                        'destino': step_destino,
-                                    }, status=status.HTTP_400_BAD_REQUEST)
+                                # Validación mínima por paso: origen ocupado y destino libre.
+                                if step_origen not in occupied_positions:
+                                    return Response({ 'error': 'No hay pieza en el origen', 'origen': step_origen }, status=status.HTTP_400_BAD_REQUEST)
+                                if step_destino in occupied_positions:
+                                    return Response({ 'error': 'El destino está ocupado', 'destino': step_destino }, status=status.HTTP_400_BAD_REQUEST)
 
                                 occupied_positions.discard(step_origen)
                                 occupied_positions.add(step_destino)
@@ -584,12 +631,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
 
                             piece_positions[pieza_id] = (pieza, destino)
                             continue
-
-                    return Response({
-                        'error': f'Movimiento {idx} inválido: {mensaje_error}',
-                        'origen': origen,
-                        'destino': destino
-                    }, status=status.HTTP_400_BAD_REQUEST)
 
                 occupied_positions.discard(origen)
                 occupied_positions.add(destino)
