@@ -209,6 +209,139 @@ class TestRegistrarMovimientos:
         res = api_client.post(f"/api/partidas/{p.id_partida}/registrar_movimientos/", payload, format="json")
         assert res.status_code == 400
 
+    def test_registrar_movimientos_falla_avanzar_mas_de_un_nodo_sin_saltar(
+        self, api_client, make_jugador, make_partida, make_turno, make_pieza
+    ):
+        j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        p = make_partida(id_partida="P1", numero_jugadores=2)
+        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
+
+        # 0-4 -> 2-4 sería un salto si 1-4 estuviera ocupado. Aquí NO lo está.
+        pieza = make_pieza(id_pieza="X1", jugador=j, partida=p, posicion="0-4")
+
+        payload = {
+            "movimientos": [
+                {
+                    "jugador_id": j.id_jugador,
+                    "turno_id": t.id_turno,
+                    "partida_id": p.id_partida,
+                    "pieza_id": pieza.id_pieza,
+                    "origen": "0-4",
+                    "destino": "2-4",
+                }
+            ]
+        }
+
+        res = api_client.post(f"/api/partidas/{p.id_partida}/registrar_movimientos/", payload, format="json")
+        assert res.status_code == 400
+
+    def test_registrar_movimientos_falla_salto_sin_casilla_libre_detras(self, api_client, make_jugador, make_partida, make_turno, make_pieza):
+        j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        p = make_partida(id_partida="P1", numero_jugadores=2)
+        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
+
+        pieza = make_pieza(id_pieza="X1", jugador=j, partida=p, posicion="0-4")
+        make_pieza(id_pieza="B1", jugador=j, partida=p, posicion="1-4")
+        # La casilla de aterrizaje está ocupada: salto prohibido.
+        make_pieza(id_pieza="BLOCK", jugador=j, partida=p, posicion="2-4")
+
+        payload = {
+            "movimientos": [
+                {
+                    "jugador_id": j.id_jugador,
+                    "turno_id": t.id_turno,
+                    "partida_id": p.id_partida,
+                    "pieza_id": pieza.id_pieza,
+                    "origen": "0-4",
+                    "destino": "2-4",
+                }
+            ]
+        }
+
+        res = api_client.post(f"/api/partidas/{p.id_partida}/registrar_movimientos/", payload, format="json")
+        assert res.status_code == 400
+
+    def test_registrar_movimientos_falla_salto_no_colineal(self, api_client, make_jugador, make_partida, make_turno, make_pieza):
+        j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        p = make_partida(id_partida="P1", numero_jugadores=2)
+        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
+
+        pieza = make_pieza(id_pieza="X1", jugador=j, partida=p, posicion="0-4")
+        # Ponemos una pieza vecina para que "parezca" un salto, pero el destino no es colineal.
+        make_pieza(id_pieza="B1", jugador=j, partida=p, posicion="1-4")
+
+        payload = {
+            "movimientos": [
+                {
+                    "jugador_id": j.id_jugador,
+                    "turno_id": t.id_turno,
+                    "partida_id": p.id_partida,
+                    "pieza_id": pieza.id_pieza,
+                    "origen": "0-4",
+                    "destino": "2-5",
+                }
+            ]
+        }
+
+        res = api_client.post(f"/api/partidas/{p.id_partida}/registrar_movimientos/", payload, format="json")
+        assert res.status_code == 400
+
+    def test_registrar_movimientos_falla_origen_igual_destino(self, api_client, make_jugador, make_partida, make_turno, make_pieza):
+        j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        p = make_partida(id_partida="P1", numero_jugadores=2)
+        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
+
+        pieza = make_pieza(id_pieza="X1", jugador=j, partida=p, posicion="0-4")
+
+        payload = {
+            "movimientos": [
+                {
+                    "jugador_id": j.id_jugador,
+                    "turno_id": t.id_turno,
+                    "partida_id": p.id_partida,
+                    "pieza_id": pieza.id_pieza,
+                    "origen": "0-4",
+                    "destino": "0-4",
+                }
+            ]
+        }
+
+        res = api_client.post(f"/api/partidas/{p.id_partida}/registrar_movimientos/", payload, format="json")
+        assert res.status_code == 400
+
+    def test_registrar_movimientos_falla_cadena_con_salto_invalido(self, api_client, make_jugador, make_partida, make_turno, make_pieza):
+        j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        p = make_partida(id_partida="P1", numero_jugadores=2)
+        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
+
+        pieza = make_pieza(id_pieza="X1", jugador=j, partida=p, posicion="0-4")
+        make_pieza(id_pieza="B1", jugador=j, partida=p, posicion="1-4")
+        # OJO: no creamos pieza en 3-4, así que el segundo salto (2-4 -> 4-4) es inválido.
+
+        payload = {
+            "movimientos": [
+                {
+                    "jugador_id": j.id_jugador,
+                    "turno_id": t.id_turno,
+                    "partida_id": p.id_partida,
+                    "pieza_id": pieza.id_pieza,
+                    "origen": "0-4",
+                    "destino": "2-4",
+                },
+                {
+                    "jugador_id": j.id_jugador,
+                    "turno_id": t.id_turno,
+                    "partida_id": p.id_partida,
+                    "pieza_id": pieza.id_pieza,
+                    "origen": "2-4",
+                    "destino": "4-4",
+                },
+            ]
+        }
+
+        res = api_client.post(f"/api/partidas/{p.id_partida}/registrar_movimientos/", payload, format="json")
+        assert res.status_code == 400
+
     def test_registrar_movimientos_ok_salto_en_cadena_actualiza_pieza_y_crea_movimientos(
         self, api_client, make_jugador, make_partida, make_turno, make_pieza
     ):
