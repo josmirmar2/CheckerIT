@@ -199,8 +199,6 @@ class Movimiento(models.Model):
         Partida,
         on_delete=models.CASCADE,
         related_name='movimientos',  # Partida 1 --> 0..* Movimiento
-        null=True,
-        blank=True
     )
     origen = models.CharField(max_length=10, validators=[validate_position_key])
     destino = models.CharField(max_length=10, validators=[validate_position_key])
@@ -211,6 +209,18 @@ class Movimiento(models.Model):
     def clean(self):
         super().clean()
 
+        if not self.partida_id:
+            raise ValidationError({'partida': 'El movimiento debe pertenecer a una partida'})
+
+        if self.turno_id and self.turno.partida_id != self.partida_id:
+            raise ValidationError({'turno': 'El turno no pertenece a la partida del movimiento'})
+
+        if self.pieza_id:
+            if self.pieza.partida_id is None:
+                raise ValidationError({'pieza': 'La pieza debe estar asignada a una partida para poder moverla'})
+            if self.pieza.partida_id != self.partida_id:
+                raise ValidationError({'pieza': 'La pieza no pertenece a la partida del movimiento'})
+
         if self.pieza_id and self.origen:
             pieza_pos = str(self.pieza.posicion)
             if str(self.origen) != pieza_pos:
@@ -218,15 +228,9 @@ class Movimiento(models.Model):
                     'origen': 'El origen debe coincidir con la posición actual de la pieza'
                 })
 
-        partida_ctx = None
-        if self.turno_id:
-            partida_ctx = self.turno.partida
-        if partida_ctx is None:
-            partida_ctx = self.partida
-        if partida_ctx is None and self.pieza_id:
-            partida_ctx = self.pieza.partida
+        partida_ctx = self.partida
 
-        if partida_ctx is not None and self.destino:
+        if self.destino:
             occupied = (
                 Pieza.objects
                 .filter(partida=partida_ctx, posicion=str(self.destino))
