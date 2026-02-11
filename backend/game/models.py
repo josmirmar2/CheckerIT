@@ -1,4 +1,33 @@
+from django.core.exceptions import ValidationError
+from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+
+ROW_LENGTHS = (1,2,3,4,13,12,11,10,9,10,11,12,13,4,3,2,1,)
+
+
+def is_valid_position_key(key: str) -> bool:
+    if not isinstance(key, str):
+        return False
+    if "-" not in key:
+        return False
+
+    col_str, row_str = key.split("-", 1)
+    try:
+        col = int(col_str)
+        row = int(row_str)
+    except Exception:
+        return False
+
+    if row < 0 or row >= len(ROW_LENGTHS):
+        return False
+
+    row_len = ROW_LENGTHS[row]
+    return 0 <= col < row_len
+
+
+def validate_position_key(key: str) -> None:
+    if not is_valid_position_key(key):
+        raise ValidationError("Posición inválida: fuera del tablero")
 
 
 class Jugador(models.Model):
@@ -33,7 +62,9 @@ class Partida(models.Model):
     fecha_fin = models.DateTimeField(null=True, blank=True)
     tiempo_sobrante = models.IntegerField(default=0) 
     estado = models.CharField(max_length=20, choices=ESTADOS, default='EN_CURSO')
-    numero_jugadores = models.IntegerField()
+    numero_jugadores = models.IntegerField(
+        validators=[MinValueValidator(2), MaxValueValidator(6)]
+    )
     jugadores = models.ManyToManyField(
         Jugador,
         related_name='partidas',  # Relación: Jugador 2..6 --> 0..* Partida
@@ -42,6 +73,17 @@ class Partida(models.Model):
 
     class Meta:
         verbose_name_plural = "Partidas"
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(numero_jugadores__gte=2) & models.Q(numero_jugadores__lte=6),
+                name="partida_numero_jugadores_between_2_6",
+            )
+            ,
+            models.CheckConstraint(
+                check=models.Q(fecha_fin__isnull=True) | models.Q(fecha_fin__gt=models.F('fecha_inicio')),
+                name="partida_fecha_fin_after_fecha_inicio",
+            )
+        ]
 
     def __str__(self):
         return f"Partida {self.id_partida}"
@@ -56,7 +98,10 @@ class Pieza(models.Model):
     """
     id_pieza = models.CharField(max_length=50, primary_key=True)
     tipo = models.CharField(max_length=50)
-    posicion = models.CharField(max_length=10)  # Ej: "A3", "B10", coordenadas del tablero
+    posicion = models.CharField(
+        max_length=10,
+        validators=[validate_position_key],
+    )
     jugador = models.ForeignKey(
         Jugador, 
         on_delete=models.CASCADE, 
@@ -116,6 +161,12 @@ class Turno(models.Model):
 
     class Meta:
         verbose_name_plural = "Turnos"
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(fin__isnull=True) | models.Q(fin__gt=models.F('inicio')),
+                name="turno_fin_after_inicio",
+            )
+        ]
 
     def __str__(self):
         return f"Turno {self.numero} de {self.jugador}"
@@ -148,14 +199,46 @@ class Movimiento(models.Model):
         Partida,
         on_delete=models.CASCADE,
         related_name='movimientos',  # Partida 1 --> 0..* Movimiento
-        null=True,
-        blank=True
     )
-    origen = models.CharField(max_length=10)
-    destino = models.CharField(max_length=10)
+    origen = models.CharField(max_length=10, validators=[validate_position_key])
+    destino = models.CharField(max_length=10, validators=[validate_position_key])
 
     class Meta:
         verbose_name_plural = "Movimientos"
+
+    def clean(self):
+        super().clean()
+
+        if not self.partida_id:
+            raise ValidationError({'partida': 'El movimiento debe pertenecer a una partida'})
+
+        if self.turno_id and self.turno.partida_id != self.partida_id:
+            raise ValidationError({'turno': 'El turno no pertenece a la partida del movimiento'})
+
+        if self.pieza_id:
+            if self.pieza.partida_id is None:
+                raise ValidationError({'pieza': 'La pieza debe estar asignada a una partida para poder moverla'})
+            if self.pieza.partida_id != self.partida_id:
+                raise ValidationError({'pieza': 'La pieza no pertenece a la partida del movimiento'})
+
+        if self.pieza_id and self.origen:
+            pieza_pos = str(self.pieza.posicion)
+            if str(self.origen) != pieza_pos:
+                raise ValidationError({
+                    'origen': 'El origen debe coincidir con la posición actual de la pieza'
+                })
+
+        partida_ctx = self.partida
+
+        if self.destino:
+            occupied = (
+                Pieza.objects
+                .filter(partida=partida_ctx, posicion=str(self.destino))
+                .exclude(pk=self.pieza_id)
+                .exists()
+            )
+            if occupied:
+                raise ValidationError({'destino': 'El destino está ocupado por otra pieza'})
 
     def __str__(self):
         return f"{self.pieza} de {self.origen} a {self.destino}"
@@ -174,11 +257,19 @@ class IA(models.Model):
         primary_key=True,
         related_name='ia'  # Jugador 1 --> 0..1 IA
     )
-    nivel = models.IntegerField()
+    nivel = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(2)]
+    )
 
     class Meta:
         verbose_name = "IA"
         verbose_name_plural = "IAs"
+        constraints = [
+            models.CheckConstraint(
+                check=models.Q(nivel__gte=1) & models.Q(nivel__lte=2),
+                name="ia_nivel_between_1_2",
+            )
+        ]
 
     def __str__(self):
         return f"IA Nivel {self.nivel} del jugador {self.jugador}"
@@ -214,11 +305,23 @@ class JugadorPartida(models.Model):
     jugador = models.ForeignKey(Jugador, on_delete=models.CASCADE)
     partida = models.ForeignKey(Partida, on_delete=models.CASCADE)
     fecha_union = models.DateTimeField(auto_now_add=True)
-    orden_participacion = models.IntegerField()
+    orden_participacion = models.IntegerField(
+        validators=[MinValueValidator(1), MaxValueValidator(6)]
+    )
 
     class Meta:
         verbose_name_plural = "Participaciones en Partida"
         unique_together = ('jugador', 'partida')
+        constraints = [
+            models.UniqueConstraint(
+                fields=['partida', 'orden_participacion'],
+                name='jugadorpartida_unique_orden_por_partida',
+            ),
+            models.CheckConstraint(
+                check=models.Q(orden_participacion__gte=1) & models.Q(orden_participacion__lte=6),
+                name='jugadorpartida_orden_between_1_6',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.jugador} en {self.partida}"

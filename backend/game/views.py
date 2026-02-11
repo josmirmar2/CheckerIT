@@ -2,7 +2,9 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.utils import timezone
+from django.conf import settings
 from datetime import datetime
+from collections import deque
 from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida
 from .ai.max_agent import MaxHeuristicAgent
 from .ai.mcts_agent import MCTSAgent
@@ -115,6 +117,91 @@ def compute_jump_moves(origin_key, occupied_positions):
     
     dfs(origin_coord)
     return list(landings)
+
+
+def _jump_neighbors(current_key, base_occupied_without_piece):
+    """Devuelve destinos alcanzables con UN salto legal desde `current_key`.
+
+    `base_occupied_without_piece` debe ser el conjunto de ocupadas EXCLUYENDO la posición
+    original de la pieza (para poder simular el movimiento durante el encadenado).
+    """
+    current_coord = coord_from_key(current_key)
+    if not current_coord:
+        return []
+
+    occupied = set(base_occupied_without_piece)
+    occupied.add(current_key)
+
+    neighbors = []
+    for direction in AXIAL_DIRECTIONS:
+        middle_q = current_coord["q"] + direction["dq"]
+        middle_r = current_coord["r"] + direction["dr"]
+        landing_q = current_coord["q"] + 2 * direction["dq"]
+        landing_r = current_coord["r"] + 2 * direction["dr"]
+
+        middle_key = key_from_coord(middle_q, middle_r)
+        landing_key = key_from_coord(landing_q, landing_r)
+
+        if not middle_key or not landing_key:
+            continue
+        if middle_key not in occupied:
+            continue
+        if landing_key in occupied:
+            continue
+        neighbors.append(landing_key)
+
+    return neighbors
+
+
+def find_jump_chain_path(origin_key, destination_key, occupied_positions):
+    """Encuentra una ruta de saltos (encadenada) desde origen a destino.
+
+    Retorna lista de claves [origen, ..., destino] si existe, si no None.
+    La ruta está compuesta SOLO por saltos legales (no movimientos simples).
+    """
+    if not origin_key or not destination_key:
+        return None
+    if origin_key == destination_key:
+        return None
+
+    origin_coord = coord_from_key(origin_key)
+    dest_coord = coord_from_key(destination_key)
+    if not origin_coord or not dest_coord:
+        return None
+    if origin_key not in occupied_positions:
+        return None
+    if destination_key in occupied_positions:
+        return None
+
+    base_occupied_without_piece = set(occupied_positions)
+    base_occupied_without_piece.discard(origin_key)
+
+    queue = deque([origin_key])
+    prev = {origin_key: None}
+
+    while queue:
+        current = queue.popleft()
+        if current == destination_key:
+            break
+        for nxt in _jump_neighbors(current, base_occupied_without_piece):
+            if nxt in prev:
+                continue
+            prev[nxt] = current
+            queue.append(nxt)
+
+    if destination_key not in prev:
+        return None
+
+    path = []
+    cur = destination_key
+    while cur is not None:
+        path.append(cur)
+        cur = prev[cur]
+    path.reverse()
+
+    if len(path) < 2:
+        return None
+    return path
 
 
 def get_valid_moves_from(origin_key, occupied_positions, allow_simple=True):
@@ -233,20 +320,51 @@ class PartidaViewSet(viewsets.ModelViewSet):
             ]
         }
         """
-        numero_jugadores = request.data.get('numero_jugadores', 2)
         jugadores_data = request.data.get('jugadores', [])
+        numero_jugadores_raw = request.data.get('numero_jugadores', None)
         
         if not jugadores_data or len(jugadores_data) == 0:
             return Response(
                 {'error': 'Se requieren datos de jugadores'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+
+        # Determinar/validar numero_jugadores
+        if numero_jugadores_raw is None:
+            numero_jugadores = len(jugadores_data)
+        else:
+            try:
+                numero_jugadores = int(numero_jugadores_raw)
+            except Exception:
+                return Response({'error': 'numero_jugadores debe ser un entero'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if numero_jugadores < 2 or numero_jugadores > 6:
+            return Response({'error': 'Una partida debe tener entre 2 y 6 jugadores'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if len(jugadores_data) != numero_jugadores:
+            return Response(
+                {'error': 'numero_jugadores no coincide con la cantidad de jugadores enviada'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Validar que no se repitan numeros de jugador dentro de la partida (p.ej. dos numero=1)
+        numeros = []
+        for idx, jugador_data in enumerate(jugadores_data):
+            numero_raw = jugador_data.get('numero', idx + 1)
+            try:
+                numero = int(numero_raw)
+            except Exception:
+                return Response({'error': f'El campo numero del jugador {idx + 1} debe ser un entero'}, status=status.HTTP_400_BAD_REQUEST)
+            numeros.append(numero)
+
+        if len(set(numeros)) != len(numeros):
+            return Response({'error': 'No puede haber dos jugadores con el mismo numero en la misma partida'}, status=status.HTTP_400_BAD_REQUEST)
         
         jugadores_list = []
         
         for idx, jugador_data in enumerate(jugadores_data):
             es_humano = jugador_data.get('tipo', 'humano') == 'humano'
-            numero = jugador_data.get('numero', idx + 1)
+            numero = numeros[idx]
             dificultad = jugador_data.get('dificultad', 'Fácil')
 
             if es_humano:
@@ -405,6 +523,8 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 turno = Turno.objects.get(id_turno=turno_id)
                 pieza = Pieza.objects.get(id_pieza=pieza_id)
 
+                enforce_move_rules = (not bool(getattr(jugador, 'humano', False))) or bool(getattr(settings, 'ENFORCE_MOVE_VALIDATION_FOR_HUMANS', False))
+
                 # Validaciones de turno/jugador/pieza
                 if str(turno.partida_id) != expected_partida_id:
                     return Response({ 'error': 'El turno no pertenece a la partida' }, status=status.HTTP_400_BAD_REQUEST)
@@ -429,15 +549,88 @@ class PartidaViewSet(viewsets.ModelViewSet):
                         'origen_esperado': expected_origin,
                     }, status=status.HTTP_400_BAD_REQUEST)
 
-                # Si hay cadena, todas las acciones deben ser saltos (una pieza por turno).
-                allow_simple = (not chain_mode and idx == 1)
-                es_valido, mensaje_error = validate_move(origen, destino, occupied_positions, allow_simple)
-                if not es_valido:
-                    return Response({ 
-                        'error': f'Movimiento {idx} inválido: {mensaje_error}',
-                        'origen': origen,
-                        'destino': destino
-                    }, status=status.HTTP_400_BAD_REQUEST)
+                if enforce_move_rules:
+                    allow_simple = (not chain_mode and idx == 1)
+                    es_valido, mensaje_error = validate_move(origen, destino, occupied_positions, allow_simple)
+                    if not es_valido:
+                        if bool(getattr(jugador, 'humano', False)) and (not chain_mode) and idx == 1:
+                            path = find_jump_chain_path(origen, destino, occupied_positions)
+                            if path and len(path) >= 2:
+                                for step_i in range(len(path) - 1):
+                                    step_origen = path[step_i]
+                                    step_destino = path[step_i + 1]
+
+                                    step_ok, step_err = validate_move(step_origen, step_destino, occupied_positions, allow_simple=False)
+                                    if not step_ok:
+                                        return Response({
+                                            'error': f'Movimiento {idx} inválido: {step_err}',
+                                            'origen': step_origen,
+                                            'destino': step_destino,
+                                        }, status=status.HTTP_400_BAD_REQUEST)
+
+                                    occupied_positions.discard(step_origen)
+                                    occupied_positions.add(step_destino)
+
+                                    mov = Movimiento.objects.create(
+                                        id_movimiento=f"M_{turno.id_turno}_{idx}_{step_i + 1}_{datetime.now().timestamp()}",
+                                        jugador=jugador,
+                                        pieza=pieza,
+                                        turno=turno,
+                                        partida=partida,
+                                        origen=step_origen,
+                                        destino=step_destino,
+                                    )
+                                    created.append(mov)
+
+                                piece_positions[pieza_id] = (pieza, destino)
+                                continue
+
+                        return Response({
+                            'error': f'Movimiento {idx} inválido: {mensaje_error}',
+                            'origen': origen,
+                            'destino': destino
+                        }, status=status.HTTP_400_BAD_REQUEST)
+                else:
+                    # Humanos: validación mínima de consistencia (las reglas se validan en frontend)
+                    if not coord_from_key(origen):
+                        return Response({ 'error': f'Origen fuera del tablero: {origen}', 'origen': origen }, status=status.HTTP_400_BAD_REQUEST)
+                    if not coord_from_key(destino):
+                        return Response({ 'error': f'Destino fuera del tablero: {destino}', 'destino': destino }, status=status.HTTP_400_BAD_REQUEST)
+                    if origen not in occupied_positions:
+                        return Response({ 'error': 'No hay pieza en el origen', 'origen': origen }, status=status.HTTP_400_BAD_REQUEST)
+                    if destino in occupied_positions:
+                        return Response({ 'error': 'El destino está ocupado', 'destino': destino }, status=status.HTTP_400_BAD_REQUEST)
+
+                    # Si el humano envía un destino final de una cadena de saltos, intentamos expandirla.
+                    if (not chain_mode) and idx == 1:
+                        path = find_jump_chain_path(origen, destino, occupied_positions)
+                        if path and len(path) >= 2:
+                            for step_i in range(len(path) - 1):
+                                step_origen = path[step_i]
+                                step_destino = path[step_i + 1]
+
+                                # Validación mínima por paso: origen ocupado y destino libre.
+                                if step_origen not in occupied_positions:
+                                    return Response({ 'error': 'No hay pieza en el origen', 'origen': step_origen }, status=status.HTTP_400_BAD_REQUEST)
+                                if step_destino in occupied_positions:
+                                    return Response({ 'error': 'El destino está ocupado', 'destino': step_destino }, status=status.HTTP_400_BAD_REQUEST)
+
+                                occupied_positions.discard(step_origen)
+                                occupied_positions.add(step_destino)
+
+                                mov = Movimiento.objects.create(
+                                    id_movimiento=f"M_{turno.id_turno}_{idx}_{step_i + 1}_{datetime.now().timestamp()}",
+                                    jugador=jugador,
+                                    pieza=pieza,
+                                    turno=turno,
+                                    partida=partida,
+                                    origen=step_origen,
+                                    destino=step_destino,
+                                )
+                                created.append(mov)
+
+                            piece_positions[pieza_id] = (pieza, destino)
+                            continue
 
                 occupied_positions.discard(origen)
                 occupied_positions.add(destino)
@@ -452,7 +645,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
                     destino=destino,
                 )
                 created.append(mov)
-                
+
                 # Guardar el último destino de esta pieza (en caso de movimientos encadenados)
                 piece_positions[pieza_id] = (pieza, destino)
                 

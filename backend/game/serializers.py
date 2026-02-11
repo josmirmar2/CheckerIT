@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida
+from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida, is_valid_position_key
 
 
 class JugadorSerializer(serializers.ModelSerializer):
@@ -10,6 +10,52 @@ class JugadorSerializer(serializers.ModelSerializer):
 
 class JugadorPartidaSerializer(serializers.ModelSerializer):
     jugador_nombre = serializers.CharField(source='jugador.nombre', read_only=True)
+
+    def validate(self, attrs):
+        partida = attrs.get('partida')
+        jugador = attrs.get('jugador')
+        orden = attrs.get('orden_participacion')
+
+        if partida is not None:
+            limit = getattr(partida, 'numero_jugadores', None) or 6
+            qs = JugadorPartida.objects.filter(partida=partida)
+            if self.instance is not None:
+                qs = qs.exclude(pk=self.instance.pk)
+            if qs.count() >= limit:
+                raise serializers.ValidationError({'partida': f'Una partida no puede tener más de {limit} jugadores'})
+
+            if orden is not None:
+                try:
+                    orden_int = int(orden)
+                except Exception:
+                    raise serializers.ValidationError({'orden_participacion': 'orden_participacion debe ser un entero'})
+
+                if orden_int < 1 or orden_int > limit:
+                    raise serializers.ValidationError({'orden_participacion': f'orden_participacion debe estar entre 1 y {limit}'})
+
+                existing_orden = JugadorPartida.objects.filter(partida=partida, orden_participacion=orden_int)
+                if self.instance is not None:
+                    existing_orden = existing_orden.exclude(pk=self.instance.pk)
+                if existing_orden.exists():
+                    raise serializers.ValidationError({'orden_participacion': 'Ese orden_participacion ya está ocupado en la partida'})
+
+        if partida is not None and jugador is not None:
+            existing_pair = JugadorPartida.objects.filter(partida=partida, jugador=jugador)
+            if self.instance is not None:
+                existing_pair = existing_pair.exclude(pk=self.instance.pk)
+            if existing_pair.exists():
+                raise serializers.ValidationError({'jugador': 'El jugador ya está inscrito en esta partida'})
+
+            # Evitar duplicar el numero de jugador dentro de la misma partida.
+            numero = getattr(jugador, 'numero', None)
+            if numero is not None:
+                existing = JugadorPartida.objects.filter(partida=partida, jugador__numero=numero)
+                if self.instance is not None:
+                    existing = existing.exclude(pk=self.instance.pk)
+                if existing.exists():
+                    raise serializers.ValidationError({'jugador': f'Ya existe un jugador con numero={numero} en esta partida'})
+
+        return attrs
     
     class Meta:
         model = JugadorPartida
@@ -18,6 +64,11 @@ class JugadorPartidaSerializer(serializers.ModelSerializer):
 
 class PiezaSerializer(serializers.ModelSerializer):
     jugador_nombre = serializers.CharField(source='jugador.nombre', read_only=True)
+
+    def validate_posicion(self, value):
+        if not is_valid_position_key(str(value)):
+            raise serializers.ValidationError('Posición inválida: fuera del tablero')
+        return value
     
     class Meta:
         model = Pieza
@@ -27,6 +78,48 @@ class PiezaSerializer(serializers.ModelSerializer):
 class MovimientoSerializer(serializers.ModelSerializer):
     jugador_nombre = serializers.CharField(source='jugador.nombre', read_only=True)
     pieza_tipo = serializers.CharField(source='pieza.tipo', read_only=True)
+
+    def validate_origen(self, value):
+        if not is_valid_position_key(str(value)):
+            raise serializers.ValidationError('Posición inválida: fuera del tablero')
+        return value
+
+    def validate_destino(self, value):
+        if not is_valid_position_key(str(value)):
+            raise serializers.ValidationError('Posición inválida: fuera del tablero')
+        return value
+
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        pieza = attrs.get('pieza') if 'pieza' in attrs else getattr(self.instance, 'pieza', None)
+        origen = attrs.get('origen') if 'origen' in attrs else getattr(self.instance, 'origen', None)
+        destino = attrs.get('destino') if 'destino' in attrs else getattr(self.instance, 'destino', None)
+        turno = attrs.get('turno') if 'turno' in attrs else getattr(self.instance, 'turno', None)
+        partida = attrs.get('partida') if 'partida' in attrs else getattr(self.instance, 'partida', None)
+
+        if pieza is not None and origen is not None:
+            if str(origen) != str(pieza.posicion):
+                raise serializers.ValidationError({
+                    'origen': 'El origen debe coincidir con la posición actual de la pieza'
+                })
+
+        # La ocupación del destino debe comprobarse en la misma partida del movimiento.
+        # Priorizamos turno.partida (contexto real del movimiento) y, solo si no existe,
+        # usamos partida o pieza.partida.
+        partida_ctx = None
+        if turno is not None:
+            partida_ctx = turno.partida
+        if partida_ctx is None:
+            partida_ctx = partida
+        if partida_ctx is None and pieza is not None:
+            partida_ctx = pieza.partida
+
+        if partida_ctx is not None and destino is not None and pieza is not None:
+            if Pieza.objects.filter(partida=partida_ctx, posicion=str(destino)).exclude(pk=pieza.pk).exists():
+                raise serializers.ValidationError({'destino': 'El destino está ocupado por otra pieza'})
+
+        return attrs
     
     class Meta:
         model = Movimiento

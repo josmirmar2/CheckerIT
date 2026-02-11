@@ -156,3 +156,8 @@ REST_FRAMEWORK = {
         'rest_framework.parsers.JSONParser',
     ],
 }
+
+# Validación de movimientos
+# Por defecto, las reglas del juego (adyacente/salto/cadena) se validan en backend solo para IA.
+# Si se quiere forzar también para humanos (p.ej. en producción), activar esta variable.
+ENFORCE_MOVE_VALIDATION_FOR_HUMANS = os.getenv('ENFORCE_MOVE_VALIDATION_FOR_HUMANS', 'False') == 'True'
