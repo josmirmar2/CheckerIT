@@ -1,19 +1,3 @@
-"""Prueba local (sin requests) de la IA heurística (MaxHeuristicAgent).
-
-- No usa HTTP.
-- Usa Django ORM contra la BD configurada (por defecto sqlite).
-- Crea una partida mínima de 2 jugadores con un turno activo y piezas.
-- Ejecuta MaxHeuristicAgent.suggest_move y valida que la jugada es legal según validate_move.
-- Si devuelve una cadena (secuencia), valida cada salto como cadena (sin simples).
-
-Ejecución (desde la raíz del repo):
-    C:/Users/JoséManuel/Documents/TFG/CheckerIT/.venv/Scripts/python.exe backend/game/tests/ai/verificar_heuristica_sin_requests.py
-
-Notas:
-- Este script NO intenta medir “calidad” de la IA; comprueba legalidad y consistencia.
-- Para fuerza, conviene comparar métricas (progreso, oscilación, etc.) en simulaciones.
-"""
-
 from __future__ import annotations
 
 import os

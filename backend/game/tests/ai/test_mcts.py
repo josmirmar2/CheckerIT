@@ -1,15 +1,3 @@
-"""Prueba local (sin requests) de la IA MCTS.
-
-- No usa HTTP.
-- Usa Django ORM contra la BD configurada (por defecto sqlite).
-- Crea una partida mínima 2 jugadores con un turno activo y piezas.
-- Ejecuta MCTSAgent.suggest_move y valida que la jugada es legal según validate_move
-  y que no se mueven varias piezas en un turno.
-
-Ejecución:
-    C:/Users/JoséManuel/Documents/TFG/CheckerIT/.venv/Scripts/python.exe backend/game/tests/ai/verificar_mcts_sin_requests.py
-"""
-
 from __future__ import annotations
 
 import os

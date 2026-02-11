@@ -1,24 +1,3 @@
-"""Autoplay comparando IA Heurística (nivel 1) vs IA MCTS (nivel 2) sin HTTP.
-
-Qué hace:
-- Crea partidas 2 jugadores (ambos IA) usando el mismo esquema que `start_game`:
-  - Punta asignada según orden de participación (para 2 jugadores: puntas 0 y 3).
-  - 10 piezas por jugador, tipo `{punta}-{Color}`.
-- Ejecuta un bucle de turnos:
-  - Jugador 1 usa `MaxHeuristicAgent`.
-  - Jugador 2 usa `MCTSAgent`.
-  - Valida cada paso con `validate_move` (si hay cadena, fuerza saltos).
-  - Persiste `Movimiento` por paso y actualiza `Pieza.posicion`.
-- Imprime un análisis por experimento y un resumen global.
-
-Ejecución:
-    C:/Users/JoséManuel/Documents/TFG/CheckerIT/.venv/Scripts/python.exe backend/game/tests/ai/verificar_comparacion_ias.py
-
-Notas:
-- Métrica principal: distancia total a la meta (menor es mejor), usando `_distance_to_goal`.
-- El MCTS es estocástico: se fija un `seed_base` para reproducibilidad.
-"""
-
 from __future__ import annotations
 
 import os
