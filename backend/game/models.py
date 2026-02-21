@@ -51,7 +51,6 @@ class Pieza(models.Model):
     """
     Modelo para representar una pieza del juego
     Relación: Jugador 1 --> 1..* Pieza
-    Relación: IA 1 -- 0..* Pieza
     Relación: Chatbot 1 -- 0..* Pieza
     """
     id_pieza = models.CharField(max_length=50, primary_key=True)
@@ -61,13 +60,6 @@ class Pieza(models.Model):
         Jugador, 
         on_delete=models.CASCADE, 
         related_name='piezas'  # Jugador 1 --> 1..* Pieza
-    )
-    ia = models.ForeignKey(
-        'IA',
-        on_delete=models.CASCADE,
-        related_name='piezas',  # IA 1 -- 0..* Pieza
-        null=True,
-        blank=True
     )
     chatbot = models.ForeignKey(
         'Chatbot',
@@ -165,7 +157,6 @@ class IA(models.Model):
     """
     Modelo para representar la configuración de IA de un jugador
     Relación: Jugador 1 --> 0..1 IA
-    Relación: IA 1 --> 1..* Pieza
     Relación: Chatbot 1 --> 1 IA (inversa)
     """
     jugador = models.OneToOneField(

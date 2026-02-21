@@ -21,7 +21,7 @@ class PiezaSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Pieza
-        fields = ['id_pieza', 'tipo', 'posicion', 'jugador', 'jugador_nombre', 'ia', 'chatbot', 'partida']
+        fields = ['id_pieza', 'tipo', 'posicion', 'jugador', 'jugador_nombre', 'chatbot', 'partida']
 
 
 class MovimientoSerializer(serializers.ModelSerializer):
