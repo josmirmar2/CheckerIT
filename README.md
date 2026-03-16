@@ -33,6 +33,45 @@ Aplicación web full-stack para jugar a las Damas Chinas, desarrollada con React
 
 ## 🚀 Instalación
 
+### Opción rápida (VS Code): ejecutar todo de una vez
+
+Si estás usando VS Code, puedes levantar backend + frontend sin teclear los comandos uno a uno:
+
+- Abre la paleta de comandos: `Ctrl+Shift+P`
+- Ejecuta: **Tasks: Run Task**
+- Selecciona: **Dev: iniciar (backend+frontend)**
+
+Esto crea el `venv` si no existe, instala dependencias, aplica migraciones y arranca ambos servidores.
+
+### Opción rápida (PowerShell): un script
+
+Desde la raíz del proyecto:
+
+```powershell
+.\scripts\dev.ps1
+```
+
+Por defecto abre ventanas de PowerShell con los logs (backend y frontend). Opcionalmente:
+
+```powershell
+# Abrir el navegador automáticamente
+.\scripts\dev.ps1 -OpenBrowser
+
+# Solo backend o solo frontend
+.\scripts\dev.ps1 -BackendOnly
+.\scripts\dev.ps1 -FrontendOnly
+
+# Lanzar en segundo plano (sin ventanas/logs)
+.\scripts\dev.ps1 -Mode background
+```
+
+Si PowerShell te bloquea scripts por permisos:
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+.\scripts\dev.ps1
+```
+
 ### 1. Configurar la Base de Datos
 
 Primero, crea la base de datos PostgreSQL:
@@ -185,26 +224,7 @@ ALLOWED_HOSTS=localhost,127.0.0.1
 REACT_APP_API_URL=http://localhost:8000/api
 ```
 
-## 🎨 Características Implementadas
-
-✅ Pantalla de inicio con navegación
-✅ Sistema de routing con React Router
-✅ Tutorial completo con reglas del juego
-✅ API REST completa para gestión de partidas
-✅ Modelos de base de datos para Game y Move
-✅ Interfaz responsiva y moderna
-✅ Configuración CORS para comunicación frontend-backend
-
-## 🚧 Pendiente de Implementar
-
-- [ ] Lógica completa del tablero de Damas Chinas
-- [ ] Validación de movimientos según reglas del juego
-- [ ] Sistema de detección de victoria
-- [ ] Animaciones de movimientos de piezas
-- [ ] Historial de partidas
-- [ ] Estadísticas de jugadores
-
-## 🐛 Solución de Problemas
+## Solución de Problemas
 
 ### Error de conexión a PostgreSQL
 - Verifica que PostgreSQL esté ejecutándose
@@ -219,17 +239,17 @@ REACT_APP_API_URL=http://localhost:8000/api
 - Elimina la carpeta `node_modules` y ejecuta `npm install` de nuevo
 - Limpia el cache con `npm cache clean --force`
 
-## 📝 Notas de Desarrollo
+## Notas de Desarrollo
 
 - No incluye sistema de autenticación (según especificaciones)
 - La lógica del tablero está preparada para ser implementada en `views.py`
 - El estado del tablero se guarda en formato JSON en PostgreSQL
 
-## 👥 Contribuir
+## Contribuir
 
 Este es un proyecto académico (TFG). 
 
-## 📄 Licencia
+## Licencia
 
 Este proyecto es un Trabajo Fin de Grado (TFG).
 
