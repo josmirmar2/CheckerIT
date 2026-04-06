@@ -10,7 +10,7 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background: url('C:\Users\JoséManuel\Documents\TFG\TFG\frontend\src\components\images\Background.jpg');
+  background: url('./components/images/Background.jpg');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;

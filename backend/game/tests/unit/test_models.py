@@ -98,7 +98,6 @@ class TestPropiedadesYValidaciones:
         )
         assert pieza.jugador_id == "J1"
         assert pieza.partida_id is None
-        assert pieza.ia_id is None
         assert pieza.chatbot_id is None
 
     @pytest.mark.django_db
@@ -472,30 +471,28 @@ class TestRelacionesEntreEntidades:
         assert chatbot_sin_ia.ia is None
 
     @pytest.mark.django_db
-    def test_related_name_piezas_desde_ia_y_chatbot_funciona(self, make_jugador, make_ia, make_partida, make_pieza):
+    def test_related_name_piezas_desde_chatbot_funciona(self, make_jugador, make_ia, make_partida, make_pieza):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
         ia = make_ia(jugador=j, nivel=2)
         chatbot = Chatbot.objects.create(ia=ia, memoria={}, contexto={})
         p = make_partida(id_partida="P1", numero_jugadores=2)
 
         make_pieza(
-            id_pieza="X_IA",
+            id_pieza="X_CB",
             tipo="punta-0",
             posicion="0-0",
             jugador=j,
             partida=p,
-            ia=ia,
+            chatbot=chatbot,
         )
         make_pieza(
-            id_pieza="X_CB",
+            id_pieza="X_NO_CB",
             tipo="punta-0",
             posicion="0-1",
             jugador=j,
             partida=p,
-            chatbot=chatbot,
         )
 
-        assert ia.piezas.count() == 1
         assert chatbot.piezas.count() == 1
 
     @pytest.mark.django_db
@@ -570,20 +567,19 @@ class TestRelacionesEntreEntidades:
         assert JugadorPartida.objects.count() == 0
 
     @pytest.mark.django_db
-    def test_borrado_ia_hace_cascade_a_chatbot_y_piezas_asociadas(self, make_jugador, make_ia, make_partida, make_pieza):
+    def test_borrado_ia_hace_cascade_a_chatbot_pero_no_a_piezas(self, make_jugador, make_ia, make_pieza):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
         ia = make_ia(jugador=j, nivel=2)
         Chatbot.objects.create(ia=ia, memoria={}, contexto={})
 
-        pieza_ia = make_pieza(
-            id_pieza="X_IA",
+        pieza_1 = make_pieza(
+            id_pieza="X1",
             tipo="punta-0",
             posicion="0-0",
             jugador=j,
-            ia=ia,
         )
-        pieza_sin_ia = make_pieza(
-            id_pieza="X_NO_IA",
+        pieza_2 = make_pieza(
+            id_pieza="X2",
             tipo="punta-0",
             posicion="0-1",
             jugador=j,
@@ -592,8 +588,8 @@ class TestRelacionesEntreEntidades:
         ia.delete()
 
         assert Chatbot.objects.count() == 0
-        assert Pieza.objects.filter(id_pieza=pieza_ia.id_pieza).count() == 0
-        assert Pieza.objects.filter(id_pieza=pieza_sin_ia.id_pieza).count() == 1
+        assert Pieza.objects.filter(id_pieza=pieza_1.id_pieza).count() == 1
+        assert Pieza.objects.filter(id_pieza=pieza_2.id_pieza).count() == 1
 
     @pytest.mark.django_db
     def test_borrado_chatbot_hace_cascade_a_piezas_asociadas(self, make_ia, make_jugador, make_pieza):

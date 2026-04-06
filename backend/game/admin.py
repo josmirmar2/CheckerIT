@@ -19,7 +19,7 @@ class PartidaAdmin(admin.ModelAdmin):
 
 @admin.register(Pieza)
 class PiezaAdmin(admin.ModelAdmin):
-    list_display = ['id_pieza', 'tipo', 'posicion', 'jugador', 'ia', 'chatbot']
+    list_display = ['id_pieza', 'tipo', 'posicion', 'jugador', 'chatbot']
     list_filter = ['tipo', 'jugador']
     search_fields = ['id_pieza', 'posicion']
 

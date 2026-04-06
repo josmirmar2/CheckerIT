@@ -150,7 +150,6 @@ def test_crear_pieza_rechaza_posicion_invalida(api_client, make_jugador):
         "tipo": "punta-0",
         "posicion": "99-99",
         "jugador": jugador.id_jugador,
-        "ia": None,
         "chatbot": None,
         "partida": None,
     }
