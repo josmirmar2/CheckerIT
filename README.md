@@ -27,7 +27,29 @@ CheckerIT es una aplicación web full-stack para jugar a Damas Chinas. El fronte
 
 ## Instalación y ejecución (Windows)
 
-### Backend (Django)
+### Arranque rápido (recomendado)
+
+Desde la raíz del proyecto puedes levantar backend y frontend con un único script:
+
+```powershell
+./scripts/dev.ps1
+```
+
+Opciones útiles:
+
+```powershell
+./scripts/dev.ps1 -BackendOnly
+./scripts/dev.ps1 -FrontendOnly
+./scripts/dev.ps1 -SkipInstall
+./scripts/dev.ps1 -OpenBrowser
+```
+
+Notas:
+
+- El script detecta un virtualenv existente en `.venv` (raíz) y, si no existe, lo crea.
+- Mantiene compatibilidad con entornos antiguos (`backend/.venv` o `backend/venv`) si ya los tienes.
+
+### Backend (Django) — ejecución manual
 
 Desde la raíz del proyecto:
 
@@ -42,7 +64,7 @@ python manage.py runserver
 
 El backend queda disponible en `http://localhost:8000` y la API en `http://localhost:8000/api/`.
 
-### Frontend (React)
+### Frontend (React) — ejecución manual
 
 En una terminal independiente, desde la raíz del proyecto:
 
