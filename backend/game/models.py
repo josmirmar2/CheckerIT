@@ -130,17 +130,17 @@ class Pieza(models.Model):
 
 
 
-class Turno(models.Model):
+class Ronda(models.Model):
     """
     Modelo para representar un turno en la partida
     Relación: Partida 1 --> 1..* Turno
     Relación: Turno 1 --> 0..* Movimiento
     """
-    id_turno = models.CharField(max_length=50, primary_key=True)
+    id_ronda = models.CharField(max_length=50, primary_key=True)
     jugador = models.ForeignKey(
         Jugador, 
         on_delete=models.CASCADE,
-        related_name='turnos'
+        related_name='rondas'
     )
     numero = models.IntegerField()
     inicio = models.DateTimeField(auto_now_add=True)
@@ -148,20 +148,20 @@ class Turno(models.Model):
     partida = models.ForeignKey(
         Partida, 
         on_delete=models.CASCADE, 
-        related_name='turnos'  # Partida 1 --> 1..* Turno
+        related_name='rondas'  # Partida 1 --> 1..* Ronda
     )
 
     class Meta:
-        verbose_name_plural = "Turnos"
+        verbose_name_plural = "Rondas"
         constraints = [
             models.CheckConstraint(
                 check=models.Q(fin__isnull=True) | models.Q(fin__gt=models.F('inicio')),
-                name="turno_fin_after_inicio",
+                name="ronda_fin_after_inicio",
             )
         ]
 
     def __str__(self):
-        return f"Turno {self.numero} de {self.jugador}"
+        return f"Ronda {self.numero} de {self.jugador}"
 
 
 class Movimiento(models.Model):
@@ -182,10 +182,10 @@ class Movimiento(models.Model):
         on_delete=models.CASCADE,
         related_name='movimientos'  # Pieza 1 --> 0..* Movimiento
     )
-    turno = models.ForeignKey(
-        Turno, 
+    ronda = models.ForeignKey(
+        Ronda, 
         on_delete=models.CASCADE, 
-        related_name='movimientos'  # Turno 1 --> 0..* Movimiento
+        related_name='movimientos'  # Ronda 1 --> 0..* Movimiento
     )
     partida = models.ForeignKey(
         Partida,
@@ -204,8 +204,8 @@ class Movimiento(models.Model):
         if not self.partida_id:
             raise ValidationError({'partida': 'El movimiento debe pertenecer a una partida'})
 
-        if self.turno_id and self.turno.partida_id != self.partida_id:
-            raise ValidationError({'turno': 'El turno no pertenece a la partida del movimiento'})
+        if self.ronda_id and self.ronda.partida_id != self.partida_id:
+            raise ValidationError({'ronda': 'La ronda no pertenece a la partida del movimiento'})
 
         if self.pieza_id:
             if self.pieza.partida_id is None:
@@ -236,7 +236,7 @@ class Movimiento(models.Model):
         return f"{self.pieza} de {self.origen} a {self.destino}"
 
 
-class IA(models.Model):
+class AgenteInteligente(models.Model):
     """
     Modelo para representar la configuración de agente Inteligente de un jugador
     Relación: Jugador 1 --> 0..1 agente Inteligente
@@ -246,7 +246,7 @@ class IA(models.Model):
         Jugador, 
         on_delete=models.CASCADE, 
         primary_key=True,
-        related_name='ia'  # Jugador 1 --> 0..1 agente Inteligente
+        related_name='agente_inteligente'  # Jugador 1 --> 0..1 agente Inteligente
     )
     nivel = models.IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(2)]
@@ -258,7 +258,7 @@ class IA(models.Model):
         constraints = [
             models.CheckConstraint(
                 check=models.Q(nivel__gte=1) & models.Q(nivel__lte=2),
-                name="ia_nivel_between_1_2",
+                name="agenteinteligente_nivel_between_1_2",
             )
         ]
 
@@ -271,8 +271,8 @@ class Chatbot(models.Model):
     Modelo para representar el chatbot de ayuda
     Relación: Chatbot 1 --> 1 agente Inteligente
     """
-    ia = models.OneToOneField(
-        IA,
+    agente_inteligente = models.OneToOneField(
+        AgenteInteligente,
         on_delete=models.CASCADE,
         related_name='chatbot',  # Chatbot 1 --> 1 agente Inteligente
         null=True,

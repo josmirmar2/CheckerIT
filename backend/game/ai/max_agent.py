@@ -330,8 +330,8 @@ class MaxHeuristicAgent:
         # Último movimiento del jugador (para evitar oscilaciones A->B->A)
         last_move = (
             Movimiento.objects.filter(partida_id=partida_id, jugador_id=jugador_id)
-            .select_related("turno", "pieza")
-            .order_by("-turno__numero", "-id_movimiento")
+            .select_related("ronda", "pieza")
+            .order_by("-ronda__numero", "-id_movimiento")
             .first()
         )
         last_from = getattr(last_move, "origen", None)

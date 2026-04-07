@@ -327,11 +327,11 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
     
     if (turnStartPieceMap) {
       setPieceMapLocal(new Map(turnStartPieceMap));
-      console.log('🔄 pieceMapLocal restaurado desde snapshot del turno:', turnStartPieceMap);
+      console.log('🔄 pieceMapLocal restaurado desde snapshot de la ronda:', turnStartPieceMap);
     }
     if (turnStartPositionsList) {
       setPositionsList([...turnStartPositionsList]);
-      console.log('🔄 positionsList restaurado desde snapshot del turno:', turnStartPositionsList);
+      console.log('🔄 positionsList restaurado desde snapshot de la ronda:', turnStartPositionsList);
     }
     
     if (initialBoardState) {
@@ -581,7 +581,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                       setTurnStartBoardState(boardPieces);
                       setTurnStartPieceMap(new Map(pieceMapLocal));
                       setTurnStartPositionsList([...positionsList]);
-                      console.log('📸 Snapshot guardado al inicio del turno:', { pieceMapLocal, positionsList });
+                      console.log('📸 Snapshot guardado al inicio de la ronda:', { pieceMapLocal, positionsList });
                     }
                     
                     setBoardPieces(next);

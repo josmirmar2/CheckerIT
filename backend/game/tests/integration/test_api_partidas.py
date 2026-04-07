@@ -1,6 +1,6 @@
 import pytest
 
-from game.models import IA, Chatbot, Jugador, JugadorPartida, Movimiento, Partida, Pieza, Turno
+from game.models import AgenteInteligente, Chatbot, Jugador, JugadorPartida, Movimiento, Partida, Pieza, Ronda
 
 
 def _start_game(api_client, payload=None):
@@ -42,7 +42,7 @@ def test_start_game_crea_partida_y_turno(api_client):
     assert data["id_partida"]
     assert data["numero_jugadores"] == 2
     assert len(data["participantes"]) == 2
-    assert len(data["turnos"]) == 1
+    assert len(data["rondas"]) == 1
 
 
 @pytest.mark.django_db
@@ -137,7 +137,7 @@ def test_start_game_crea_ia_con_nivel_correcto(api_client):
     jugadores = list(Jugador.objects.filter(id_jugador__in=jugadores_ids))
     ia_players = [j for j in jugadores if not j.humano]
     assert len(ia_players) == 1
-    assert IA.objects.get(jugador=ia_players[0]).nivel == 2
+    assert AgenteInteligente.objects.get(jugador=ia_players[0]).nivel == 2
 
     assert Partida.objects.filter(id_partida=partida_id).exists()
 
@@ -159,7 +159,7 @@ def test_crear_pieza_rechaza_posicion_invalida(api_client, make_jugador):
 
 
 @pytest.mark.django_db
-def test_crear_movimiento_rechaza_origen_o_destino_fuera_del_tablero(api_client, make_jugador, make_partida, make_turno, make_pieza):
+def test_crear_movimiento_rechaza_origen_o_destino_fuera_del_tablero(api_client, make_jugador, make_partida, make_ronda, make_pieza):
     jugador = make_jugador(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
     partida = make_partida(id_partida="P_API", numero_jugadores=2)
     pieza = make_pieza(
@@ -169,13 +169,13 @@ def test_crear_movimiento_rechaza_origen_o_destino_fuera_del_tablero(api_client,
         jugador=jugador,
         partida=partida,
     )
-    turno = make_turno(id_turno="T_API", jugador=jugador, numero=1, partida=partida)
+    ronda = make_ronda(id_ronda="R_API", jugador=jugador, numero=1, partida=partida)
 
     payload_bad_origen = {
         "id_movimiento": "M_API_1",
         "jugador": jugador.id_jugador,
         "pieza": pieza.id_pieza,
-        "turno": turno.id_turno,
+        "ronda": ronda.id_ronda,
         "partida": partida.id_partida,
         "origen": "99-99",
         "destino": "0-1",
@@ -187,7 +187,7 @@ def test_crear_movimiento_rechaza_origen_o_destino_fuera_del_tablero(api_client,
         "id_movimiento": "M_API_2",
         "jugador": jugador.id_jugador,
         "pieza": pieza.id_pieza,
-        "turno": turno.id_turno,
+        "ronda": ronda.id_ronda,
         "partida": partida.id_partida,
         "origen": "0-0",
         "destino": "99-99",
@@ -197,7 +197,7 @@ def test_crear_movimiento_rechaza_origen_o_destino_fuera_del_tablero(api_client,
 
 
 @pytest.mark.django_db
-def test_crear_movimiento_rechaza_origen_que_no_coincide_con_posicion_de_pieza(api_client, make_jugador, make_partida, make_turno, make_pieza):
+def test_crear_movimiento_rechaza_origen_que_no_coincide_con_posicion_de_pieza(api_client, make_jugador, make_partida, make_ronda, make_pieza):
     jugador = make_jugador(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
     partida = make_partida(id_partida="P_API", numero_jugadores=2)
     pieza = make_pieza(
@@ -207,13 +207,13 @@ def test_crear_movimiento_rechaza_origen_que_no_coincide_con_posicion_de_pieza(a
         jugador=jugador,
         partida=partida,
     )
-    turno = make_turno(id_turno="T_API", jugador=jugador, numero=1, partida=partida)
+    ronda = make_ronda(id_ronda="R_API", jugador=jugador, numero=1, partida=partida)
 
     payload = {
         "id_movimiento": "M_API_ORIGEN_MAL",
         "jugador": jugador.id_jugador,
         "pieza": pieza.id_pieza,
-        "turno": turno.id_turno,
+        "ronda": ronda.id_ronda,
         "partida": partida.id_partida,
         "origen": "0-1",
         "destino": "0-2",
@@ -223,7 +223,7 @@ def test_crear_movimiento_rechaza_origen_que_no_coincide_con_posicion_de_pieza(a
 
 
 @pytest.mark.django_db
-def test_crear_movimiento_rechaza_destino_ocupado(api_client, make_jugador, make_partida, make_turno, make_pieza):
+def test_crear_movimiento_rechaza_destino_ocupado(api_client, make_jugador, make_partida, make_ronda, make_pieza):
     jugador = make_jugador(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
     partida = make_partida(id_partida="P_API", numero_jugadores=2)
     pieza = make_pieza(
@@ -240,13 +240,13 @@ def test_crear_movimiento_rechaza_destino_ocupado(api_client, make_jugador, make
         jugador=jugador,
         partida=partida,
     )
-    turno = make_turno(id_turno="T_API", jugador=jugador, numero=1, partida=partida)
+    ronda = make_ronda(id_ronda="R_API", jugador=jugador, numero=1, partida=partida)
 
     payload = {
         "id_movimiento": "M_API_DESTINO_OCUPADO",
         "jugador": jugador.id_jugador,
         "pieza": pieza.id_pieza,
-        "turno": turno.id_turno,
+        "ronda": ronda.id_ronda,
         "partida": partida.id_partida,
         "origen": "0-0",
         "destino": "0-1",
@@ -256,7 +256,7 @@ def test_crear_movimiento_rechaza_destino_ocupado(api_client, make_jugador, make
 
 
 @pytest.mark.django_db
-def test_crear_movimiento_no_rechaza_destino_ocupado_en_otra_partida(api_client, make_jugador, make_partida, make_turno, make_pieza):
+def test_crear_movimiento_no_rechaza_destino_ocupado_en_otra_partida(api_client, make_jugador, make_partida, make_ronda, make_pieza):
     jugador = make_jugador(id_jugador="J_API", nombre="Ana", humano=True, numero=1)
     partida1 = make_partida(id_partida="P_API_1", numero_jugadores=2)
     partida2 = make_partida(id_partida="P_API_2", numero_jugadores=2)
@@ -276,13 +276,13 @@ def test_crear_movimiento_no_rechaza_destino_ocupado_en_otra_partida(api_client,
         jugador=jugador,
         partida=partida1,
     )
-    turno = make_turno(id_turno="T_API", jugador=jugador, numero=1, partida=partida1)
+    ronda = make_ronda(id_ronda="R_API", jugador=jugador, numero=1, partida=partida1)
 
     payload = {
         "id_movimiento": "M_API_OK_OTRA_PARTIDA",
         "jugador": jugador.id_jugador,
         "pieza": pieza.id_pieza,
-        "turno": turno.id_turno,
+        "ronda": ronda.id_ronda,
         "partida": partida1.id_partida,
         "origen": "0-0",
         "destino": "0-1",
@@ -387,7 +387,7 @@ def test_accion_actualizar_posiciones_iniciales_ok(api_client):
 
 
 @pytest.mark.django_db
-def test_accion_end_game_finaliza_partida_y_turno(api_client):
+def test_accion_end_game_finaliza_partida_y_ronda(api_client):
     res = _start_game(api_client)
     assert res.status_code == 201
     partida_id = res.json()["id_partida"]
@@ -398,14 +398,14 @@ def test_accion_end_game_finaliza_partida_y_turno(api_client):
     assert data2["estado"] == "FINALIZADA"
     assert data2.get("fecha_fin") is not None
 
-    turno = Turno.objects.filter(partida_id=partida_id).order_by("numero").first()
-    assert turno is not None
-    turno.refresh_from_db()
-    assert turno.fin is not None
+    ronda = Ronda.objects.filter(partida_id=partida_id).order_by("numero").first()
+    assert ronda is not None
+    ronda.refresh_from_db()
+    assert ronda.fin is not None
 
 
 @pytest.mark.django_db
-def test_accion_avanzar_turno_crea_nuevo_turno(api_client):
+def test_accion_avanzar_ronda_crea_nueva_ronda(api_client):
     res = _start_game(api_client)
     assert res.status_code == 201
     data = res.json()
@@ -415,14 +415,14 @@ def test_accion_avanzar_turno_crea_nuevo_turno(api_client):
     assert len(jugador_ids) == 2
 
     payload = {
-        "oldTurn": {"final": None},
-        "newTurnCreated": {"numero": 2, "jugador_id": jugador_ids[1]},
+        "oldRound": {"final": None},
+        "newRoundCreated": {"numero": 2, "jugador_id": jugador_ids[1]},
     }
-    res2 = api_client.post(f"/api/partidas/{partida_id}/avanzar_turno/", payload, format="json")
+    res2 = api_client.post(f"/api/partidas/{partida_id}/avanzar_ronda/", payload, format="json")
     assert res2.status_code == 201
     data2 = res2.json()
-    assert data2["nuevo_turno"]["numero"] == 2
-    assert data2["nuevo_turno"]["jugador"] == jugador_ids[1]
+    assert data2["nueva_ronda"]["numero"] == 2
+    assert data2["nueva_ronda"]["jugador"] == jugador_ids[1]
 
 
 @pytest.mark.django_db
@@ -439,7 +439,7 @@ def test_delete_partida_elimina_partida_y_jugadores_asociados(api_client):
     assert Partida.objects.filter(id_partida=partida_id).count() == 0
     assert JugadorPartida.objects.filter(partida_id=partida_id).count() == 0
     assert Pieza.objects.filter(partida_id=partida_id).count() == 0
-    assert Turno.objects.filter(partida_id=partida_id).count() == 0
+    assert Ronda.objects.filter(partida_id=partida_id).count() == 0
     assert Movimiento.objects.filter(partida_id=partida_id).count() == 0
     assert Jugador.objects.filter(id_jugador__in=jugador_ids).count() == 0
 
@@ -447,7 +447,11 @@ def test_delete_partida_elimina_partida_y_jugadores_asociados(api_client):
 @pytest.mark.django_db
 def test_crear_ia_rechaza_nivel_fuera_de_1_2(api_client, make_jugador):
     j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
-    res = api_client.post("/api/ia/", {"jugador": j.id_jugador, "nivel": 3}, format="json")
+    res = api_client.post(
+        "/api/agentes-inteligentes/",
+        {"jugador": j.id_jugador, "nivel": 3},
+        format="json",
+    )
     assert res.status_code == 400
 
 
@@ -464,10 +468,10 @@ def test_crear_jugador_ia_normaliza_nombre(api_client):
 
 
 @pytest.mark.django_db
-def test_chatbot_send_message_responde(api_client, make_jugador, make_ia):
+def test_chatbot_send_message_responde(api_client, make_jugador, make_agente_inteligente):
     j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
-    ia = make_ia(jugador=j, nivel=1)
-    chatbot = Chatbot.objects.create(ia=ia, memoria={}, contexto={})
+    agente = make_agente_inteligente(jugador=j, nivel=1)
+    chatbot = Chatbot.objects.create(agente_inteligente=agente, memoria={}, contexto={})
 
     res = api_client.post(f"/api/chatbot/{chatbot.pk}/send_message/", {"mensaje": "hola"}, format="json")
     assert res.status_code == 200
