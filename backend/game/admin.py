@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida
+from .models import Jugador, Partida, Pieza, Ronda, Movimiento, AgenteInteligente, Chatbot, JugadorPartida
 
 
 @admin.register(Jugador)
@@ -19,35 +19,35 @@ class PartidaAdmin(admin.ModelAdmin):
 
 @admin.register(Pieza)
 class PiezaAdmin(admin.ModelAdmin):
-    list_display = ['id_pieza', 'tipo', 'posicion', 'jugador', 'ia', 'chatbot']
+    list_display = ['id_pieza', 'tipo', 'posicion', 'jugador', 'chatbot']
     list_filter = ['tipo', 'jugador']
     search_fields = ['id_pieza', 'posicion']
 
 
-@admin.register(Turno)
-class TurnoAdmin(admin.ModelAdmin):
-    list_display = ['id_turno', 'numero', 'jugador', 'partida', 'inicio', 'fin']
+@admin.register(Ronda)
+class RondaAdmin(admin.ModelAdmin):
+    list_display = ['id_ronda', 'numero', 'jugador', 'partida', 'inicio', 'fin']
     list_filter = ['jugador', 'partida']
-    search_fields = ['id_turno']
+    search_fields = ['id_ronda']
     date_hierarchy = 'inicio'
 
 
 @admin.register(Movimiento)
 class MovimientoAdmin(admin.ModelAdmin):
-    list_display = ['id_movimiento', 'jugador', 'pieza', 'turno', 'partida', 'origen', 'destino']
+    list_display = ['id_movimiento', 'jugador', 'pieza', 'ronda', 'partida', 'origen', 'destino']
     list_filter = ['jugador', 'partida']
     search_fields = ['id_movimiento', 'origen', 'destino']
 
 
-@admin.register(IA)
-class IAAdmin(admin.ModelAdmin):
+@admin.register(AgenteInteligente)
+class AgenteInteligenteAdmin(admin.ModelAdmin):
     list_display = ['jugador', 'nivel']
     list_filter = ['nivel']
 
 
 @admin.register(Chatbot)
 class ChatbotAdmin(admin.ModelAdmin):
-    list_display = ['id', 'ia']
+    list_display = ['id', 'agente_inteligente']
 
 
 @admin.register(JugadorPartida)

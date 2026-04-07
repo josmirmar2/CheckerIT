@@ -7,7 +7,7 @@ from typing import Dict, Iterable, List, Optional, Tuple
 from montecarlo.montecarlo import MonteCarlo
 from montecarlo.node import Node
 
-from ..models import JugadorPartida, Movimiento, Pieza, Turno
+from ..models import JugadorPartida, Movimiento, Pieza, Ronda
 from .max_agent import (AXIAL_DIRECTIONS,GOAL_POSITIONS,POSITION_TO_CARTESIAN,_axial_from_key,_distance_to_goal,_key_from_axial,_parse_punta,_target_punta)
 
 # Nota de diseño
@@ -296,13 +296,13 @@ def legal_turn_moves(
 
 
 class MCTSAgent:
-    """IA 'Difícil' basada en MCTS.
+    """Agente Inteligente 'Difícil' basado en MCTS.
 
     Integra la librería `imparaai-montecarlo` mediante:
     - `child_finder`: genera los hijos (jugadas posibles) de un nodo.
     - `node_evaluator`: evalúa un estado desde la perspectiva del jugador raíz.
 
-    La salida está pensada para `IAViewSet.sugerir_movimiento`: si el `TurnMove`
+    La salida está pensada para `AgenteInteligenteViewSet.sugerir_movimiento`: si el `TurnMove`
     incluye una cadena, se emite `secuencia` para que el backend registre todos los
     saltos como un único movimiento de turno.
     """
@@ -330,16 +330,16 @@ class MCTSAgent:
         if not partida_id or not jugador_id:
             raise ValueError("partida_id y jugador_id son requeridos")
 
-        # Turno activo debe corresponder al jugador
-        turno_actual = (
-            Turno.objects.filter(partida_id=partida_id, fin__isnull=True)
+        # Ronda activa debe corresponder al jugador
+        ronda_actual = (
+            Ronda.objects.filter(partida_id=partida_id, fin__isnull=True)
             .order_by("numero")
             .first()
         )
-        if not turno_actual:
-            raise ValueError("No hay turno activo para la partida")
-        if str(turno_actual.jugador_id) != str(jugador_id):
-            raise ValueError("No es el turno de este jugador")
+        if not ronda_actual:
+            raise ValueError("No hay ronda activa para la partida")
+        if str(ronda_actual.jugador_id) != str(jugador_id):
+            raise ValueError("No es la ronda de este jugador")
 
         piezas = list(Pieza.objects.filter(partida_id=partida_id))
         if not piezas:
@@ -463,8 +463,8 @@ class MCTSAgent:
         # anti-oscillación leve: evita deshacer el último movimiento si hay alternativas
         last_move = (
             Movimiento.objects.filter(partida_id=partida_id, jugador_id=jugador_id)
-            .select_related("turno", "pieza")
-            .order_by("-turno__numero", "-id_movimiento")
+            .select_related("ronda", "pieza")
+            .order_by("-ronda__numero", "-id_movimiento")
             .first()
         )
         if last_move and chosen_move.sequence == (str(last_move.destino), str(last_move.origen)):

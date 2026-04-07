@@ -5,7 +5,7 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
-from game.models import Chatbot, IA, Jugador, JugadorPartida, Movimiento, Partida, Pieza, Turno
+from game.models import AgenteInteligente, Chatbot, Jugador, JugadorPartida, Movimiento, Partida, Pieza, Ronda
 
 
 # ============================================================================
@@ -33,11 +33,11 @@ class TestEntidadesBasico:
         assert "Ana" in str(pieza)
 
     @pytest.mark.django_db
-    def test_turno_str_formato(self, make_jugador, make_partida, make_turno):
+    def test_ronda_str_formato(self, make_jugador, make_partida, make_ronda):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
         p = make_partida(id_partida="P1", numero_jugadores=2)
-        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
-        assert str(t) == "Turno 1 de Ana"
+        r = make_ronda(id_ronda="R1", jugador=j, numero=1, partida=p)
+        assert str(r) == "Ronda 1 de Ana"
 
     @pytest.mark.django_db
     def test_movimiento_str_incluye_origen_destino_y_pieza(self, make_partida, make_jugador, make_movimiento):
@@ -98,7 +98,6 @@ class TestPropiedadesYValidaciones:
         )
         assert pieza.jugador_id == "J1"
         assert pieza.partida_id is None
-        assert pieza.ia_id is None
         assert pieza.chatbot_id is None
 
     @pytest.mark.django_db
@@ -147,10 +146,10 @@ class TestPropiedadesYValidaciones:
             pieza.full_clean()
 
     @pytest.mark.django_db
-    def test_turno_inicio_se_asigna_y_fin_es_nullable(self, make_jugador, make_partida, make_turno):
+    def test_ronda_inicio_se_asigna_y_fin_es_nullable(self, make_jugador, make_partida, make_ronda):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
         p = make_partida(id_partida="P1", numero_jugadores=2)
-        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
+        t = make_ronda(id_ronda="R1", jugador=j, numero=1, partida=p)
 
         assert t.inicio is not None
         assert t.fin is None
@@ -162,10 +161,10 @@ class TestPropiedadesYValidaciones:
         assert t.fin > t.inicio
 
     @pytest.mark.django_db
-    def test_turno_fin_posterior_a_inicio_forzado_por_bd(self, make_jugador, make_partida, make_turno):
+    def test_ronda_fin_posterior_a_inicio_forzado_por_bd(self, make_jugador, make_partida, make_ronda):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
         p = make_partida(id_partida="P1", numero_jugadores=2)
-        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
+        t = make_ronda(id_ronda="R1", jugador=j, numero=1, partida=p)
 
         with pytest.raises(IntegrityError):
             with transaction.atomic():
@@ -173,29 +172,29 @@ class TestPropiedadesYValidaciones:
                 t.save(update_fields=["fin"])
 
     @pytest.mark.django_db
-    def test_turno_requiere_jugador_y_partida(self, make_jugador, make_partida, make_turno):
+    def test_ronda_requiere_jugador_y_partida(self, make_jugador, make_partida, make_ronda):
         p = make_partida(id_partida="P1", numero_jugadores=2)
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
 
         with pytest.raises(IntegrityError):
             with transaction.atomic():
-                make_turno(id_turno="T_NO_PLAYER", partida=p, numero=1)
+                make_ronda(id_ronda="R_NO_PLAYER", partida=p, numero=1)
 
         with pytest.raises(IntegrityError):
             with transaction.atomic():
-                make_turno(id_turno="T_NO_PARTIDA", jugador=j, numero=1)
+                make_ronda(id_ronda="R_NO_PARTIDA", jugador=j, numero=1)
 
     @pytest.mark.django_db
-    def test_movimiento_campos_obligatorios(self, make_jugador, make_partida, make_pieza, make_turno):
+    def test_movimiento_campos_obligatorios(self, make_jugador, make_partida, make_pieza, make_ronda):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
         p = make_partida(id_partida="P1", numero_jugadores=2)
         pieza = make_pieza(id_pieza="X1", tipo="punta-0", posicion="0-0", jugador=j, partida=p)
-        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
+        t = make_ronda(id_ronda="R1", jugador=j, numero=1, partida=p)
 
         base = {
             "jugador": j,
             "pieza": pieza,
-            "turno": t,
+            "ronda": t,
             "partida": p,
             "origen": "0-0",
             "destino": "0-1",
@@ -204,7 +203,7 @@ class TestPropiedadesYValidaciones:
         cases = [
             ("jugador", IntegrityError),
             ("pieza", IntegrityError),
-            ("turno", IntegrityError),
+            ("ronda", IntegrityError),
             ("origen", IntegrityError),
             ("destino", IntegrityError),
             ("partida", IntegrityError),
@@ -229,17 +228,17 @@ class TestPropiedadesYValidaciones:
                         )
 
     @pytest.mark.django_db
-    def test_movimiento_origen_y_destino_deben_estar_en_tablero(self, make_jugador, make_partida, make_pieza, make_turno, make_movimiento):
+    def test_movimiento_origen_y_destino_deben_estar_en_tablero(self, make_jugador, make_partida, make_pieza, make_ronda, make_movimiento):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
         p = make_partida(id_partida="P1", numero_jugadores=2)
         pieza = make_pieza(id_pieza="X1", tipo="punta-0", posicion="0-0", jugador=j, partida=p)
-        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
+        t = make_ronda(id_ronda="R1", jugador=j, numero=1, partida=p)
 
         m1 = make_movimiento(
             id_movimiento="M_BAD_ORIGEN",
             jugador=j,
             pieza=pieza,
-            turno=t,
+            ronda=t,
             partida=p,
             origen="99-99",
             destino="0-1",
@@ -251,7 +250,7 @@ class TestPropiedadesYValidaciones:
             id_movimiento="M_BAD_DESTINO",
             jugador=j,
             pieza=pieza,
-            turno=t,
+            ronda=t,
             partida=p,
             origen="0-0",
             destino="99-99",
@@ -260,17 +259,17 @@ class TestPropiedadesYValidaciones:
             m2.full_clean()
 
     @pytest.mark.django_db
-    def test_movimiento_origen_debe_coincidir_con_posicion_de_pieza(self, make_jugador, make_partida, make_pieza, make_turno, make_movimiento):
+    def test_movimiento_origen_debe_coincidir_con_posicion_de_pieza(self, make_jugador, make_partida, make_pieza, make_ronda, make_movimiento):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
         p = make_partida(id_partida="P1", numero_jugadores=2)
         pieza = make_pieza(id_pieza="X1", tipo="punta-0", posicion="0-0", jugador=j, partida=p)
-        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
+        t = make_ronda(id_ronda="R1", jugador=j, numero=1, partida=p)
         
         m = make_movimiento(
             id_movimiento="M_BAD_ORIGEN_MATCH",
             jugador=j,
             pieza=pieza,
-            turno=t,
+            ronda=t,
             partida=p,
             origen="0-1",
             destino="0-2",
@@ -279,11 +278,11 @@ class TestPropiedadesYValidaciones:
             m.full_clean()
 
     @pytest.mark.django_db
-    def test_movimiento_destino_no_debe_estar_ocupado_en_misma_partida(self, make_jugador, make_partida, make_pieza, make_turno, make_movimiento):
+    def test_movimiento_destino_no_debe_estar_ocupado_en_misma_partida(self, make_jugador, make_partida, make_pieza, make_ronda, make_movimiento):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
         p = make_partida(id_partida="P1", numero_jugadores=2)
         pieza = make_pieza(id_pieza="X1", tipo="punta-0", posicion="0-0", jugador=j, partida=p)
-        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
+        t = make_ronda(id_ronda="R1", jugador=j, numero=1, partida=p)
 
         make_pieza( id_pieza="X2", tipo="punta-0", posicion="0-1", jugador=j, partida=p)
 
@@ -291,7 +290,7 @@ class TestPropiedadesYValidaciones:
             id_movimiento="M_DESTINO_OCUPADO",
             jugador=j,
             pieza=pieza,
-            turno=t,
+            ronda=t,
             partida=p,
             origen="0-0",
             destino="0-1",
@@ -300,7 +299,7 @@ class TestPropiedadesYValidaciones:
             m.full_clean()
 
     @pytest.mark.django_db
-    def test_movimiento_destino_ocupado_en_otra_partida_no_debe_fallar(self, make_jugador, make_partida, make_pieza, make_turno, make_movimiento):
+    def test_movimiento_destino_ocupado_en_otra_partida_no_debe_fallar(self, make_jugador, make_partida, make_pieza, make_ronda, make_movimiento):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
         p1 = make_partida(id_partida="P1", numero_jugadores=2)
         p2 = make_partida(id_partida="P2", numero_jugadores=2)
@@ -308,13 +307,13 @@ class TestPropiedadesYValidaciones:
         make_pieza(id_pieza="X_OTHER", tipo="punta-0", posicion="0-1", jugador=j, partida=p2)
 
         pieza_p1 = make_pieza(id_pieza="X1", tipo="punta-0", posicion="0-0", jugador=j, partida=p1)
-        t1 = make_turno(id_turno="T1", jugador=j, numero=1, partida=p1)
+        t1 = make_ronda(id_ronda="R1", jugador=j, numero=1, partida=p1)
 
         m = make_movimiento(
             id_movimiento="M_OK_OTRA_PARTIDA",
             jugador=j,
             pieza=pieza_p1,
-            turno=t1,
+            ronda=t1,
             partida=p1,
             origen="0-0",
             destino="0-1",
@@ -325,27 +324,27 @@ class TestPropiedadesYValidaciones:
     def test_ia_nivel_solo_puede_ser_1_o_2_full_clean(self, make_jugador):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
 
-        ia_bad_0 = IA(jugador=j, nivel=0)
+        ia_bad_0 = AgenteInteligente(jugador=j, nivel=0)
         with pytest.raises(ValidationError):
             ia_bad_0.full_clean()
 
-        ia_bad_3 = IA(jugador=j, nivel=3)
+        ia_bad_3 = AgenteInteligente(jugador=j, nivel=3)
         with pytest.raises(ValidationError):
             ia_bad_3.full_clean()
 
-        ia_ok_1 = IA(jugador=j, nivel=1)
+        ia_ok_1 = AgenteInteligente(jugador=j, nivel=1)
         ia_ok_1.full_clean()
 
-        ia_ok_2 = IA(jugador=j, nivel=2)
+        ia_ok_2 = AgenteInteligente(jugador=j, nivel=2)
         ia_ok_2.full_clean()
 
     @pytest.mark.django_db
-    def test_ia_nivel_solo_puede_ser_1_o_2_forzado_por_bd(self, make_jugador, make_ia):
+    def test_ia_nivel_solo_puede_ser_1_o_2_forzado_por_bd(self, make_jugador, make_agente_inteligente):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
 
         with pytest.raises(IntegrityError):
             with transaction.atomic():
-                make_ia(jugador=j, nivel=3)
+                make_agente_inteligente(jugador=j, nivel=3)
 
     @pytest.mark.django_db
     def test_jugador_partida_orden_participacion_debe_ser_entre_1_y_6_full_clean(self, make_jugador, make_partida):
@@ -397,27 +396,27 @@ class TestRelacionesEntreEntidades:
                 JugadorPartida.objects.create(jugador=j2, partida=p, orden_participacion=1)
 
     @pytest.mark.django_db
-    def test_turno_related_name_funciona(self, make_jugador, make_partida, make_turno):
+    def test_ronda_related_name_funciona(self, make_jugador, make_partida, make_ronda):
         p = make_partida(id_partida="P1", numero_jugadores=2)
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
-        make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
-        make_turno(id_turno="T2", jugador=j, numero=2, partida=p)
+        make_ronda(id_ronda="R1", jugador=j, numero=1, partida=p)
+        make_ronda(id_ronda="R2", jugador=j, numero=2, partida=p)
 
-        assert j.turnos.count() == 2
-        assert p.turnos.count() == 2
+        assert j.rondas.count() == 2
+        assert p.rondas.count() == 2
 
     @pytest.mark.django_db
-    def test_movimiento_related_names_funcionan(self, make_jugador, make_partida, make_pieza, make_turno, make_movimiento):
+    def test_movimiento_related_names_funcionan(self, make_jugador, make_partida, make_pieza, make_ronda, make_movimiento):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
         p = make_partida(id_partida="P1", numero_jugadores=2)
         pieza = make_pieza(id_pieza="X1", tipo="punta-0", posicion="0-0", jugador=j, partida=p)
-        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
+        t = make_ronda(id_ronda="R1", jugador=j, numero=1, partida=p)
         
         make_movimiento(
             id_movimiento="M1",
             jugador=j,
             pieza=pieza,
-            turno=t,
+            ronda=t,
             partida=p,
             origen="0-0",
             destino="0-1",
@@ -453,53 +452,51 @@ class TestRelacionesEntreEntidades:
         assert p.piezas.count() == 1
 
     @pytest.mark.django_db
-    def test_one_to_one_jugador_ia_se_accede_y_pk_coincide(self, make_jugador, make_ia):
+    def test_one_to_one_jugador_ia_se_accede_y_pk_coincide(self, make_jugador, make_agente_inteligente):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
-        ia = make_ia(jugador=j, nivel=2)
+        agente = make_agente_inteligente(jugador=j, nivel=2)
 
-        assert j.ia == ia
-        assert ia.pk == j.pk
+        assert j.agente_inteligente == agente
+        assert agente.pk == j.pk
 
     @pytest.mark.django_db
-    def test_one_to_one_chatbot_desde_ia_y_chatbot_puede_ser_null(self, make_jugador, make_ia):
+    def test_one_to_one_chatbot_desde_ia_y_chatbot_puede_ser_null(self, make_jugador, make_agente_inteligente):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
-        ia = make_ia(jugador=j, nivel=1)
+        agente = make_agente_inteligente(jugador=j, nivel=1)
 
-        chatbot = Chatbot.objects.create(ia=ia, memoria={"a": 1}, contexto={"b": 2})
-        assert ia.chatbot == chatbot
+        chatbot = Chatbot.objects.create(agente_inteligente=agente, memoria={"a": 1}, contexto={"b": 2})
+        assert agente.chatbot == chatbot
 
         chatbot_sin_ia = Chatbot.objects.create(memoria={}, contexto={})
-        assert chatbot_sin_ia.ia is None
+        assert chatbot_sin_ia.agente_inteligente is None
 
     @pytest.mark.django_db
-    def test_related_name_piezas_desde_ia_y_chatbot_funciona(self, make_jugador, make_ia, make_partida, make_pieza):
+    def test_related_name_piezas_desde_chatbot_funciona(self, make_jugador, make_agente_inteligente, make_partida, make_pieza):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
-        ia = make_ia(jugador=j, nivel=2)
-        chatbot = Chatbot.objects.create(ia=ia, memoria={}, contexto={})
+        agente = make_agente_inteligente(jugador=j, nivel=2)
+        chatbot = Chatbot.objects.create(agente_inteligente=agente, memoria={}, contexto={})
         p = make_partida(id_partida="P1", numero_jugadores=2)
 
         make_pieza(
-            id_pieza="X_IA",
+            id_pieza="X_CB",
             tipo="punta-0",
             posicion="0-0",
             jugador=j,
             partida=p,
-            ia=ia,
+            chatbot=chatbot,
         )
         make_pieza(
-            id_pieza="X_CB",
+            id_pieza="X_NO_CB",
             tipo="punta-0",
             posicion="0-1",
             jugador=j,
             partida=p,
-            chatbot=chatbot,
         )
 
-        assert ia.piezas.count() == 1
         assert chatbot.piezas.count() == 1
 
     @pytest.mark.django_db
-    def test_borrado_partida_hace_cascade_a_turnos_movimientos_piezas_y_through(self, make_jugador, make_partida, make_pieza, make_turno, make_movimiento):
+    def test_borrado_partida_hace_cascade_a_turnos_movimientos_piezas_y_through(self, make_jugador, make_partida, make_pieza, make_ronda, make_movimiento):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
         p = make_partida(id_partida="P1", numero_jugadores=2)
         JugadorPartida.objects.create(jugador=j, partida=p, orden_participacion=1)
@@ -511,34 +508,34 @@ class TestRelacionesEntreEntidades:
             jugador=j,
             partida=p,
         )
-        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
+        t = make_ronda(id_ronda="R1", jugador=j, numero=1, partida=p)
         make_movimiento(
             id_movimiento="M1",
             jugador=j,
             pieza=pieza,
-            turno=t,
+            ronda=t,
             partida=p,
             origen="0-0",
             destino="0-1",
         )
 
-        assert Turno.objects.filter(partida=p).count() == 1
+        assert Ronda.objects.filter(partida=p).count() == 1
         assert Pieza.objects.filter(partida=p).count() == 1
         assert Movimiento.objects.filter(partida=p).count() == 1
         assert JugadorPartida.objects.filter(partida=p).count() == 1
 
         p.delete()
 
-        assert Turno.objects.filter(id_turno="T1").count() == 0
+        assert Ronda.objects.filter(id_ronda="R1").count() == 0
         assert Pieza.objects.filter(id_pieza="X1").count() == 0
         assert Movimiento.objects.filter(id_movimiento="M1").count() == 0
         assert JugadorPartida.objects.filter(jugador=j).count() == 0
 
     @pytest.mark.django_db
-    def test_borrado_jugador_hace_cascade_a_ia_chatbot_y_dependencias(self, make_jugador, make_ia, make_partida, make_pieza, make_turno, make_movimiento):
+    def test_borrado_jugador_hace_cascade_a_ia_chatbot_y_dependencias(self, make_jugador, make_agente_inteligente, make_partida, make_pieza, make_ronda, make_movimiento):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
-        ia = make_ia(jugador=j, nivel=2)
-        Chatbot.objects.create(ia=ia, memoria={}, contexto={})
+        agente = make_agente_inteligente(jugador=j, nivel=2)
+        Chatbot.objects.create(agente_inteligente=agente, memoria={}, contexto={})
         p = make_partida(id_partida="P1", numero_jugadores=2)
         JugadorPartida.objects.create(jugador=j, partida=p, orden_participacion=1)
 
@@ -549,12 +546,12 @@ class TestRelacionesEntreEntidades:
             jugador=j,
             partida=p,
         )
-        t = make_turno(id_turno="T1", jugador=j, numero=1, partida=p)
+        t = make_ronda(id_ronda="R1", jugador=j, numero=1, partida=p)
         make_movimiento(
             id_movimiento="M1",
             jugador=j,
             pieza=pieza,
-            turno=t,
+            ronda=t,
             partida=p,
             origen="0-0",
             destino="0-1",
@@ -562,44 +559,43 @@ class TestRelacionesEntreEntidades:
 
         j.delete()
 
-        assert IA.objects.filter(pk="J1").count() == 0
+        assert AgenteInteligente.objects.filter(pk="J1").count() == 0
         assert Chatbot.objects.count() == 0
         assert Pieza.objects.count() == 0
-        assert Turno.objects.count() == 0
+        assert Ronda.objects.count() == 0
         assert Movimiento.objects.count() == 0
         assert JugadorPartida.objects.count() == 0
 
     @pytest.mark.django_db
-    def test_borrado_ia_hace_cascade_a_chatbot_y_piezas_asociadas(self, make_jugador, make_ia, make_partida, make_pieza):
+    def test_borrado_ia_hace_cascade_a_chatbot_pero_no_a_piezas(self, make_jugador, make_agente_inteligente, make_pieza):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
-        ia = make_ia(jugador=j, nivel=2)
-        Chatbot.objects.create(ia=ia, memoria={}, contexto={})
+        agente = make_agente_inteligente(jugador=j, nivel=2)
+        Chatbot.objects.create(agente_inteligente=agente, memoria={}, contexto={})
 
-        pieza_ia = make_pieza(
-            id_pieza="X_IA",
+        pieza_1 = make_pieza(
+            id_pieza="X1",
             tipo="punta-0",
             posicion="0-0",
             jugador=j,
-            ia=ia,
         )
-        pieza_sin_ia = make_pieza(
-            id_pieza="X_NO_IA",
+        pieza_2 = make_pieza(
+            id_pieza="X2",
             tipo="punta-0",
             posicion="0-1",
             jugador=j,
         )
 
-        ia.delete()
+        agente.delete()
 
         assert Chatbot.objects.count() == 0
-        assert Pieza.objects.filter(id_pieza=pieza_ia.id_pieza).count() == 0
-        assert Pieza.objects.filter(id_pieza=pieza_sin_ia.id_pieza).count() == 1
+        assert Pieza.objects.filter(id_pieza=pieza_1.id_pieza).count() == 1
+        assert Pieza.objects.filter(id_pieza=pieza_2.id_pieza).count() == 1
 
     @pytest.mark.django_db
-    def test_borrado_chatbot_hace_cascade_a_piezas_asociadas(self, make_ia, make_jugador, make_pieza):
+    def test_borrado_chatbot_hace_cascade_a_piezas_asociadas(self, make_agente_inteligente, make_jugador, make_pieza):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
-        ia = make_ia(jugador=j, nivel=2)
-        chatbot = Chatbot.objects.create(ia=ia, memoria={}, contexto={})
+        agente = make_agente_inteligente(jugador=j, nivel=2)
+        chatbot = Chatbot.objects.create(agente_inteligente=agente, memoria={}, contexto={})
 
         pieza_cb = make_pieza(
             id_pieza="X_CB",

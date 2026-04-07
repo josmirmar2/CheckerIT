@@ -22,7 +22,7 @@ django.setup()
 from django.utils import timezone    
 
 from game.ai.max_agent import MaxHeuristicAgent    
-from game.models import IA, Jugador, JugadorPartida, Movimiento, Partida, Pieza, Turno    
+from game.models import AgenteInteligente, Jugador, JugadorPartida, Movimiento, Partida, Pieza, Ronda    
 from game.views import get_occupied_positions, validate_move    
 
 
@@ -56,15 +56,15 @@ def main() -> int:
     # 1) Crear partida y jugadores
     partida = Partida.objects.create(id_partida=_new_id("PHEUR"), numero_jugadores=2)
 
-    j1 = Jugador.objects.create(id_jugador=_new_id("JIA"), nombre="IA 1", humano=False, numero=1)
+    j1 = Jugador.objects.create(id_jugador=_new_id("JIA"), nombre="Agente Inteligente 1", humano=False, numero=1)
     j2 = Jugador.objects.create(id_jugador=_new_id("JH"), nombre="Humano 2", humano=True, numero=2)
 
-    IA.objects.create(jugador=j1, nivel=1) 
+    AgenteInteligente.objects.create(jugador=j1, nivel=1) 
 
     JugadorPartida.objects.create(jugador=j1, partida=partida, orden_participacion=1)
     JugadorPartida.objects.create(jugador=j2, partida=partida, orden_participacion=2)
 
-    turno = Turno.objects.create(id_turno=f"T1_{partida.id_partida}", jugador=j1, numero=1, partida=partida)
+    ronda = Ronda.objects.create(id_ronda=f"R1_{partida.id_partida}", jugador=j1, numero=1, partida=partida)
 
     # 2) Crear piezas. Usamos coordenadas conocidas (aparecen en posiciones iniciales del backend).
     #    La heurística elegirá una jugada legal; no forzamos que sea salto.
@@ -92,7 +92,7 @@ def main() -> int:
     )
 
     print(f"Partida: {partida.id_partida}")
-    print(f"Turno:   {turno.id_turno} (jugador IA: {j1.id_jugador})")
+    print(f"Ronda:   {ronda.id_ronda} (jugador agente Inteligente: {j1.id_jugador})")
 
     _print_header("HEURÍSTICA (SIN REQUESTS) - SUGERENCIA")
 
@@ -144,7 +144,7 @@ def main() -> int:
             id_movimiento=_new_id(f"M{i}"),
             jugador=j1,
             pieza=pieza,
-            turno=turno,
+            ronda=ronda,
             partida=partida,
             origen=origin,
             destino=dest,

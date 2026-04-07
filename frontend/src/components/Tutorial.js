@@ -41,7 +41,7 @@ function Tutorial() {
               </li>
               <li>
                 <strong>Saltos Múltiples:</strong> Si después de un salto puedes 
-                realizar otro, puedes continuar saltando en el mismo turno.
+                realizar otro, puedes continuar saltando en la misma ronda.
               </li>
               <li>
                 <strong>No se Captura:</strong> A diferencia de las damas 
@@ -56,7 +56,7 @@ function Tutorial() {
               <li>Selecciona una de tus piezas haciendo clic sobre ella</li>
               <li>Haz clic en la casilla destino donde quieres mover la pieza</li>
               <li>Si el movimiento es válido, la pieza se moverá automáticamente</li>
-              <li>El turno pasa al siguiente jugador</li>
+              <li>La ronda pasa al siguiente jugador</li>
             </ol>
           </section>
 

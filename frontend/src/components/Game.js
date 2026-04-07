@@ -38,11 +38,11 @@ function Game() {
   const [originalPiecePos, setOriginalPiecePos] = useState(null);
   const [undoToOriginalToken, setUndoToOriginalToken] = useState(0);
   const [initialBoardState, setInitialBoardState] = useState(null);
-  const [turnCount, setTurnCount] = useState(1);
+  const [roundCount, setRoundCount] = useState(1);
   const [moveHistory, setMoveHistory] = useState([]);
-  const [actualTurn, setActualTurn] = useState(null);
+  const [actualRound, setActualRound] = useState(null);
   const [pieceByPos, setPieceByPos] = useState(new Map());
-  const [turnStartPieceByPos, setTurnStartPieceByPos] = useState(null);
+  const [roundStartPieceByPos, setRoundStartPieceByPos] = useState(null);
   const [dbJugadores, setDbJugadores] = useState([]);
   const [isPaused, setIsPaused] = useState(false);
   const [pausedAccumMs, setPausedAccumMs] = useState(0); // tiempo total en pausa
@@ -63,10 +63,10 @@ function Game() {
   const AI_CHAIN_DELAY_MS = 200;
 
   useEffect(() => {
-    if (actualTurn?.numero) {
-      setTurnCount(actualTurn.numero);
+    if (actualRound?.numero) {
+      setRoundCount(actualRound.numero);
     }
-  }, [actualTurn?.numero]);
+  }, [actualRound?.numero]);
 
   useEffect(() => {
     isPausedRef.current = isPaused;
@@ -87,7 +87,7 @@ function Game() {
     }
     if (configJugador?.tipo === 'ia') {
       const diff = configJugador?.dificultad;
-      return diff ? `IA ${diff}` : 'IA';
+      return diff ? `Agente Inteligente ${diff}` : 'Agente Inteligente';
     }
     return 'Jugador';
   };
@@ -226,7 +226,7 @@ function Game() {
           setVictoryData({
             ganador,
             perdedores,
-            turnos: turnCount,
+            rondas: roundCount,
             tiempo: elapsed,
             totalJugadores: jugadoresConfig.length
           });
@@ -263,19 +263,19 @@ function Game() {
       fetchJugadoresPartida(partida.id_partida).then(dbJugadores => {
         setDbJugadores(dbJugadores);
         
-        fetchPrimerTurno(partida.id_partida).then(turno => {
-          if (turno?.id_turno) {
-            setActualTurn({ id_turno: turno.id_turno, numero: turno.numero, inicio: turno.inicio });
-            const turnoJugadorId = turno.jugador_id || turno.jugador?.id_jugador || turno.jugador;
-            console.log(`📍 Turno cargado: numero=${turno.numero}, jugador=${turnoJugadorId}`);
+        fetchPrimeraRonda(partida.id_partida).then(ronda => {
+          if (ronda?.id_ronda) {
+            setActualRound({ id_ronda: ronda.id_ronda, numero: ronda.numero, inicio: ronda.inicio });
+            const rondaJugadorId = ronda.jugador_id || ronda.jugador?.id_jugador || ronda.jugador;
+            console.log(`📍 Ronda cargada: numero=${ronda.numero}, jugador=${rondaJugadorId}`);
 
-            if (turnoJugadorId && dbJugadores.length > 0) {
-              const jugadorDelTurno = dbJugadores.find(j => j.id_jugador === turnoJugadorId);
-              if (jugadorDelTurno) {
-                const idx = dbJugadores.findIndex(j => j.id_jugador === jugadorDelTurno.id_jugador);
+            if (rondaJugadorId && dbJugadores.length > 0) {
+              const jugadorDeLaRonda = dbJugadores.find(j => j.id_jugador === rondaJugadorId);
+              if (jugadorDeLaRonda) {
+                const idx = dbJugadores.findIndex(j => j.id_jugador === jugadorDeLaRonda.id_jugador);
                 if (idx >= 0) {
                   setCurrentPlayerIndex(idx);
-                  console.log(`👤 Jugador establecido al jugador ${jugadorDelTurno.numero}`);
+                  console.log(`👤 Jugador establecido al jugador ${jugadorDeLaRonda.numero}`);
                 }
               }
             }
@@ -292,11 +292,11 @@ function Game() {
       setLoading(false);
       
       if (partidaData?.id_partida) {
-        // Verificar si la partida ya tiene turnos; si no, inicializar posiciones
-        fetch(`http://localhost:8000/api/turnos/?partida_id=${partidaData.id_partida}`)
+        // Verificar si la partida ya tiene rondas; si no, inicializar posiciones
+        fetch(`http://localhost:8000/api/rondas/?partida_id=${partidaData.id_partida}`)
           .then(res => res.json())
-          .then(turnos => {
-            const esPrimeraVez = !Array.isArray(turnos) || turnos.length === 0;
+          .then(rondas => {
+            const esPrimeraVez = !Array.isArray(rondas) || rondas.length === 0;
             
             if (esPrimeraVez) {
               // Solo actualizar posiciones iniciales si es la primera vez
@@ -309,11 +309,11 @@ function Game() {
                 console.log('Posiciones iniciales actualizadas:', data);
               });
             } else {
-              console.log('Partida ya tiene turnos, no se resetean posiciones');
+              console.log('Partida ya tiene rondas, no se resetean posiciones');
             }
           })
           .catch(error => {
-            console.error('Error verificando turnos:', error);
+            console.error('Error verificando rondas:', error);
           });
       }
     } else {
@@ -444,8 +444,8 @@ function Game() {
     }
   };
 
-  const fetchPrimerTurno = async (partidaId) => {
-    const res = await fetch(`http://localhost:8000/api/turnos/?partida_id=${partidaId}`);
+  const fetchPrimeraRonda = async (partidaId) => {
+    const res = await fetch(`http://localhost:8000/api/rondas/?partida_id=${partidaId}`);
     const data = await res.json();
     if (!Array.isArray(data) || data.length === 0) return null;
     const current = data.find(t => !t.fin);
@@ -497,7 +497,7 @@ function Game() {
     setAiThinking(true);
     setAiError(null);
     try {
-      const res = await fetch(`http://localhost:8000/api/ia/${jugadorDb.id_jugador}/sugerir_movimiento/`, {
+      const res = await fetch(`http://localhost:8000/api/agentes-inteligentes/${jugadorDb.id_jugador}/sugerir_movimiento/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ partida_id: partida.id_partida, permitir_simples: true })
@@ -510,7 +510,7 @@ function Game() {
 
       const data = await res.json();
       if (!data?.origen || !data?.destino) {
-        throw new Error('Respuesta de IA sin origen/destino');
+        throw new Error('Respuesta del agente Inteligente sin origen/destino');
       }
 
       const token = Date.now();
@@ -521,7 +521,7 @@ function Game() {
           .map((m) => ({ fromKey: m.origen, toKey: m.destino, piezaId: data.pieza_id || data.pieza }));
 
         if (seq.length === 0) {
-          throw new Error('Respuesta de IA con secuencia vacía');
+          throw new Error('Respuesta del agente Inteligente con secuencia vacía');
         }
 
         aiSeqTokenRef.current = token;
@@ -541,8 +541,8 @@ function Game() {
         }, AI_FIRST_DELAY_MS);
       }
     } catch (error) {
-      console.error('Error al solicitar jugada IA:', error);
-      setAiError(error.message || 'Fallo al calcular jugada de IA');
+      console.error('Error al solicitar jugada del agente Inteligente:', error);
+      setAiError(error.message || 'Fallo al calcular jugada del agente Inteligente');
       setAiMoveCmd(null);
       setAiAutoFinishToken(null);
       setAiSequence(null);
@@ -560,15 +560,15 @@ function Game() {
     if (!dbJugadores[currentPlayerIndex]?.id_jugador) return;
     if (aiMoveCmd) return;
     if (aiSequence) return; // ya tenemos secuencia pendiente
-    if (moveMade) return; // ya se movió este turno
+    if (moveMade) return; // ya se movió esta ronda
     if (isPaused) return;
 
     requestAiMove();
   }, [isAITurn, showVictory, moveMade, aiThinking, partida?.id_partida, currentPlayerIndex, dbJugadores, aiMoveCmd, aiSequence, isPaused]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const saveTurnToDatabase = async () => {
+  const saveRoundToDatabase = async () => {
     try {
-      const url = `http://localhost:8000/api/partidas/${partida.id_partida}/avanzar_turno/`;
+      const url = `http://localhost:8000/api/partidas/${partida.id_partida}/avanzar_ronda/`;
       const currentJugadorId = dbJugadores[currentPlayerIndex]?.id_jugador;
       
       const currentJugadorNumero = dbJugadores[currentPlayerIndex]?.numero || 1;
@@ -577,47 +577,47 @@ function Game() {
       const nextJugador = dbJugadores.find(j => j.numero === nextNumero);
       const nextJugadorId = nextJugador?.id_jugador || dbJugadores[0]?.id_jugador;
       
-      // Incrementar turno solo cuando vuelve al jugador 1
-      const shouldIncrementTurn = nextNumero === 1;
+      // Incrementar ronda solo cuando vuelve al jugador 1
+      const shouldIncrementRound = nextNumero === 1;
       
-      console.log(`🔄 saveTurnToDatabase: Jugador actual ${currentJugadorNumero}, Siguiente ${nextNumero}, Incrementar: ${shouldIncrementTurn}, TurnoActual: ${actualTurn?.numero}`);
+      console.log(`🔄 saveRoundToDatabase: Jugador actual ${currentJugadorNumero}, Siguiente ${nextNumero}, Incrementar: ${shouldIncrementRound}, RondaActual: ${actualRound?.numero}`);
       
-      const oldTurn = {
-        numero: actualTurn?.numero || 0,
-        inicio: actualTurn?.inicio,
+      const oldRound = {
+        numero: actualRound?.numero || 0,
+        inicio: actualRound?.inicio,
         final: new Date().toISOString(),
         jugador_id: currentJugadorId,
         partida_id: partida.id_partida,
       };
-      const newTurnCreated = {
-        numero: shouldIncrementTurn ? (actualTurn?.numero || 0) + 1 : actualTurn?.numero || 0,
+      const newRoundCreated = {
+        numero: shouldIncrementRound ? (actualRound?.numero || 0) + 1 : actualRound?.numero || 0,
         inicio: new Date().toISOString(),
         jugador_id: nextJugadorId,
         partida_id: partida.id_partida,
       };
       
-      console.log(`📊 Nuevo turno a crear: numero=${newTurnCreated.numero}`);
+      console.log(`📊 Nueva ronda a crear: numero=${newRoundCreated.numero}`);
       
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ oldTurn, newTurnCreated })
+        body: JSON.stringify({ oldRound, newRoundCreated })
       });
       if (!res.ok) {
-        console.error('Error al avanzar turno:', res.status);
+        console.error('Error al avanzar ronda:', res.status);
         return null;
       }
       const data = await res.json();
-      const nuevoTurno = data?.nuevo_turno || data;
-      console.log(`✅ Turno actualizado en servidor: numero=${nuevoTurno?.numero}`);
-      if (nuevoTurno?.id_turno) {
-        setActualTurn({ id_turno: nuevoTurno.id_turno, numero: nuevoTurno.numero, inicio: nuevoTurno.inicio });
+      const nuevaRonda = data?.nueva_ronda || data;
+      console.log(`✅ Ronda actualizada en servidor: numero=${nuevaRonda?.numero}`);
+      if (nuevaRonda?.id_ronda) {
+        setActualRound({ id_ronda: nuevaRonda.id_ronda, numero: nuevaRonda.numero, inicio: nuevaRonda.inicio });
         const nextPlayerIdx = dbJugadores.findIndex(j => j.numero === nextNumero);
         if (nextPlayerIdx >= 0) setCurrentPlayerIndex(nextPlayerIdx);
       }
-      return nuevoTurno;
+      return nuevaRonda;
     } catch (error) {
-      console.error('Error en saveTurnToDatabase:', error);
+      console.error('Error en saveRoundToDatabase:', error);
       return null;
     }
   };
@@ -625,18 +625,18 @@ function Game() {
   const saveMoveToDatabase = async (moves) => {
     try {
       const jugadorId = dbJugadores[currentPlayerIndex]?.id_jugador;
-      const turnoId = actualTurn?.id_turno;
+      const rondaId = actualRound?.id_ronda;
       const movimientos = moves
         .map(m => ({
           origen: `${m.from.col}-${m.from.fila}`,
           destino: `${m.to.col}-${m.to.fila}`,
           partida_id: partida.id_partida,
           jugador_id: jugadorId,
-          turno_id: turnoId,
+          ronda_id: rondaId,
           pieza_id: m.pieza_id,
         }))
         .filter((m, idx) => {
-          const completo = m.origen && m.destino && m.partida_id && m.jugador_id && m.turno_id && m.pieza_id;
+          const completo = m.origen && m.destino && m.partida_id && m.jugador_id && m.ronda_id && m.pieza_id;
           if (!completo) {
             console.warn('Movimiento incompleto, no se enviará', { idx, m });
           }
@@ -673,8 +673,8 @@ function Game() {
     if (!initialBoardState && move.boardState) {
       setInitialBoardState(move.boardState);
     }
-    if (!turnStartPieceByPos) {
-      setTurnStartPieceByPos(new Map(pieceByPos));
+    if (!roundStartPieceByPos) {
+      setRoundStartPieceByPos(new Map(pieceByPos));
       console.log('📸 Snapshot de pieceByPos guardado en Game.js:', pieceByPos);
     }
     const origenKey = `${move.from.col}-${move.from.fila}`;
@@ -695,7 +695,7 @@ function Game() {
       pieza_id: piezaId,
     }]);
 
-    // Si la IA está ejecutando una secuencia, avanzar al siguiente paso
+    // Si el agente Inteligente está ejecutando una secuencia, avanzar al siguiente paso
     if (isAITurn && aiSequence && aiSeqTokenRef.current) {
       setAiSeqIndex((idx) => idx + 1);
     }
@@ -710,13 +710,13 @@ function Game() {
     setOriginalPiecePos(null);
     setMoveHistory([]);
     
-    if (turnStartPieceByPos) {
-      setPieceByPos(new Map(turnStartPieceByPos));
-      console.log('🔄 pieceByPos restaurado desde snapshot en Game.js:', turnStartPieceByPos);
+    if (roundStartPieceByPos) {
+      setPieceByPos(new Map(roundStartPieceByPos));
+      console.log('🔄 pieceByPos restaurado desde snapshot en Game.js:', roundStartPieceByPos);
     }
   };
 
-  const continueTurn = async () => {
+  const continueRound = async () => {
     if (isPausedRef.current) return;
     if (!moveMade) return;
     if (moveHistory.length > 0) {
@@ -728,13 +728,13 @@ function Game() {
       return; 
     }
 
-    await saveTurnToDatabase();
+    await saveRoundToDatabase();
     setMoveMade(false);
     setLockedPiecePos(null);
     setOriginalPiecePos(null);
     setInitialBoardState(null);
     setMoveHistory([]);
-    setTurnStartPieceByPos(null);
+    setRoundStartPieceByPos(null);
     setAiMoveCmd(null);
     setAiAutoFinishToken(null);
     setAiSequence(null);
@@ -742,7 +742,7 @@ function Game() {
     aiSeqTokenRef.current = null;
   };
 
-  // Ejecutar secuencias de IA paso a paso con retardo
+  // Ejecutar secuencias del agente Inteligente paso a paso con retardo
   useEffect(() => {
     if (!isAITurn) return;
     if (!aiSequence || !aiSeqTokenRef.current) return;
@@ -766,28 +766,28 @@ function Game() {
     if (!moveMade) return;
     if (!moveHistory || moveHistory.length === 0) return;
 
-    // Si hay una secuencia IA en curso, no cerrar turno aún
+    // Si hay una secuencia del agente Inteligente en curso, no cerrar ronda aún
     if (aiSequence && aiSeqIndex < (aiSequence?.length || 0)) return;
     if (isPaused) return;
 
     const autoAdvance = async () => {
-      console.log('🤖 Auto-avanzando turno de IA...');
-      await continueTurn();
+      console.log('🤖 Auto-avanzando ronda del agente Inteligente...');
+      await continueRound();
     };
 
     const timer = setTimeout(autoAdvance, 500);
     return () => clearTimeout(timer);
   }, [isAITurn, moveMade, moveHistory, aiSequence, aiSeqIndex, isPaused]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const passTurn = async () => {
+  const passRound = async () => {
     if (isPausedRef.current) return;
-    await saveTurnToDatabase();
+    await saveRoundToDatabase();
     setMoveMade(false);
     setLockedPiecePos(null);
     setOriginalPiecePos(null);
     setInitialBoardState(null);
     setMoveHistory([]);
-    setTurnStartPieceByPos(null);
+    setRoundStartPieceByPos(null);
     setAiMoveCmd(null);
     setAiAutoFinishToken(null);
     setAiSequence(null);
@@ -818,8 +818,8 @@ function Game() {
     <div className="game-container">
       <div className="game-layout">
         <aside className="turns-panel">
-          <h3>Turno</h3>
-          <div className="turn-counter">Actual: {turnCount}</div>
+          <h3>Ronda</h3>
+          <div className="turn-counter">Actual: {roundCount}</div>
           <div className="turns-list">
             {jugadoresConfig.length === 0 && (
               <p className="turns-empty">Sin datos de jugadores</p>
@@ -829,7 +829,7 @@ function Game() {
               const punta = activePuntas[idx];
               const colorHex = PLAYER_COLORS[punta];
               const displayName = resolveNombreJugador(jugador, dbJugadores[idx]);
-              const keyBase = dbJugadores[idx]?.id_jugador || `${jugador?.nombre || 'IA'}-${idx}`;
+              const keyBase = dbJugadores[idx]?.id_jugador || `${jugador?.nombre || 'Agente Inteligente'}-${idx}`;
               return (
                 <div
                   key={keyBase}
@@ -841,7 +841,7 @@ function Game() {
                   <div className="turn-info">
                     <div className="turn-color-dot" style={{ backgroundColor: colorHex }} />
                     <span className="turn-name">{displayName}</span>
-                    {isCurrent && <span className="turn-indicator">Turno actual</span>}
+                    {isCurrent && <span className="turn-indicator">Ronda actual</span>}
                   </div>
                 </div>
               );
@@ -884,11 +884,11 @@ function Game() {
               <>
                 {moveMade ? (
                   <>
-                    <button className="control-button" onClick={continueTurn} disabled={isPaused || isAITurn || aiThinking}>Continuar</button>
+                    <button className="control-button" onClick={continueRound} disabled={isPaused || isAITurn || aiThinking}>Continuar</button>
                     <button className="control-button" onClick={undoMove} disabled={isPaused || isAITurn || aiThinking}>Deshacer</button>
                   </>
                 ) : (
-                  <button className="control-button" onClick={passTurn} disabled={isPaused || isAITurn || aiThinking}>Pasar Turno</button>
+                  <button className="control-button" onClick={passRound} disabled={isPaused || isAITurn || aiThinking}>Pasar Ronda</button>
                 )}
               </>
             )}
@@ -953,7 +953,7 @@ function Game() {
         <Victory
           ganador={victoryData.ganador}
           perdedores={victoryData.perdedores}
-          turnos={victoryData.turnos}
+          rondas={victoryData.rondas}
           tiempo={victoryData.tiempo}
           totalJugadores={victoryData.totalJugadores}
           onVolverInicio={handleEndGame}

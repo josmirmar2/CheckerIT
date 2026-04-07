@@ -43,12 +43,12 @@ def make_partida(db):
 
 
 @pytest.fixture()
-def make_turno(db, make_jugador, make_partida):
-    from game.models import Turno
+def make_ronda(db, make_jugador, make_partida):
+    from game.models import Ronda
 
-    def _make_turno(
+    def _make_ronda(
         *,
-        id_turno: str = "T1",
+        id_ronda: str = "R1",
         jugador=_AUTO,
         numero: int = 1,
         partida=_AUTO,
@@ -58,15 +58,15 @@ def make_turno(db, make_jugador, make_partida):
             jugador = make_jugador()
         if partida is _AUTO:
             partida = make_partida()
-        return Turno.objects.create(
-            id_turno=id_turno,
+        return Ronda.objects.create(
+            id_ronda=id_ronda,
             jugador=jugador,
             numero=numero,
             partida=partida,
             **extra,
         )
 
-    return _make_turno
+    return _make_ronda
 
 
 @pytest.fixture()
@@ -80,7 +80,6 @@ def make_pieza(db, make_jugador, make_partida):
         posicion: str = "0-0",
         jugador=_AUTO,
         partida=_AUTO,
-        ia=None,
         chatbot=None,
         **extra,
     ):
@@ -94,7 +93,6 @@ def make_pieza(db, make_jugador, make_partida):
             posicion=posicion,
             jugador=jugador,
             partida=partida,
-            ia=ia,
             chatbot=chatbot,
             **extra,
         )
@@ -103,7 +101,7 @@ def make_pieza(db, make_jugador, make_partida):
 
 
 @pytest.fixture()
-def make_movimiento(db, make_jugador, make_partida, make_turno, make_pieza):
+def make_movimiento(db, make_jugador, make_partida, make_ronda, make_pieza):
     from game.models import Movimiento
 
     def _make_movimiento(
@@ -111,7 +109,7 @@ def make_movimiento(db, make_jugador, make_partida, make_turno, make_pieza):
         id_movimiento: str = "M1",
         jugador=_AUTO,
         partida=_AUTO,
-        turno=_AUTO,
+        ronda=_AUTO,
         pieza=_AUTO,
         origen: str = "0-0",
         destino: str = "0-1",
@@ -123,13 +121,13 @@ def make_movimiento(db, make_jugador, make_partida, make_turno, make_pieza):
             jugador = make_jugador()
         if pieza is _AUTO:
             pieza = make_pieza(jugador=jugador, partida=partida, posicion=origen)
-        if turno is _AUTO:
-            turno = make_turno(jugador=jugador, partida=partida)
+        if ronda is _AUTO:
+            ronda = make_ronda(jugador=jugador, partida=partida)
         return Movimiento.objects.create(
             id_movimiento=id_movimiento,
             jugador=jugador,
             pieza=pieza,
-            turno=turno,
+            ronda=ronda,
             partida=partida,
             origen=origen,
             destino=destino,
@@ -140,10 +138,10 @@ def make_movimiento(db, make_jugador, make_partida, make_turno, make_pieza):
 
 
 @pytest.fixture()
-def make_ia(db, make_jugador):
-    from game.models import IA
+def make_agente_inteligente(db, make_jugador):
+    from game.models import AgenteInteligente
 
-    def _make_ia(
+    def _make_agente_inteligente(
         *,
         jugador=_AUTO,
         nivel: int = 1,
@@ -151,13 +149,13 @@ def make_ia(db, make_jugador):
     ):
         if jugador is _AUTO:
             jugador = make_jugador(humano=False)
-        return IA.objects.create(
+        return AgenteInteligente.objects.create(
             jugador=jugador,
             nivel=nivel,
             **extra,
         )
 
-    return _make_ia
+    return _make_agente_inteligente
 
 
 @pytest.fixture()

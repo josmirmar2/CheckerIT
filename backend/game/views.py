@@ -5,13 +5,13 @@ from django.utils import timezone
 from django.conf import settings
 from datetime import datetime
 from collections import deque
-from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida
+from .models import Jugador, Partida, Pieza, Ronda, Movimiento, AgenteInteligente, Chatbot, JugadorPartida
 from .ai.max_agent import MaxHeuristicAgent
 from .ai.mcts_agent import MCTSAgent
 from .serializers import (
     JugadorSerializer, PartidaSerializer, PartidaListSerializer,
-    PiezaSerializer, TurnoSerializer, 
-    MovimientoSerializer, IASerializer, ChatbotSerializer, JugadorPartidaSerializer
+    PiezaSerializer, RondaSerializer,
+    MovimientoSerializer, AgenteInteligenteSerializer, ChatbotSerializer, JugadorPartidaSerializer
 )
 
 CARTESIAN_COORD_ROWS = [
@@ -278,7 +278,7 @@ class JugadorViewSet(viewsets.ModelViewSet):
             return
         dificultad = str(request_data.get('dificultad') or request_data.get('nivel') or 'Fácil')
         numero = jugador.numero or Jugador.objects.filter(humano=False).count()
-        nombre_deseado = f"IA {numero}"
+        nombre_deseado = f"Agente Inteligente {numero}"
         if jugador.nombre != nombre_deseado:
             jugador.nombre = nombre_deseado
             jugador.save(update_fields=['nombre'])
@@ -316,7 +316,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
             "numero_jugadores": 2,
             "jugadores": [
                 {"nombre": "Juan", "icono": "icono1.jpg", "tipo": "humano", "dificultad": "Baja"},
-                {"nombre": "IA Difícil 2", "icono": "Robot-icon.jpg", "tipo": "ia", "dificultad": "Difícil"}
+                {"nombre": "Agente Inteligente Difícil 2", "icono": "Robot-icon.jpg", "tipo": "agente_inteligente", "dificultad": "Difícil"}
             ]
         }
         """
@@ -370,7 +370,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
             if es_humano:
                 nombre = jugador_data.get('nombre', f'Jugador {idx + 1}')
             else:
-                nombre = f"IA {numero}"
+                nombre = f"Agente Inteligente {numero}"
             
             jugador = Jugador.objects.create(
                 id_jugador=f"J{idx + 1}_{datetime.now().timestamp()}",
@@ -382,7 +382,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
             if not es_humano:
                 nivel = 2 if dificultad == 'Difícil' else 1
                 
-                IA.objects.create(
+                AgenteInteligente.objects.create(
                     jugador=jugador,
                     nivel=nivel
                 )
@@ -403,8 +403,8 @@ class PartidaViewSet(viewsets.ModelViewSet):
             )
             self._initialize_pieces(jugador, partida)
         
-        Turno.objects.create(
-            id_turno=f"T1_{partida.id_partida}",
+        Ronda.objects.create(
+            id_ronda=f"R1_{partida.id_partida}",
             jugador=jugadores_list[0],
             numero=1,
             partida=partida
@@ -477,28 +477,28 @@ class PartidaViewSet(viewsets.ModelViewSet):
 
         occupied_positions = get_occupied_positions(partida.id_partida)
 
-        turno_actual = partida.turnos.filter(fin__isnull=True).order_by('numero').first()
-        if not turno_actual:
-            return Response({ 'error': 'No hay turno activo para la partida' }, status=status.HTTP_400_BAD_REQUEST)
+        ronda_actual = partida.rondas.filter(fin__isnull=True).order_by('numero').first()
+        if not ronda_actual:
+            return Response({ 'error': 'No hay ronda activa para la partida' }, status=status.HTTP_400_BAD_REQUEST)
 
         created = []
         piece_positions = {}
         moved_piece_id = None
         expected_jugador_id = None
-        expected_turno_id = None
+        expected_ronda_id = None
         expected_partida_id = str(partida.id_partida)
         chain_mode = len(movimientos_data) > 1
 
         for idx, m in enumerate(movimientos_data, start=1):
             try:
                 jugador_id = m.get('jugador_id')
-                turno_id = m.get('turno_id')
+                ronda_id = m.get('ronda_id')
                 partida_id = m.get('partida_id')
                 pieza_id = m.get('pieza_id')
                 origen = m.get('origen')
                 destino = m.get('destino')
 
-                if not all([jugador_id, turno_id, pieza_id, origen, destino, partida_id]):
+                if not all([jugador_id, ronda_id, pieza_id, origen, destino, partida_id]):
                     return Response({ 'error': f'Movimiento incompleto en índice {idx-1}' }, status=status.HTTP_400_BAD_REQUEST)
 
                 if str(partida_id) != expected_partida_id:
@@ -509,31 +509,31 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 elif str(jugador_id) != expected_jugador_id:
                     return Response({ 'error': 'Todos los movimientos deben pertenecer al mismo jugador' }, status=status.HTTP_400_BAD_REQUEST)
 
-                if expected_turno_id is None:
-                    expected_turno_id = str(turno_id)
-                elif str(turno_id) != expected_turno_id:
-                    return Response({ 'error': 'Todos los movimientos deben pertenecer al mismo turno' }, status=status.HTTP_400_BAD_REQUEST)
+                if expected_ronda_id is None:
+                    expected_ronda_id = str(ronda_id)
+                elif str(ronda_id) != expected_ronda_id:
+                    return Response({ 'error': 'Todos los movimientos deben pertenecer a la misma ronda' }, status=status.HTTP_400_BAD_REQUEST)
 
                 if moved_piece_id is None:
                     moved_piece_id = str(pieza_id)
                 elif str(pieza_id) != moved_piece_id:
-                    return Response({ 'error': 'No se permite mover varias piezas en un mismo turno' }, status=status.HTTP_400_BAD_REQUEST)
+                    return Response({ 'error': 'No se permite mover varias piezas en una misma ronda' }, status=status.HTTP_400_BAD_REQUEST)
 
                 jugador = Jugador.objects.get(id_jugador=jugador_id)
-                turno = Turno.objects.get(id_turno=turno_id)
+                ronda = Ronda.objects.get(id_ronda=ronda_id)
                 pieza = Pieza.objects.get(id_pieza=pieza_id)
 
                 enforce_move_rules = (not bool(getattr(jugador, 'humano', False))) or bool(getattr(settings, 'ENFORCE_MOVE_VALIDATION_FOR_HUMANS', False))
 
-                # Validaciones de turno/jugador/pieza
-                if str(turno.partida_id) != expected_partida_id:
-                    return Response({ 'error': 'El turno no pertenece a la partida' }, status=status.HTTP_400_BAD_REQUEST)
-                if turno.fin is not None:
-                    return Response({ 'error': 'El turno ya está finalizado' }, status=status.HTTP_400_BAD_REQUEST)
-                if str(turno_actual.id_turno) != str(turno.id_turno):
-                    return Response({ 'error': 'No es el turno activo de la partida' }, status=status.HTTP_400_BAD_REQUEST)
-                if str(turno.jugador_id) != str(jugador.id_jugador):
-                    return Response({ 'error': 'El jugador del movimiento no coincide con el jugador del turno' }, status=status.HTTP_400_BAD_REQUEST)
+                # Validaciones de ronda/jugador/pieza
+                if str(ronda.partida_id) != expected_partida_id:
+                    return Response({ 'error': 'La ronda no pertenece a la partida' }, status=status.HTTP_400_BAD_REQUEST)
+                if ronda.fin is not None:
+                    return Response({ 'error': 'La ronda ya está finalizada' }, status=status.HTTP_400_BAD_REQUEST)
+                if str(ronda_actual.id_ronda) != str(ronda.id_ronda):
+                    return Response({ 'error': 'No es la ronda activa de la partida' }, status=status.HTTP_400_BAD_REQUEST)
+                if str(ronda.jugador_id) != str(jugador.id_jugador):
+                    return Response({ 'error': 'El jugador del movimiento no coincide con el jugador de la ronda' }, status=status.HTTP_400_BAD_REQUEST)
                 if str(pieza.partida_id) != expected_partida_id:
                     return Response({ 'error': 'La pieza no pertenece a la partida' }, status=status.HTTP_400_BAD_REQUEST)
                 if str(pieza.jugador_id) != str(jugador.id_jugador):
@@ -572,10 +572,10 @@ class PartidaViewSet(viewsets.ModelViewSet):
                                     occupied_positions.add(step_destino)
 
                                     mov = Movimiento.objects.create(
-                                        id_movimiento=f"M_{turno.id_turno}_{idx}_{step_i + 1}_{datetime.now().timestamp()}",
+                                        id_movimiento=f"M_{ronda.id_ronda}_{idx}_{step_i + 1}_{datetime.now().timestamp()}",
                                         jugador=jugador,
                                         pieza=pieza,
-                                        turno=turno,
+                                        ronda=ronda,
                                         partida=partida,
                                         origen=step_origen,
                                         destino=step_destino,
@@ -619,10 +619,10 @@ class PartidaViewSet(viewsets.ModelViewSet):
                                 occupied_positions.add(step_destino)
 
                                 mov = Movimiento.objects.create(
-                                    id_movimiento=f"M_{turno.id_turno}_{idx}_{step_i + 1}_{datetime.now().timestamp()}",
+                                    id_movimiento=f"M_{ronda.id_ronda}_{idx}_{step_i + 1}_{datetime.now().timestamp()}",
                                     jugador=jugador,
                                     pieza=pieza,
-                                    turno=turno,
+                                    ronda=ronda,
                                     partida=partida,
                                     origen=step_origen,
                                     destino=step_destino,
@@ -636,10 +636,10 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 occupied_positions.add(destino)
 
                 mov = Movimiento.objects.create(
-                    id_movimiento=f"M_{turno.id_turno}_{idx}_{datetime.now().timestamp()}",
+                    id_movimiento=f"M_{ronda.id_ronda}_{idx}_{datetime.now().timestamp()}",
                     jugador=jugador,
                     pieza=pieza,
-                    turno=turno,
+                    ronda=ronda,
                     partida=partida,
                     origen=origen,
                     destino=destino,
@@ -651,8 +651,8 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 
             except Jugador.DoesNotExist:
                 return Response({ 'error': f'Jugador no encontrado: {jugador_id}' }, status=status.HTTP_400_BAD_REQUEST)
-            except Turno.DoesNotExist:
-                return Response({ 'error': f'Turno no encontrado: {turno_id}' }, status=status.HTTP_400_BAD_REQUEST)
+            except Ronda.DoesNotExist:
+                return Response({ 'error': f'Ronda no encontrada: {ronda_id}' }, status=status.HTTP_400_BAD_REQUEST)
             except Pieza.DoesNotExist:
                 return Response({ 'error': f'Pieza no encontrada: {pieza_id}' }, status=status.HTTP_400_BAD_REQUEST)
             except Exception as e:
@@ -667,57 +667,55 @@ class PartidaViewSet(viewsets.ModelViewSet):
         return Response({ 'registrados': serializer.data }, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['post'])
-    def avanzar_turno(self, request, id_partida=None):
-        """
-        Actualiza el turno actual con los datos proporcionados y crea el nuevo turno con los datos de entrada.
-        """
+    def avanzar_ronda(self, request, id_partida=None):
+        """Actualiza la ronda actual y crea la nueva ronda."""
         partida = self.get_object()
-        old_turn_data = request.data.get('oldTurn')
-        new_turn_data = request.data.get('newTurnCreated')
+        old_round_data = request.data.get('oldRound')
+        new_round_data = request.data.get('newRoundCreated')
 
-        if not new_turn_data:
-            return Response({ 'error': 'newTurnCreated es requerido' }, status=status.HTTP_400_BAD_REQUEST)
+        if not new_round_data:
+            return Response({ 'error': 'newRoundCreated es requerido' }, status=status.HTTP_400_BAD_REQUEST)
 
-        updated_turn = None
-        if old_turn_data:
-            turno_actual = partida.turnos.filter(fin__isnull=True).order_by('numero').first()
-            if turno_actual:
-                final_val = old_turn_data.get('final')
-                inicio_val = old_turn_data.get('inicio')
+        updated_round = None
+        if old_round_data:
+            ronda_actual = partida.rondas.filter(fin__isnull=True).order_by('numero').first()
+            if ronda_actual:
+                final_val = old_round_data.get('final')
+                inicio_val = old_round_data.get('inicio')
                 try:
                     if inicio_val:
                         if isinstance(inicio_val, (int, float)):
-                            turno_actual.inicio = datetime.fromtimestamp(inicio_val / 1000.0, tz=timezone.get_current_timezone())
+                            ronda_actual.inicio = datetime.fromtimestamp(inicio_val / 1000.0, tz=timezone.get_current_timezone())
                         else:
-                            turno_actual.inicio = datetime.fromisoformat(str(inicio_val))
+                            ronda_actual.inicio = datetime.fromisoformat(str(inicio_val))
                     if final_val:
                         if isinstance(final_val, (int, float)):
-                            turno_actual.fin = datetime.fromtimestamp(final_val / 1000.0, tz=timezone.get_current_timezone())
+                            ronda_actual.fin = datetime.fromtimestamp(final_val / 1000.0, tz=timezone.get_current_timezone())
                         else:
-                            turno_actual.fin = datetime.fromisoformat(str(final_val))
+                            ronda_actual.fin = datetime.fromisoformat(str(final_val))
                     else:
-                        turno_actual.fin = timezone.now()
+                        ronda_actual.fin = timezone.now()
                 except Exception:
-                    turno_actual.fin = timezone.now()
-                turno_actual.save()
-                updated_turn = turno_actual
+                    ronda_actual.fin = timezone.now()
+                ronda_actual.save()
+                updated_round = ronda_actual
 
-        numero_nuevo = new_turn_data.get('numero')
-        inicio_nuevo = new_turn_data.get('inicio')
-        jugador_id_nuevo = new_turn_data.get('jugador_id')
+        numero_nuevo = new_round_data.get('numero')
+        inicio_nuevo = new_round_data.get('inicio')
+        jugador_id_nuevo = new_round_data.get('jugador_id')
 
         if not all([numero_nuevo, jugador_id_nuevo]):
-            return Response({ 'error': 'Faltan campos en newTurnCreated: numero y jugador_id son obligatorios' }, status=status.HTTP_400_BAD_REQUEST)
+            return Response({ 'error': 'Faltan campos en newRoundCreated: numero y jugador_id son obligatorios' }, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             jugador_nuevo = Jugador.objects.get(id_jugador=jugador_id_nuevo)
         except Jugador.DoesNotExist:
             return Response({ 'error': f'Jugador no encontrado: {jugador_id_nuevo}' }, status=status.HTTP_400_BAD_REQUEST)
 
-        new_turn_id = f"T{numero_nuevo}_{partida.id_partida}"
+        new_round_id = f"R{numero_nuevo}_{partida.id_partida}"
 
-        nuevo_turno = Turno(
-            id_turno=new_turn_id,
+        nueva_ronda = Ronda(
+            id_ronda=new_round_id,
             jugador=jugador_nuevo,
             numero=numero_nuevo,
             partida=partida
@@ -725,18 +723,18 @@ class PartidaViewSet(viewsets.ModelViewSet):
         if inicio_nuevo:
             try:
                 if isinstance(inicio_nuevo, (int, float)):
-                    nuevo_turno.inicio = datetime.fromtimestamp(inicio_nuevo / 1000.0, tz=timezone.get_current_timezone())
+                    nueva_ronda.inicio = datetime.fromtimestamp(inicio_nuevo / 1000.0, tz=timezone.get_current_timezone())
                 else:
-                    nuevo_turno.inicio = datetime.fromisoformat(str(inicio_nuevo))
+                    nueva_ronda.inicio = datetime.fromisoformat(str(inicio_nuevo))
             except Exception:
-                nuevo_turno.inicio = timezone.now()
-        nuevo_turno.save()
+                nueva_ronda.inicio = timezone.now()
+        nueva_ronda.save()
 
         response_data = {
-            'nuevo_turno': TurnoSerializer(nuevo_turno).data
+            'nueva_ronda': RondaSerializer(nueva_ronda).data
         }
-        if updated_turn:
-            response_data['turno_actualizado'] = TurnoSerializer(updated_turn).data
+        if updated_round:
+            response_data['ronda_actualizada'] = RondaSerializer(updated_round).data
 
         return Response(response_data, status=status.HTTP_201_CREATED)
     
@@ -750,10 +748,10 @@ class PartidaViewSet(viewsets.ModelViewSet):
         partida.fecha_fin = timezone.now()
         partida.save()
         
-        turno_actual = partida.turnos.filter(fin__isnull=True).first()
-        if turno_actual:
-            turno_actual.fin = timezone.now()
-            turno_actual.save()
+        ronda_actual = partida.rondas.filter(fin__isnull=True).first()
+        if ronda_actual:
+            ronda_actual.fin = timezone.now()
+            ronda_actual.save()
         
         serializer = self.get_serializer(partida)
         return Response(serializer.data)
@@ -816,7 +814,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         """
         Elimina la partida y todos los jugadores asociados creados para ella.
-        También elimina en cascada: piezas, movimientos, turnos, IAs y chatbots.
+        También elimina en cascada: piezas, movimientos, rondas, agentes Inteligentes y chatbots.
         """
         partida = self.get_object()
         
@@ -824,11 +822,11 @@ class PartidaViewSet(viewsets.ModelViewSet):
         jugadores_partida = JugadorPartida.objects.filter(partida=partida)
         jugadores_ids = [jp.jugador.id_jugador for jp in jugadores_partida]
         
-        # Eliminar la partida (esto eliminará en cascada: turnos, movimientos, piezas, JugadorPartida)
+        # Eliminar la partida (esto eliminará en cascada: rondas, movimientos, piezas, JugadorPartida)
         partida.delete()
         
         # Eliminar los jugadores que fueron creados para esta partida
-        # (esto eliminará en cascada sus IAs y Chatbots asociados)
+        # (esto eliminará en cascada sus agentes Inteligentes y Chatbots asociados)
         Jugador.objects.filter(id_jugador__in=jugadores_ids).delete()
         
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -853,12 +851,12 @@ class PiezaViewSet(viewsets.ModelViewSet):
             
         return queryset
 
-class TurnoViewSet(viewsets.ModelViewSet):
+class RondaViewSet(viewsets.ModelViewSet):
     """
-    ViewSet para gestionar turnos
+    ViewSet para gestionar rondas
     """
-    queryset = Turno.objects.all()
-    serializer_class = TurnoSerializer
+    queryset = Ronda.objects.all()
+    serializer_class = RondaSerializer
     
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -877,48 +875,48 @@ class MovimientoViewSet(viewsets.ModelViewSet):
     
     def get_queryset(self):
         queryset = super().get_queryset()
-        turno_id = self.request.query_params.get('turno_id')
-        if turno_id:
-            queryset = queryset.filter(turno_id=turno_id)
+        ronda_id = self.request.query_params.get('ronda_id')
+        if ronda_id:
+            queryset = queryset.filter(ronda_id=ronda_id)
         return queryset
 
 
-class IAViewSet(viewsets.ModelViewSet):
+class AgenteInteligenteViewSet(viewsets.ModelViewSet):
     """
-    ViewSet para gestionar configuraciones de IA
+    ViewSet para gestionar configuraciones de agente Inteligente
     """
-    queryset = IA.objects.all()
-    serializer_class = IASerializer
+    queryset = AgenteInteligente.objects.all()
+    serializer_class = AgenteInteligenteSerializer
     lookup_field = 'pk'
     lookup_value_regex = '[^/]+'
 
     @action(detail=True, methods=['post'])
     def sugerir_movimiento(self, request, pk=None):
         """
-        Retorna un movimiento sugerido para la IA usando heuristica Max.
+        Retorna un movimiento sugerido para el agente Inteligente usando heurística Max.
 
         Datos de entrada:
         - partida_id: id de la partida
         - permitir_simples (opcional, bool): si True incluye movimientos simples en el primer salto
         """
-        ia_obj = self.get_object() 
+        agente_obj = self.get_object() 
         partida_id = request.data.get('partida_id')
         permitir_simples_raw = request.data.get('permitir_simples', True)
 
         if not partida_id:
             return Response({'error': 'partida_id es requerido'}, status=status.HTTP_400_BAD_REQUEST)
 
-        turno_actual = Turno.objects.filter(partida_id=partida_id, fin__isnull=True).order_by('numero').first()
-        if not turno_actual:
-            return Response({'error': 'No hay turno activo para la partida'}, status=status.HTTP_400_BAD_REQUEST)
-        if str(turno_actual.jugador_id) != str(ia_obj.jugador_id):
-            return Response({'error': 'No es el turno de esta IA'}, status=status.HTTP_409_CONFLICT)
+        ronda_actual = Ronda.objects.filter(partida_id=partida_id, fin__isnull=True).order_by('numero').first()
+        if not ronda_actual:
+            return Response({'error': 'No hay ronda activa para la partida'}, status=status.HTTP_400_BAD_REQUEST)
+        if str(ronda_actual.jugador_id) != str(agente_obj.jugador_id):
+            return Response({'error': 'No es la ronda de este agente Inteligente'}, status=status.HTTP_409_CONFLICT)
 
         allow_simple = bool(permitir_simples_raw) if isinstance(permitir_simples_raw, bool) else str(permitir_simples_raw).lower() != 'false'
 
         try:
             # Nivel 1: heurística Max (actual). Nivel 2: MCTS (DIFICIL).
-            if int(getattr(ia_obj, 'nivel', 1) or 1) >= 2:
+            if int(getattr(agente_obj, 'nivel', 1) or 1) >= 2:
                 iterations_raw = request.data.get('simulaciones', request.data.get('iterations', 250))
                 depth_raw = request.data.get('rollout_depth', 10)
                 try:
@@ -933,7 +931,7 @@ class IAViewSet(viewsets.ModelViewSet):
                 agent = MCTSAgent()
                 sugerencia = agent.suggest_move(
                     partida_id=partida_id,
-                    jugador_id=ia_obj.jugador_id,
+                    jugador_id=agente_obj.jugador_id,
                     allow_simple=allow_simple,
                     iterations=max(1, min(iterations, 2000)),
                     rollout_depth=max(1, min(rollout_depth, 60)),
@@ -942,7 +940,7 @@ class IAViewSet(viewsets.ModelViewSet):
                 agent = MaxHeuristicAgent()
                 sugerencia = agent.suggest_move(
                     partida_id=partida_id,
-                    jugador_id=ia_obj.jugador_id,
+                    jugador_id=agente_obj.jugador_id,
                     allow_simple=allow_simple,
                 )
         except ValueError as exc:

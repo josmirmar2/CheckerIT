@@ -25,7 +25,7 @@ from django.utils import timezone
 
 from game.ai.max_agent import MaxHeuristicAgent, _distance_to_goal, _parse_punta, _target_punta    
 from game.ai.mcts_agent import MCTSAgent    
-from game.models import IA, Jugador, JugadorPartida, Movimiento, Partida, Pieza, Turno    
+from game.models import AgenteInteligente, Jugador, JugadorPartida, Movimiento, Partida, Pieza, Ronda    
 from game.views import get_occupied_positions, validate_move    
 
 
@@ -172,9 +172,9 @@ class MatchResult:
         return "empate"
 
 
-def _make_turn(partida: Partida, numero: int, jugador: Jugador) -> Turno:
-    return Turno.objects.create(
-        id_turno=f"T{numero}_{partida.id_partida}",
+def _make_round(partida: Partida, numero: int, jugador: Jugador) -> Ronda:
+    return Ronda.objects.create(
+        id_ronda=f"R{numero}_{partida.id_partida}",
         jugador=jugador,
         numero=numero,
         partida=partida,
@@ -183,16 +183,16 @@ def _make_turn(partida: Partida, numero: int, jugador: Jugador) -> Turno:
 
 
 def run_match(turns: int, iterations_mcts: int, seed_base: int) -> MatchResult:
-    """Crea una partida nueva y simula `turns` turnos."""
+    """Crea una partida nueva y simula `turns` rondas."""
 
     with transaction.atomic():
         partida = Partida.objects.create(id_partida=_new_id("PAUTO"), numero_jugadores=2)
 
-        j_heur = Jugador.objects.create(id_jugador=_new_id("JH"), nombre="IA Heur", humano=False, numero=1)
-        j_mcts = Jugador.objects.create(id_jugador=_new_id("JM"), nombre="IA MCTS", humano=False, numero=2)
+        j_heur = Jugador.objects.create(id_jugador=_new_id("JH"), nombre="Agente Inteligente Heur", humano=False, numero=1)
+        j_mcts = Jugador.objects.create(id_jugador=_new_id("JM"), nombre="Agente Inteligente MCTS", humano=False, numero=2)
 
-        IA.objects.create(jugador=j_heur, nivel=1)
-        IA.objects.create(jugador=j_mcts, nivel=2)
+        AgenteInteligente.objects.create(jugador=j_heur, nivel=1)
+        AgenteInteligente.objects.create(jugador=j_mcts, nivel=2)
 
         JugadorPartida.objects.create(jugador=j_heur, partida=partida, orden_participacion=1)
         JugadorPartida.objects.create(jugador=j_mcts, partida=partida, orden_participacion=2)
@@ -200,7 +200,7 @@ def run_match(turns: int, iterations_mcts: int, seed_base: int) -> MatchResult:
         punta_h = _initialize_pieces_for_player(partida, j_heur, orden_participacion=1)
         punta_m = _initialize_pieces_for_player(partida, j_mcts, orden_participacion=2)
 
-        turno = _make_turn(partida, numero=1, jugador=j_heur)
+        ronda = _make_round(partida, numero=1, jugador=j_heur)
 
         heuristic_agent = MaxHeuristicAgent()
         mcts_agent = MCTSAgent()
@@ -212,7 +212,7 @@ def run_match(turns: int, iterations_mcts: int, seed_base: int) -> MatchResult:
         mcts_stats.total_dist_start = _total_distance_to_goal(partida.id_partida, j_mcts.id_jugador)
 
         for t in range(1, int(turns) + 1):
-            jugador = turno.jugador
+            jugador = ronda.jugador
             jugador_id = str(jugador.id_jugador)
             is_heur = jugador_id == str(j_heur.id_jugador)
 
@@ -234,15 +234,15 @@ def run_match(turns: int, iterations_mcts: int, seed_base: int) -> MatchResult:
 
             pieza_id = payload.get("pieza_id")
             if not pieza_id:
-                raise RuntimeError("La IA no devolvió pieza_id")
+                raise RuntimeError("El agente Inteligente no devolvió pieza_id")
 
             pieza = Pieza.objects.get(id_pieza=str(pieza_id))
             if str(pieza.jugador_id) != jugador_id:
-                raise RuntimeError("La IA devolvió una pieza que no es del jugador")
+                raise RuntimeError("El agente Inteligente devolvió una pieza que no es del jugador")
 
             steps = list(_iter_steps_from_payload(payload))
             if not steps or not all(o and d for o, d in steps):
-                raise RuntimeError("La IA no devolvió origen/destino")
+                raise RuntimeError("El agente Inteligente no devolvió origen/destino")
 
             # coherencia: el primer origen debe coincidir con la posición actual de la pieza
             pieza.refresh_from_db()
@@ -272,7 +272,7 @@ def run_match(turns: int, iterations_mcts: int, seed_base: int) -> MatchResult:
                     id_movimiento=_new_id(f"M{t}_{i}"),
                     jugador=jugador,
                     pieza=pieza,
-                    turno=turno,
+                    ronda=ronda,
                     partida=partida,
                     origen=origin,
                     destino=dest,
@@ -286,12 +286,12 @@ def run_match(turns: int, iterations_mcts: int, seed_base: int) -> MatchResult:
             dist_after = _total_distance_to_goal(partida.id_partida, jugador_id)
             stats.progress_sum += float(dist_before - dist_after)
 
-            # cerrar turno actual y crear el siguiente
-            turno.fin = timezone.now()
-            turno.save(update_fields=["fin"])
+            # cerrar ronda actual y crear la siguiente
+            ronda.fin = timezone.now()
+            ronda.save(update_fields=["fin"])
 
             next_player = j_mcts if is_heur else j_heur
-            turno = _make_turn(partida, numero=t + 1, jugador=next_player)
+            ronda = _make_round(partida, numero=t + 1, jugador=next_player)
 
         heur_stats.total_dist_end = _total_distance_to_goal(partida.id_partida, j_heur.id_jugador)
         mcts_stats.total_dist_end = _total_distance_to_goal(partida.id_partida, j_mcts.id_jugador)
@@ -306,7 +306,7 @@ def run_match(turns: int, iterations_mcts: int, seed_base: int) -> MatchResult:
 
 
 def _print_match_analysis(result: MatchResult) -> None:
-    _print_header(f"ANÁLISIS - {result.turns} turnos")
+    _print_header(f"ANÁLISIS - {result.turns} rondas")
 
     def line(ps: PlayerStats) -> str:
         return (

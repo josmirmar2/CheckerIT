@@ -22,7 +22,7 @@ django.setup()
 from django.db import transaction  
 
 from game.ai.mcts_agent import MCTSAgent   
-from game.models import IA, Jugador, JugadorPartida, Movimiento, Partida, Pieza, Turno   
+from game.models import AgenteInteligente, Jugador, JugadorPartida, Movimiento, Partida, Pieza, Ronda   
 from game.views import get_occupied_positions, validate_move   
 
 
@@ -61,15 +61,15 @@ def main() -> int:
         # 1) Crear partida y jugadores
         partida = Partida.objects.create(id_partida=_new_id("PMCTS"), numero_jugadores=2)
 
-        j1 = Jugador.objects.create(id_jugador=_new_id("J1"), nombre="IA 1", humano=False, numero=1)
+        j1 = Jugador.objects.create(id_jugador=_new_id("J1"), nombre="Agente Inteligente 1", humano=False, numero=1)
         j2 = Jugador.objects.create(id_jugador=_new_id("J2"), nombre="Humano 2", humano=True, numero=2)
 
-        IA.objects.create(jugador=j1, nivel=2)
+        AgenteInteligente.objects.create(jugador=j1, nivel=2)
 
         JugadorPartida.objects.create(jugador=j1, partida=partida, orden_participacion=1)
         JugadorPartida.objects.create(jugador=j2, partida=partida, orden_participacion=2)
 
-        turno = Turno.objects.create(id_turno=f"T1_{partida.id_partida}", jugador=j1, numero=1, partida=partida)
+        ronda = Ronda.objects.create(id_ronda=f"R1_{partida.id_partida}", jugador=j1, numero=1, partida=partida)
 
     # 2) Crear piezas en posiciones que permitan un salto
     # Nota: la validez exacta depende de la geometría del tablero ya definida.
@@ -103,7 +103,7 @@ def main() -> int:
         )
 
         print(f"Partida: {partida.id_partida}")
-        print(f"Turno:   {turno.id_turno} (jugador IA: {j1.id_jugador})")
+        print(f"Ronda:   {ronda.id_ronda} (jugador agente Inteligente: {j1.id_jugador})")
 
         # 3) Ejecutar MCTS
         _print_header("MCTS (SIN REQUESTS) - SUGERENCIA")
@@ -128,11 +128,11 @@ def main() -> int:
         pieza_id = suggestion.get("pieza_id")
         assert pieza_id, "La sugerencia no incluye pieza_id"
 
-        # 4) Validaciones de coherencia (pieza/turno)
+        # 4) Validaciones de coherencia (pieza/ronda)
         pieza = Pieza.objects.get(id_pieza=pieza_id)
         assert str(pieza.jugador_id) == str(j1.id_jugador), "MCTS devolvió una pieza que no es del jugador"
         assert str(pieza.partida_id) == str(partida.id_partida), "MCTS devolvió una pieza que no es de la partida"
-        assert turno.fin is None, "El turno ya está finalizado"
+        assert ronda.fin is None, "La ronda ya está finalizada"
 
         steps = list(_iter_steps_from_payload(suggestion))
         assert steps and all(o and d for o, d in steps), "La sugerencia no incluye origen/destino válidos"
@@ -169,7 +169,7 @@ def main() -> int:
                 id_movimiento=_new_id(f"M{i}"),
                 jugador=j1,
                 pieza=pieza,
-                turno=turno,
+                ronda=ronda,
                 partida=partida,
                 origen=origin,
                 destino=dest,

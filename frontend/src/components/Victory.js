@@ -1,7 +1,7 @@
 import React from 'react';
 import './Victory.css';
 
-const Victory = ({ ganador, perdedores, turnos, tiempo, totalJugadores, onVolverInicio }) => {
+const Victory = ({ ganador, perdedores, rondas, tiempo, totalJugadores, onVolverInicio }) => {
   const PLAYER_COLORS = ['#FFFFFF', '#4444FF', '#44DD44', '#000000', '#FF4444', '#FFDD44'];
   const COLOR_NAMES = ['Blanco', 'Azul', 'Verde', 'Negro', 'Rojo', 'Amarillo'];
 
@@ -66,8 +66,8 @@ const Victory = ({ ganador, perdedores, turnos, tiempo, totalJugadores, onVolver
             <div className="stat-item">
               <span className="stat-icon">🎲</span>
               <div className="stat-content">
-                <span className="stat-label">Turnos</span>
-                <span className="stat-value">{turnos}</span>
+                <span className="stat-label">Rondas</span>
+                <span className="stat-value">{rondas}</span>
               </div>
             </div>
           </div>

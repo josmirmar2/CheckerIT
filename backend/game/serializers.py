@@ -1,5 +1,15 @@
 from rest_framework import serializers
-from .models import Jugador, Partida, Pieza, Turno, Movimiento, IA, Chatbot, JugadorPartida, is_valid_position_key
+from .models import (
+    Jugador,
+    Partida,
+    Pieza,
+    Ronda,
+    Movimiento,
+    AgenteInteligente,
+    Chatbot,
+    JugadorPartida,
+    is_valid_position_key,
+)
 
 
 class JugadorSerializer(serializers.ModelSerializer):
@@ -72,7 +82,7 @@ class PiezaSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Pieza
-        fields = ['id_pieza', 'tipo', 'posicion', 'jugador', 'jugador_nombre', 'ia', 'chatbot', 'partida']
+        fields = ['id_pieza', 'tipo', 'posicion', 'jugador', 'jugador_nombre', 'chatbot', 'partida']
 
 
 class MovimientoSerializer(serializers.ModelSerializer):
@@ -95,7 +105,7 @@ class MovimientoSerializer(serializers.ModelSerializer):
         pieza = attrs.get('pieza') if 'pieza' in attrs else getattr(self.instance, 'pieza', None)
         origen = attrs.get('origen') if 'origen' in attrs else getattr(self.instance, 'origen', None)
         destino = attrs.get('destino') if 'destino' in attrs else getattr(self.instance, 'destino', None)
-        turno = attrs.get('turno') if 'turno' in attrs else getattr(self.instance, 'turno', None)
+        ronda = attrs.get('ronda') if 'ronda' in attrs else getattr(self.instance, 'ronda', None)
         partida = attrs.get('partida') if 'partida' in attrs else getattr(self.instance, 'partida', None)
 
         if pieza is not None and origen is not None:
@@ -105,11 +115,11 @@ class MovimientoSerializer(serializers.ModelSerializer):
                 })
 
         # La ocupación del destino debe comprobarse en la misma partida del movimiento.
-        # Priorizamos turno.partida (contexto real del movimiento) y, solo si no existe,
+        # Priorizamos ronda.partida (contexto real del movimiento) y, solo si no existe,
         # usamos partida o pieza.partida.
         partida_ctx = None
-        if turno is not None:
-            partida_ctx = turno.partida
+        if ronda is not None:
+            partida_ctx = ronda.partida
         if partida_ctx is None:
             partida_ctx = partida
         if partida_ctx is None and pieza is not None:
@@ -124,29 +134,29 @@ class MovimientoSerializer(serializers.ModelSerializer):
     class Meta:
         model = Movimiento
         fields = ['id_movimiento', 'jugador', 'jugador_nombre', 'pieza', 'pieza_tipo', 
-                  'turno', 'partida', 'origen', 'destino']
+                  'ronda', 'partida', 'origen', 'destino']
 
 
-class TurnoSerializer(serializers.ModelSerializer):
+class RondaSerializer(serializers.ModelSerializer):
     jugador_nombre = serializers.CharField(source='jugador.nombre', read_only=True)
     movimientos = MovimientoSerializer(many=True, read_only=True)
     
     class Meta:
-        model = Turno
-        fields = ['id_turno', 'jugador', 'jugador_nombre', 'numero', 'inicio', 
+        model = Ronda
+        fields = ['id_ronda', 'jugador', 'jugador_nombre', 'numero', 'inicio', 
                   'fin', 'partida', 'movimientos']
         read_only_fields = ['inicio']
 
 
 class PartidaSerializer(serializers.ModelSerializer):
-    turnos = TurnoSerializer(many=True, read_only=True)
+    rondas = RondaSerializer(many=True, read_only=True)
     movimientos = MovimientoSerializer(many=True, read_only=True)
     participantes = JugadorPartidaSerializer(source='jugadorpartida_set', many=True, read_only=True)
     
     class Meta:
         model = Partida
         fields = ['id_partida', 'fecha_inicio', 'fecha_fin', 'estado', 
-                  'numero_jugadores', 'tiempo_sobrante', 'turnos', 'movimientos', 'participantes']
+                  'numero_jugadores', 'tiempo_sobrante', 'rondas', 'movimientos', 'participantes']
         read_only_fields = ['fecha_inicio']
 
 
@@ -158,17 +168,17 @@ class PartidaListSerializer(serializers.ModelSerializer):
         read_only_fields = ['fecha_inicio']
 
 
-class IASerializer(serializers.ModelSerializer):
+class AgenteInteligenteSerializer(serializers.ModelSerializer):
     jugador_nombre = serializers.CharField(source='jugador.nombre', read_only=True)
     
     class Meta:
-        model = IA
+        model = AgenteInteligente
         fields = ['jugador', 'jugador_nombre', 'nivel']
 
 
 class ChatbotSerializer(serializers.ModelSerializer):
-    ia_jugador = serializers.CharField(source='ia.jugador.nombre', read_only=True)
+    agente_inteligente_jugador = serializers.CharField(source='agente_inteligente.jugador.nombre', read_only=True)
     
     class Meta:
         model = Chatbot
-        fields = ['id', 'ia', 'ia_jugador', 'memoria', 'contexto']
+        fields = ['id', 'agente_inteligente', 'agente_inteligente_jugador', 'memoria', 'contexto']
