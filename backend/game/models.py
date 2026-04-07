@@ -32,7 +32,7 @@ def validate_position_key(key: str) -> None:
 
 class Jugador(models.Model):
     """
-    Modelo para representar un jugador (humano o IA)
+    Modelo para representar un jugador (humano o agente Inteligente)
     """
     id_jugador = models.CharField(max_length=50, primary_key=True)
     nombre = models.CharField(max_length=100)
@@ -238,23 +238,23 @@ class Movimiento(models.Model):
 
 class IA(models.Model):
     """
-    Modelo para representar la configuración de IA de un jugador
-    Relación: Jugador 1 --> 0..1 IA
-    Relación: Chatbot 1 --> 1 IA (inversa)
+    Modelo para representar la configuración de agente Inteligente de un jugador
+    Relación: Jugador 1 --> 0..1 agente Inteligente
+    Relación: Chatbot 1 --> 1 agente Inteligente (inversa)
     """
     jugador = models.OneToOneField(
         Jugador, 
         on_delete=models.CASCADE, 
         primary_key=True,
-        related_name='ia'  # Jugador 1 --> 0..1 IA
+        related_name='ia'  # Jugador 1 --> 0..1 agente Inteligente
     )
     nivel = models.IntegerField(
         validators=[MinValueValidator(1), MaxValueValidator(2)]
     )
 
     class Meta:
-        verbose_name = "IA"
-        verbose_name_plural = "IAs"
+        verbose_name = "Agente Inteligente"
+        verbose_name_plural = "Agentes Inteligentes"
         constraints = [
             models.CheckConstraint(
                 check=models.Q(nivel__gte=1) & models.Q(nivel__lte=2),
@@ -263,18 +263,18 @@ class IA(models.Model):
         ]
 
     def __str__(self):
-        return f"IA Nivel {self.nivel} del jugador {self.jugador}"
+        return f"Agente Inteligente Nivel {self.nivel} del jugador {self.jugador}"
 
 
 class Chatbot(models.Model):
     """
     Modelo para representar el chatbot de ayuda
-    Relación: Chatbot 1 --> 1 IA
+    Relación: Chatbot 1 --> 1 agente Inteligente
     """
     ia = models.OneToOneField(
         IA,
         on_delete=models.CASCADE,
-        related_name='chatbot',  # Chatbot 1 --> 1 IA
+        related_name='chatbot',  # Chatbot 1 --> 1 agente Inteligente
         null=True,
         blank=True
     )

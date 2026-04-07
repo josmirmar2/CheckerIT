@@ -188,8 +188,8 @@ def run_match(turns: int, iterations_mcts: int, seed_base: int) -> MatchResult:
     with transaction.atomic():
         partida = Partida.objects.create(id_partida=_new_id("PAUTO"), numero_jugadores=2)
 
-        j_heur = Jugador.objects.create(id_jugador=_new_id("JH"), nombre="IA Heur", humano=False, numero=1)
-        j_mcts = Jugador.objects.create(id_jugador=_new_id("JM"), nombre="IA MCTS", humano=False, numero=2)
+        j_heur = Jugador.objects.create(id_jugador=_new_id("JH"), nombre="Agente Inteligente Heur", humano=False, numero=1)
+        j_mcts = Jugador.objects.create(id_jugador=_new_id("JM"), nombre="Agente Inteligente MCTS", humano=False, numero=2)
 
         IA.objects.create(jugador=j_heur, nivel=1)
         IA.objects.create(jugador=j_mcts, nivel=2)
@@ -234,15 +234,15 @@ def run_match(turns: int, iterations_mcts: int, seed_base: int) -> MatchResult:
 
             pieza_id = payload.get("pieza_id")
             if not pieza_id:
-                raise RuntimeError("La IA no devolvió pieza_id")
+                raise RuntimeError("El agente Inteligente no devolvió pieza_id")
 
             pieza = Pieza.objects.get(id_pieza=str(pieza_id))
             if str(pieza.jugador_id) != jugador_id:
-                raise RuntimeError("La IA devolvió una pieza que no es del jugador")
+                raise RuntimeError("El agente Inteligente devolvió una pieza que no es del jugador")
 
             steps = list(_iter_steps_from_payload(payload))
             if not steps or not all(o and d for o, d in steps):
-                raise RuntimeError("La IA no devolvió origen/destino")
+                raise RuntimeError("El agente Inteligente no devolvió origen/destino")
 
             # coherencia: el primer origen debe coincidir con la posición actual de la pieza
             pieza.refresh_from_db()

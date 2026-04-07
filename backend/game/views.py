@@ -278,7 +278,7 @@ class JugadorViewSet(viewsets.ModelViewSet):
             return
         dificultad = str(request_data.get('dificultad') or request_data.get('nivel') or 'Fácil')
         numero = jugador.numero or Jugador.objects.filter(humano=False).count()
-        nombre_deseado = f"IA {numero}"
+        nombre_deseado = f"Agente Inteligente {numero}"
         if jugador.nombre != nombre_deseado:
             jugador.nombre = nombre_deseado
             jugador.save(update_fields=['nombre'])
@@ -316,7 +316,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
             "numero_jugadores": 2,
             "jugadores": [
                 {"nombre": "Juan", "icono": "icono1.jpg", "tipo": "humano", "dificultad": "Baja"},
-                {"nombre": "IA Difícil 2", "icono": "Robot-icon.jpg", "tipo": "ia", "dificultad": "Difícil"}
+                {"nombre": "Agente Inteligente Difícil 2", "icono": "Robot-icon.jpg", "tipo": "ia", "dificultad": "Difícil"}
             ]
         }
         """
@@ -370,7 +370,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
             if es_humano:
                 nombre = jugador_data.get('nombre', f'Jugador {idx + 1}')
             else:
-                nombre = f"IA {numero}"
+                nombre = f"Agente Inteligente {numero}"
             
             jugador = Jugador.objects.create(
                 id_jugador=f"J{idx + 1}_{datetime.now().timestamp()}",
@@ -816,7 +816,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         """
         Elimina la partida y todos los jugadores asociados creados para ella.
-        También elimina en cascada: piezas, movimientos, turnos, IAs y chatbots.
+        También elimina en cascada: piezas, movimientos, turnos, agentes Inteligentes y chatbots.
         """
         partida = self.get_object()
         
@@ -828,7 +828,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
         partida.delete()
         
         # Eliminar los jugadores que fueron creados para esta partida
-        # (esto eliminará en cascada sus IAs y Chatbots asociados)
+        # (esto eliminará en cascada sus agentes Inteligentes y Chatbots asociados)
         Jugador.objects.filter(id_jugador__in=jugadores_ids).delete()
         
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -885,7 +885,7 @@ class MovimientoViewSet(viewsets.ModelViewSet):
 
 class IAViewSet(viewsets.ModelViewSet):
     """
-    ViewSet para gestionar configuraciones de IA
+    ViewSet para gestionar configuraciones de agente Inteligente
     """
     queryset = IA.objects.all()
     serializer_class = IASerializer
@@ -895,7 +895,7 @@ class IAViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def sugerir_movimiento(self, request, pk=None):
         """
-        Retorna un movimiento sugerido para la IA usando heuristica Max.
+        Retorna un movimiento sugerido para el agente Inteligente usando heurística Max.
 
         Datos de entrada:
         - partida_id: id de la partida
@@ -912,7 +912,7 @@ class IAViewSet(viewsets.ModelViewSet):
         if not turno_actual:
             return Response({'error': 'No hay turno activo para la partida'}, status=status.HTTP_400_BAD_REQUEST)
         if str(turno_actual.jugador_id) != str(ia_obj.jugador_id):
-            return Response({'error': 'No es el turno de esta IA'}, status=status.HTTP_409_CONFLICT)
+            return Response({'error': 'No es el turno de este agente Inteligente'}, status=status.HTTP_409_CONFLICT)
 
         allow_simple = bool(permitir_simples_raw) if isinstance(permitir_simples_raw, bool) else str(permitir_simples_raw).lower() != 'false'
 

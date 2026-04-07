@@ -61,7 +61,7 @@ def main() -> int:
         # 1) Crear partida y jugadores
         partida = Partida.objects.create(id_partida=_new_id("PMCTS"), numero_jugadores=2)
 
-        j1 = Jugador.objects.create(id_jugador=_new_id("J1"), nombre="IA 1", humano=False, numero=1)
+        j1 = Jugador.objects.create(id_jugador=_new_id("J1"), nombre="Agente Inteligente 1", humano=False, numero=1)
         j2 = Jugador.objects.create(id_jugador=_new_id("J2"), nombre="Humano 2", humano=True, numero=2)
 
         IA.objects.create(jugador=j1, nivel=2)
@@ -103,7 +103,7 @@ def main() -> int:
         )
 
         print(f"Partida: {partida.id_partida}")
-        print(f"Turno:   {turno.id_turno} (jugador IA: {j1.id_jugador})")
+        print(f"Turno:   {turno.id_turno} (jugador agente Inteligente: {j1.id_jugador})")
 
         # 3) Ejecutar MCTS
         _print_header("MCTS (SIN REQUESTS) - SUGERENCIA")

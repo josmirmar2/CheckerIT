@@ -460,7 +460,7 @@ def test_crear_jugador_ia_normaliza_nombre(api_client):
     )
     assert res.status_code == 201
     j = Jugador.objects.get(id_jugador="J_IA")
-    assert j.nombre == "IA 7"
+    assert j.nombre == "Agente Inteligente 7"
 
 
 @pytest.mark.django_db

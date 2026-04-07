@@ -296,7 +296,7 @@ def legal_turn_moves(
 
 
 class MCTSAgent:
-    """IA 'Difícil' basada en MCTS.
+    """Agente Inteligente 'Difícil' basado en MCTS.
 
     Integra la librería `imparaai-montecarlo` mediante:
     - `child_finder`: genera los hijos (jugadas posibles) de un nodo.

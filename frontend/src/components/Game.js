@@ -87,7 +87,7 @@ function Game() {
     }
     if (configJugador?.tipo === 'ia') {
       const diff = configJugador?.dificultad;
-      return diff ? `IA ${diff}` : 'IA';
+      return diff ? `Agente Inteligente ${diff}` : 'Agente Inteligente';
     }
     return 'Jugador';
   };
@@ -510,7 +510,7 @@ function Game() {
 
       const data = await res.json();
       if (!data?.origen || !data?.destino) {
-        throw new Error('Respuesta de IA sin origen/destino');
+        throw new Error('Respuesta del agente Inteligente sin origen/destino');
       }
 
       const token = Date.now();
@@ -521,7 +521,7 @@ function Game() {
           .map((m) => ({ fromKey: m.origen, toKey: m.destino, piezaId: data.pieza_id || data.pieza }));
 
         if (seq.length === 0) {
-          throw new Error('Respuesta de IA con secuencia vacía');
+          throw new Error('Respuesta del agente Inteligente con secuencia vacía');
         }
 
         aiSeqTokenRef.current = token;
@@ -541,8 +541,8 @@ function Game() {
         }, AI_FIRST_DELAY_MS);
       }
     } catch (error) {
-      console.error('Error al solicitar jugada IA:', error);
-      setAiError(error.message || 'Fallo al calcular jugada de IA');
+      console.error('Error al solicitar jugada del agente Inteligente:', error);
+      setAiError(error.message || 'Fallo al calcular jugada del agente Inteligente');
       setAiMoveCmd(null);
       setAiAutoFinishToken(null);
       setAiSequence(null);
@@ -695,7 +695,7 @@ function Game() {
       pieza_id: piezaId,
     }]);
 
-    // Si la IA está ejecutando una secuencia, avanzar al siguiente paso
+    // Si el agente Inteligente está ejecutando una secuencia, avanzar al siguiente paso
     if (isAITurn && aiSequence && aiSeqTokenRef.current) {
       setAiSeqIndex((idx) => idx + 1);
     }
@@ -742,7 +742,7 @@ function Game() {
     aiSeqTokenRef.current = null;
   };
 
-  // Ejecutar secuencias de IA paso a paso con retardo
+  // Ejecutar secuencias del agente Inteligente paso a paso con retardo
   useEffect(() => {
     if (!isAITurn) return;
     if (!aiSequence || !aiSeqTokenRef.current) return;
@@ -766,12 +766,12 @@ function Game() {
     if (!moveMade) return;
     if (!moveHistory || moveHistory.length === 0) return;
 
-    // Si hay una secuencia IA en curso, no cerrar turno aún
+    // Si hay una secuencia del agente Inteligente en curso, no cerrar turno aún
     if (aiSequence && aiSeqIndex < (aiSequence?.length || 0)) return;
     if (isPaused) return;
 
     const autoAdvance = async () => {
-      console.log('🤖 Auto-avanzando turno de IA...');
+      console.log('🤖 Auto-avanzando turno del agente Inteligente...');
       await continueTurn();
     };
 
@@ -829,7 +829,7 @@ function Game() {
               const punta = activePuntas[idx];
               const colorHex = PLAYER_COLORS[punta];
               const displayName = resolveNombreJugador(jugador, dbJugadores[idx]);
-              const keyBase = dbJugadores[idx]?.id_jugador || `${jugador?.nombre || 'IA'}-${idx}`;
+              const keyBase = dbJugadores[idx]?.id_jugador || `${jugador?.nombre || 'Agente Inteligente'}-${idx}`;
               return (
                 <div
                   key={keyBase}

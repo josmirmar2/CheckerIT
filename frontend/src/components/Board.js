@@ -624,7 +624,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                       '--valid-move-color': selectedPieceColor,
                     }),
                   }}
-                  title={jugador ? `${jugador.nombre || 'IA'}` : 'Vacío'}
+                  title={jugador ? `${jugador.nombre || 'Agente Inteligente'}` : 'Vacío'}
                   onClick={onClick}
                 >
                   {jugador && (
@@ -633,7 +633,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                         src={jugador.icono === 'Robot-icon.jpg'
                           ? require('./images/Robot-icon.jpg')
                           : require(`./images/icons/${jugador.icono}`)}
-                        alt={jugador.nombre || 'IA'}
+                        alt={jugador.nombre || 'Agente Inteligente'}
                         className="cell-icon"
                       />
                     </div>

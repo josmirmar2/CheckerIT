@@ -186,7 +186,7 @@ function Players() {
                         className={`type-button ${jugador.tipo === 'ia' ? 'active' : ''}`}
                         onClick={() => handleJugadorChange(index, 'tipo', 'ia')}
                       >
-                        IA
+                        Agente Inteligente
                       </button>
                     </div>
                   </div>

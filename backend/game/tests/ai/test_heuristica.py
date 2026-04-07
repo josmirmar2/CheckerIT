@@ -56,7 +56,7 @@ def main() -> int:
     # 1) Crear partida y jugadores
     partida = Partida.objects.create(id_partida=_new_id("PHEUR"), numero_jugadores=2)
 
-    j1 = Jugador.objects.create(id_jugador=_new_id("JIA"), nombre="IA 1", humano=False, numero=1)
+    j1 = Jugador.objects.create(id_jugador=_new_id("JIA"), nombre="Agente Inteligente 1", humano=False, numero=1)
     j2 = Jugador.objects.create(id_jugador=_new_id("JH"), nombre="Humano 2", humano=True, numero=2)
 
     IA.objects.create(jugador=j1, nivel=1) 
@@ -92,7 +92,7 @@ def main() -> int:
     )
 
     print(f"Partida: {partida.id_partida}")
-    print(f"Turno:   {turno.id_turno} (jugador IA: {j1.id_jugador})")
+    print(f"Turno:   {turno.id_turno} (jugador agente Inteligente: {j1.id_jugador})")
 
     _print_header("HEURÍSTICA (SIN REQUESTS) - SUGERENCIA")
 

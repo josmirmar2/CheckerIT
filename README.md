@@ -8,7 +8,7 @@ CheckerIT es una aplicación web full-stack para jugar a Damas Chinas. El fronte
 - Registro de movimientos con validación de reglas en el backend.
 - Interfaz de usuario con tablero, tutorial y pantallas de juego.
 - Soporte de jugadores humanos e inteligencia artificial.
-- IA con dos niveles: heurística y MCTS (dificultad “Difícil”).
+- Agente Inteligente con dos niveles: heurística y MCTS (dificultad “Difícil”).
 
 ## Arquitectura
 
@@ -130,14 +130,14 @@ Acciones relevantes:
 - `POST /api/partidas/{id_partida}/registrar_movimientos/` registra uno o varios pasos (cadena) de un turno, validando reglas.
 - `POST /api/partidas/{id_partida}/avanzar_turno/` finaliza el turno actual y crea el siguiente.
 - `POST /api/partidas/{id_partida}/end_game/` finaliza la partida.
-- `POST /api/ia/{id}/sugerir_movimiento/` devuelve una sugerencia de jugada para una IA.
+- `POST /api/ia/{id}/sugerir_movimiento/` devuelve una sugerencia de jugada para un agente Inteligente.
 
 ## Estructura del proyecto
 
 ```text
 backend/
     checkerit/              Configuración de Django
-    game/                   App principal (modelos, API, validación, IA)
+    game/                   App principal (modelos, API, validación, agente Inteligente)
     manage.py
     requirements.txt
 frontend/
