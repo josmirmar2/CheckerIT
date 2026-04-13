@@ -36,6 +36,7 @@ function Game() {
   const [chatbotId, setChatbotId] = useState(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState(null);
+  const [showChatInfo, setShowChatInfo] = useState(false);
 
   const sendChatMessage = async () => {
     const mensaje = (chatInput || '').trim();
@@ -942,12 +943,45 @@ function Game() {
         </main>
 
         <aside className={`help-panel ${showHelp ? 'open' : ''}`}>
-          <button className="help-toggle" onClick={() => setShowHelp((prev) => !prev)}>
+          <button
+            className="help-toggle"
+            onClick={() => {
+              setShowHelp((prev) => {
+                const next = !prev;
+                if (!next) setShowChatInfo(false);
+                return next;
+              });
+            }}
+          >
             {showHelp ? 'Cerrar Ayuda' : 'Abrir Ayuda'}
           </button>
           {showHelp && (
             <div className="help-content">
-              <h3>Asistente</h3>
+              <div className="help-header">
+                <h3>Asistente</h3>
+                <button
+                  className="chatbot-infoButton"
+                  type="button"
+                  aria-label="Ver ejemplos de preguntas"
+                  aria-expanded={showChatInfo}
+                  onClick={() => setShowChatInfo((prev) => !prev)}
+                >
+                  i
+                </button>
+              </div>
+
+              {showChatInfo && (
+                <div className="chatbot-infoPanel">
+                  <div className="chatbot-infoTitle">Ejemplos de preguntas:</div>
+                  <ul className="chatbot-infoList">
+                    <li>"¿Cuáles son las reglas del juego?"</li>
+                    <li>"¿Cómo se mueve una pieza?"</li>
+                    <li>"Quiero ver los movimientos posibles"</li>
+                    <li>"¿Cuál es la mejor jugada?"</li>
+                    <li>"¿Qué hace el botón de Pausa y cómo se reanuda?"</li>
+                  </ul>
+                </div>
+              )}
               <div className="chatbot">
                 <div className="chatbot-messages" aria-live="polite">
                   {chatMessages.length === 0 ? (

@@ -1085,7 +1085,11 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 "En CheckerIT puedes mover una pieza de dos formas:\n"
                 "1) Movimiento simple: a una casilla vecina vacía.\n"
                 "2) Salto: si hay una pieza adyacente (propia o rival), puedes saltarla y caer en la casilla colineal detrás si está vacía.\n\n"
-                "Los saltos se pueden encadenar si, tras aterrizar, existe otro salto legal."
+                "Los saltos se pueden encadenar si, tras aterrizar, existe otro salto legal.\n\n"
+                "Botones durante tu turno:\n"
+                "- Pasar Ronda: cede el turno sin mover (si aún no has hecho un movimiento).\n"
+                "- Deshacer: revierte el movimiento que acabas de realizar en la ronda actual.\n"
+                "- Continuar: confirma el movimiento hecho y pasa al siguiente turno."
             )
             return respuesta, {"tipo": "reglas_movimiento"}
 
