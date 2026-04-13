@@ -29,6 +29,44 @@ function Game() {
   const [loading, setLoading] = useState(true);
   const [elapsed, setElapsed] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
+
+  // Chatbot (Gemini vía backend)
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState([]); // { role: 'user'|'assistant', text: string }
+  const [chatbotId, setChatbotId] = useState(null);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState(null);
+
+  const sendChatMessage = async () => {
+    const mensaje = (chatInput || '').trim();
+    if (!mensaje || chatLoading) return;
+
+    setChatError(null);
+    setChatLoading(true);
+    setChatMessages((prev) => [...prev, { role: 'user', text: mensaje }]);
+    setChatInput('');
+
+    try {
+      const res = await fetch('http://localhost:8000/api/chatbot/send_message/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mensaje, chatbot_id: chatbotId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || 'Error enviando mensaje al chatbot');
+      }
+
+      if (data?.chatbot_id && !chatbotId) {
+        setChatbotId(data.chatbot_id);
+      }
+      setChatMessages((prev) => [...prev, { role: 'assistant', text: data?.respuesta || '' }]);
+    } catch (err) {
+      setChatError(err?.message || 'Error enviando mensaje al chatbot');
+    } finally {
+      setChatLoading(false);
+    }
+  };
   const [isPlayingMusic, setIsPlayingMusic] = useState(false);
   const [currentMusicIndex, setCurrentMusicIndex] = useState(-1);
   const audioRef = useRef(null);
@@ -902,8 +940,49 @@ function Game() {
           {showHelp && (
             <div className="help-content">
               <h3>Asistente</h3>
-              <p>Chatbot de ayuda</p>
-              <p className="help-placeholder">Aquí aparecerán sugerencias y respuestas.</p>
+              <div className="chatbot">
+                <div className="chatbot-messages" aria-live="polite">
+                  {chatMessages.length === 0 ? (
+                    <p className="help-placeholder">Escribe una pregunta y pulsa Enviar.</p>
+                  ) : (
+                    chatMessages.map((m, idx) => (
+                      <div
+                        key={idx}
+                        className={`chatbot-message ${m.role === 'user' ? 'user' : 'assistant'}`}
+                      >
+                        <div className="chatbot-bubble">
+                          <div className="chatbot-author">{m.role === 'user' ? 'Tú' : 'Asistente'}</div>
+                          <div className="chatbot-text">{m.text}</div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {chatError && <div className="chatbot-error">{chatError}</div>}
+
+                <div className="chatbot-inputRow">
+                  <input
+                    className="chatbot-input"
+                    type="text"
+                    value={chatInput}
+                    placeholder="Pregunta al asistente..."
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') sendChatMessage();
+                    }}
+                    disabled={chatLoading}
+                  />
+                  <button
+                    className="chatbot-sendButton"
+                    onClick={sendChatMessage}
+                    disabled={chatLoading}
+                    type="button"
+                  >
+                    {chatLoading ? 'Enviando...' : 'Enviar'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </aside>
