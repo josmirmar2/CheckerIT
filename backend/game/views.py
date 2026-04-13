@@ -1076,9 +1076,40 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             "cómo puedo mover",
         )
 
+        end_game_triggers = (
+            "terminar partida",
+            "acabar partida",
+            "finalizar partida",
+            "cancelar partida",
+            "cómo terminar",
+            "como terminar",
+            "cómo acabar",
+            "como acabar",
+            "finalizar",
+            "cancelar",
+            "ganador",
+            "victoria",
+            "cómo ganar",
+            "como ganar",
+        )
+
         wants_best = any(t in texto for t in best_move_triggers)
         wants_possible = any(t in texto for t in possible_moves_triggers)
         wants_how = any(t in texto for t in how_to_move_triggers)
+        wants_end = any(t in texto for t in end_game_triggers)
+
+        if wants_end and not (wants_best or wants_possible):
+            respuesta = (
+                "Puedes terminar una partida de dos formas:\n\n"
+                "1) Cancelarla / finalizarla manualmente (antes de que haya ganador):\n"
+                "   - Pausa el juego y pulsa el botón de Finalizar.\n"
+                "   - Confirma la acción: volverás al inicio y se pierde el progreso de la partida.\n\n"
+                "2) Terminarla de forma normal (con ganador):\n"
+                "   - Sigue jugando turnos hasta que un jugador complete su objetivo.\n"
+                "   - La partida termina cuando todas las piezas de un jugador llegan a la zona objetivo (la punta opuesta).\n"
+                "   - En ese momento se muestra la pantalla de victoria con el ganador."
+            )
+            return respuesta, {"tipo": "fin_partida"}
 
         if wants_how and not (wants_best or wants_possible):
             respuesta = (

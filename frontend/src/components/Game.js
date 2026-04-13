@@ -978,6 +978,7 @@ function Game() {
                     <li>"¿Cómo se mueve una pieza?"</li>
                     <li>"Quiero ver los movimientos posibles"</li>
                     <li>"¿Cuál es la mejor jugada?"</li>
+                    <li>"¿Cómo puedo cancelar o finalizar una partida?"</li>
                     <li>"¿Qué hace el botón de Pausa y cómo se reanuda?"</li>
                   </ul>
                 </div>
