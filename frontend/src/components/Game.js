@@ -50,7 +50,15 @@ function Game() {
       const res = await fetch('http://localhost:8000/api/chatbot/send_message/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mensaje, chatbot_id: chatbotId }),
+        body: JSON.stringify({
+          mensaje,
+          chatbot_id: chatbotId,
+          partida_id: partida?.id_partida || null,
+          jugador_id:
+            currentPlayerIndex !== null && currentPlayerIndex !== undefined
+              ? (dbJugadores?.[currentPlayerIndex]?.id_jugador || null)
+              : null,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {

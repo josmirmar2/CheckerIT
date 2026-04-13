@@ -53,6 +53,13 @@ def generate_gemini_reply(
         raise GeminiError("El mensaje no puede estar vacío")
 
     contents: list[dict] = []
+    # Nota: la API v1 (y algunas variantes) pueden rechazar campos como `systemInstruction`.
+    # Para máxima compatibilidad, incorporamos el system prompt como un primer mensaje.
+    if system_prompt and str(system_prompt).strip():
+        contents.append({
+            "role": "user",
+            "parts": [{"text": f"INSTRUCCIONES (seguir estrictamente):\n{str(system_prompt).strip()}"}],
+        })
     if history:
         contents.extend(history)
     contents.append({"role": "user", "parts": [{"text": str(user_message)}]})
@@ -73,12 +80,6 @@ def generate_gemini_reply(
         url = f"{_BASE_URL}/{api_version}/{model_path}:generateContent"
         try:
             payload: dict = {"contents": contents}
-
-            if system_prompt and str(system_prompt).strip():
-                payload["systemInstruction"] = {
-                    "role": "system",
-                    "parts": [{"text": str(system_prompt)}],
-                }
 
             generation_config: dict = {}
             if temperature is not None:

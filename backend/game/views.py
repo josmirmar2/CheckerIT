@@ -1019,7 +1019,155 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 return True
         return False
 
-    def _send_and_persist(self, *, chatbot: Chatbot, mensaje: str) -> Response:
+    def _maybe_answer_game_help(
+        self,
+        *,
+        mensaje: str,
+        partida_id: str | None,
+        jugador_id: str | None,
+        pieza_id: str | None = None,
+    ) -> tuple[str | None, dict | None]:
+        """Respuestas deterministas basadas en estado de partida.
+
+        Devuelve (respuesta_texto, extra_payload) o (None, None) si no aplica.
+        """
+        texto = (str(mensaje) if mensaje is not None else "").lower()
+
+        best_move_triggers = (
+            "mejor jugada",
+            "mejor movimiento",
+            "sugerir jugada",
+            "sugerencia",
+            "recomienda",
+            "qué jugada",
+            "que jugada",
+            "best move",
+        )
+        possible_moves_triggers = (
+            "movimientos posibles",
+            "posibles movimientos",
+            "posiciones posibles",
+            "donde puedo mover",
+            "dónde puedo mover",
+            "a donde puedo mover",
+            "a dónde puedo mover",
+            "ver movimientos",
+        )
+        how_to_move_triggers = (
+            "como se mueve",
+            "cómo se mueve",
+            "como mover",
+            "cómo mover",
+            "como puedo mover",
+            "cómo puedo mover",
+        )
+
+        wants_best = any(t in texto for t in best_move_triggers)
+        wants_possible = any(t in texto for t in possible_moves_triggers)
+        wants_how = any(t in texto for t in how_to_move_triggers)
+
+        if wants_how and not (wants_best or wants_possible):
+            respuesta = (
+                "En CheckerIT puedes mover una pieza de dos formas:\n"
+                "1) Movimiento simple: a una casilla vecina vacía.\n"
+                "2) Salto: si hay una pieza adyacente (propia o rival), puedes saltarla y caer en la casilla colineal detrás si está vacía.\n\n"
+                "Los saltos se pueden encadenar si, tras aterrizar, existe otro salto legal."
+            )
+            return respuesta, {"tipo": "reglas_movimiento"}
+
+        if not (wants_best or wants_possible):
+            return None, None
+
+        if not partida_id or not jugador_id:
+            return (
+                "Para poder ayudarte con jugadas/movimientos necesito el estado de la partida (partida_id) y el jugador actual (jugador_id).",
+                {"tipo": "faltan_parametros"},
+            )
+
+        # Validar existencia de partida/jugador y evitar respuestas confusas
+        if not Partida.objects.filter(id_partida=str(partida_id)).exists():
+            return (f"partida_id no válido: {partida_id}", {"tipo": "error", "campo": "partida_id"})
+        if not Jugador.objects.filter(id_jugador=str(jugador_id)).exists():
+            return (f"jugador_id no válido: {jugador_id}", {"tipo": "error", "campo": "jugador_id"})
+
+        if wants_best:
+            try:
+                agent = MaxHeuristicAgent()
+                sugerencia = agent.suggest_move(
+                    partida_id=str(partida_id),
+                    jugador_id=str(jugador_id),
+                    allow_simple=True,
+                )
+            except ValueError as exc:
+                return (f"No pude calcular la mejor jugada: {exc}", {"tipo": "error", "motivo": "sin_jugadas"})
+            except Exception as exc:
+                return (f"No se pudo calcular la jugada: {exc}", {"tipo": "error"})
+
+            origen = sugerencia.get("origen")
+            destino = sugerencia.get("destino")
+            secuencia = sugerencia.get("secuencia")
+            if isinstance(secuencia, list) and secuencia:
+                pasos = " -> ".join([str(origen)] + [str(step.get("destino")) for step in secuencia if step.get("destino")])
+                respuesta = f"Sugerencia (heurística): {pasos}"
+            else:
+                respuesta = f"Sugerencia (heurística): {origen} -> {destino}"
+
+            return respuesta, {"tipo": "mejor_jugada", "sugerencia": sugerencia}
+
+        # Movimientos/posiciones posibles
+        piezas_qs = Pieza.objects.filter(partida_id=str(partida_id), jugador_id=str(jugador_id))
+        if pieza_id:
+            piezas_qs = piezas_qs.filter(id_pieza=str(pieza_id))
+
+        piezas = list(piezas_qs)
+        if not piezas:
+            return (
+                "No encontré piezas para ese jugador en esta partida.",
+                {"tipo": "movimientos", "movimientos": {}},
+            )
+
+        occupied = get_occupied_positions(str(partida_id))
+        movimientos: dict[str, dict] = {}
+
+        for pieza in piezas:
+            if not pieza.posicion:
+                continue
+            destinos = sorted(get_valid_moves_from(str(pieza.posicion), occupied, allow_simple=True))
+            if destinos:
+                movimientos[str(pieza.id_pieza)] = {
+                    "origen": str(pieza.posicion),
+                    "destinos": destinos,
+                }
+
+        total = sum(len(v.get("destinos") or []) for v in movimientos.values())
+        if total == 0:
+            return (
+                "No encontré movimientos legales disponibles en esta posición.",
+                {"tipo": "movimientos", "movimientos": movimientos},
+            )
+
+        lineas = [f"Movimientos posibles: {total} (mostrando hasta 12 piezas)"]
+        shown = 0
+        for _pid, info in movimientos.items():
+            if shown >= 12:
+                break
+            origen = info.get("origen")
+            destinos = info.get("destinos") or []
+            destinos_str = ", ".join(destinos[:10]) + ("..." if len(destinos) > 10 else "")
+            lineas.append(f"- {origen} -> {destinos_str}")
+            shown += 1
+
+        return "\n".join(lineas), {"tipo": "movimientos", "movimientos": movimientos}
+
+    def _send_and_persist(
+        self,
+        *,
+        chatbot: Chatbot,
+        mensaje: str,
+        partida_id: str | None = None,
+        jugador_id: str | None = None,
+        pieza_id: str | None = None,
+    ) -> Response:
         api_key = getattr(settings, 'GEMINI_API_KEY', None)
         try:
             max_chars = int(getattr(settings, 'CHATBOT_MAX_INPUT_CHARS', 400))
@@ -1038,6 +1186,28 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 {'error': f'El mensaje es demasiado largo (máx {max_chars} caracteres)'},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+
+        # Si el mensaje pide ayuda de jugadas/movimientos y se aporta contexto, responder sin Gemini.
+        respuesta_local, extra = self._maybe_answer_game_help(
+            mensaje=mensaje,
+            partida_id=partida_id,
+            jugador_id=jugador_id,
+            pieza_id=pieza_id,
+        )
+        if respuesta_local is not None:
+            if 'conversaciones' not in chatbot.memoria:
+                chatbot.memoria['conversaciones'] = []
+            chatbot.memoria['conversaciones'].append({
+                'mensaje': mensaje,
+                'respuesta': respuesta_local,
+                'timestamp': str(timezone.now())
+            })
+            chatbot.save()
+
+            payload = {'chatbot_id': chatbot.id, 'respuesta': respuesta_local}
+            if isinstance(extra, dict) and extra:
+                payload.update(extra)
+            return Response(payload, status=status.HTTP_200_OK)
 
         # Hard gate: si se fuerza dominio y el mensaje no es del dominio, rechazar sin IA
         if getattr(settings, 'CHATBOT_DOMAIN_ENFORCE', True) and not self._is_in_domain(mensaje):
@@ -1101,6 +1271,9 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         """
         mensaje = request.data.get('mensaje', '')
         chatbot_id = request.data.get('chatbot_id')
+        partida_id = request.data.get('partida_id')
+        jugador_id = request.data.get('jugador_id')
+        pieza_id = request.data.get('pieza_id')
 
         if chatbot_id:
             try:
@@ -1112,7 +1285,13 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             if chatbot is None:
                 chatbot = Chatbot.objects.create()
 
-        return self._send_and_persist(chatbot=chatbot, mensaje=mensaje)
+        return self._send_and_persist(
+            chatbot=chatbot,
+            mensaje=mensaje,
+            partida_id=partida_id,
+            jugador_id=jugador_id,
+            pieza_id=pieza_id,
+        )
     
     @action(detail=True, methods=['post'])
     def send_message(self, request, pk=None):
@@ -1121,8 +1300,17 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         """
         chatbot = self.get_object()
         mensaje = request.data.get('mensaje', '')
+        partida_id = request.data.get('partida_id')
+        jugador_id = request.data.get('jugador_id')
+        pieza_id = request.data.get('pieza_id')
 
-        return self._send_and_persist(chatbot=chatbot, mensaje=mensaje)
+        return self._send_and_persist(
+            chatbot=chatbot,
+            mensaje=mensaje,
+            partida_id=partida_id,
+            jugador_id=jugador_id,
+            pieza_id=pieza_id,
+        )
 
 
 class JugadorPartidaViewSet(viewsets.ModelViewSet):
