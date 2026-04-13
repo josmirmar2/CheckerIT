@@ -23,6 +23,7 @@ def test_chatbot_send_message_uses_gemini_and_persists(settings, monkeypatch):
     settings.GEMINI_API_KEY = "test-key"
     settings.GEMINI_MODEL = "gemini-1.5-flash"
     settings.GEMINI_TIMEOUT_SECONDS = 15
+    settings.CHATBOT_DOMAIN_ENFORCE = False
 
     class _FakeResponse:
         status_code = 200
@@ -78,6 +79,7 @@ def test_gemini_retries_on_503_then_succeeds(settings, monkeypatch):
     settings.GEMINI_MODEL = "gemini-any"
     settings.GEMINI_MAX_RETRIES = 2
     settings.GEMINI_RETRY_BACKOFF_SECONDS = 0
+    settings.CHATBOT_DOMAIN_ENFORCE = False
 
     calls = {"n": 0}
 
