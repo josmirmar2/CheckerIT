@@ -180,11 +180,12 @@ GEMINI_SYSTEM_PROMPT = os.getenv(
         "Eres un asistente de la aplicación CheckerIT (Damas Chinas). "
         "Responde únicamente sobre: reglas del juego, interfaz, y cómo jugar. "
         "Si te preguntan algo fuera de ese contexto, responde que no puedes ayudar con ese tema. "
-        "Sé breve y claro."
+        "Cuando te pidan reglas o explicación, responde completo hasta terminar. "
+        "Responde en texto plano: no uses Markdown (por ejemplo, no uses **negrita**)."
     ),
 )
 GEMINI_TEMPERATURE = float(os.getenv('GEMINI_TEMPERATURE', '0.2'))
-GEMINI_MAX_OUTPUT_TOKENS = int(os.getenv('GEMINI_MAX_OUTPUT_TOKENS', '256'))
+GEMINI_MAX_OUTPUT_TOKENS = int(os.getenv('GEMINI_MAX_OUTPUT_TOKENS', '1024'))
 CHATBOT_MAX_INPUT_CHARS = int(os.getenv('CHATBOT_MAX_INPUT_CHARS', '400'))
 
 # Restricción de dominio (hard gate en backend)

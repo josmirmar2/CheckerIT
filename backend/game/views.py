@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.conf import settings
 from datetime import datetime
 from collections import deque
+import re
 from .ai.gemini_api import generate_gemini_reply, GeminiError, GeminiHttpError
 from .models import Jugador, Partida, Pieza, Ronda, Movimiento, AgenteInteligente, Chatbot, JugadorPartida
 from .ai.max_agent import MaxHeuristicAgent
@@ -971,6 +972,19 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 history.append({"role": "model", "parts": [{"text": str(respuesta)}]})
         return history
 
+    def _sanitize_llm_text(self, text: str | None) -> str:
+        if text is None:
+            return ""
+        s = str(text)
+
+        # Quitar marcas típicas de negrita Markdown conservando el contenido.
+        s = re.sub(r"\*\*(.+?)\*\*", r"\1", s, flags=re.DOTALL)
+        s = re.sub(r"__(.+?)__", r"\1", s, flags=re.DOTALL)
+
+        # Si quedaron marcadores sueltos, eliminarlos.
+        s = s.replace("**", "").replace("__", "")
+        return s
+
     def _get_domain_keywords(self) -> list[str]:
         raw = getattr(settings, 'CHATBOT_DOMAIN_KEYWORDS', '')
         keywords: list[str] = []
@@ -1195,6 +1209,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             pieza_id=pieza_id,
         )
         if respuesta_local is not None:
+            respuesta_local = self._sanitize_llm_text(respuesta_local)
             if 'conversaciones' not in chatbot.memoria:
                 chatbot.memoria['conversaciones'] = []
             chatbot.memoria['conversaciones'].append({
@@ -1248,6 +1263,8 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 return Response({'error': str(exc)}, status=exc.status_code)
             except GeminiError as exc:
                 return Response({'error': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        respuesta = self._sanitize_llm_text(respuesta)
 
         if 'conversaciones' not in chatbot.memoria:
             chatbot.memoria['conversaciones'] = []

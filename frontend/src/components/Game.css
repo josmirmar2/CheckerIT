@@ -432,6 +432,7 @@
 
 .chatbot-text {
   font-size: 0.95rem;
+  white-space: pre-wrap;
 }
 
 .chatbot-error {
