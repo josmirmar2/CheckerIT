@@ -161,3 +161,14 @@ REST_FRAMEWORK = {
 # Por defecto, las reglas del juego (adyacente/salto/cadena) se validan en backend solo para agente Inteligente.
 # Si se quiere forzar también para humanos (p.ej. en producción), activar esta variable.
 ENFORCE_MOVE_VALIDATION_FOR_HUMANS = os.getenv('ENFORCE_MOVE_VALIDATION_FOR_HUMANS', 'False') == 'True'
+
+# Gemini (Google AI) - Chatbot
+# La clave debe ir en backend/.env (nunca en el frontend)
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
+# Si no se define, el backend intentará auto-seleccionar un modelo compatible.
+GEMINI_MODEL = os.getenv('GEMINI_MODEL')
+# API version: 'v1' (recomendado) o 'v1beta'
+GEMINI_API_VERSION = os.getenv('GEMINI_API_VERSION', 'v1')
+GEMINI_TIMEOUT_SECONDS = int(os.getenv('GEMINI_TIMEOUT_SECONDS', '15'))
+GEMINI_MAX_RETRIES = int(os.getenv('GEMINI_MAX_RETRIES', '2'))
+GEMINI_RETRY_BACKOFF_SECONDS = float(os.getenv('GEMINI_RETRY_BACKOFF_SECONDS', '0.6'))

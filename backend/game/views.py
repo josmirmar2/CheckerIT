@@ -5,6 +5,7 @@ from django.utils import timezone
 from django.conf import settings
 from datetime import datetime
 from collections import deque
+from .ai.gemini_api import generate_gemini_reply, GeminiError, GeminiHttpError
 from .models import Jugador, Partida, Pieza, Ronda, Movimiento, AgenteInteligente, Chatbot, JugadorPartida
 from .ai.max_agent import MaxHeuristicAgent
 from .ai.mcts_agent import MCTSAgent
@@ -957,6 +958,75 @@ class ChatbotViewSet(viewsets.ModelViewSet):
     """
     queryset = Chatbot.objects.all()
     serializer_class = ChatbotSerializer
+
+    def _build_gemini_history(self, chatbot: Chatbot, *, limit_turns: int = 10) -> list[dict]:
+        conversaciones = (chatbot.memoria or {}).get('conversaciones') or []
+        history: list[dict] = []
+        for turn in conversaciones[-limit_turns:]:
+            mensaje = (turn or {}).get('mensaje')
+            respuesta = (turn or {}).get('respuesta')
+            if mensaje:
+                history.append({"role": "user", "parts": [{"text": str(mensaje)}]})
+            if respuesta:
+                history.append({"role": "model", "parts": [{"text": str(respuesta)}]})
+        return history
+
+    def _send_and_persist(self, *, chatbot: Chatbot, mensaje: str) -> Response:
+        api_key = getattr(settings, 'GEMINI_API_KEY', None)
+        if not api_key:
+            # Fallback para entornos sin configuración de Gemini (tests, dev)
+            respuesta = f"Respuesta del chatbot a: {mensaje}"
+        else:
+            try:
+                respuesta = generate_gemini_reply(
+                    api_key=api_key,
+                    model=getattr(settings, 'GEMINI_MODEL', None),
+                    timeout_seconds=int(getattr(settings, 'GEMINI_TIMEOUT_SECONDS', 15)),
+                    api_version=getattr(settings, 'GEMINI_API_VERSION', 'v1'),
+                    max_retries=int(getattr(settings, 'GEMINI_MAX_RETRIES', 2)),
+                    retry_backoff_seconds=float(getattr(settings, 'GEMINI_RETRY_BACKOFF_SECONDS', 0.6)),
+                    user_message=mensaje,
+                    history=self._build_gemini_history(chatbot, limit_turns=10),
+                )
+            except GeminiHttpError as exc:
+                return Response({'error': str(exc)}, status=exc.status_code)
+            except GeminiError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        if 'conversaciones' not in chatbot.memoria:
+            chatbot.memoria['conversaciones'] = []
+
+        chatbot.memoria['conversaciones'].append({
+            'mensaje': mensaje,
+            'respuesta': respuesta,
+            'timestamp': str(timezone.now())
+        })
+        chatbot.save()
+
+        return Response({'chatbot_id': chatbot.id, 'respuesta': respuesta}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='send_message')
+    def send_message_global(self, request):
+        """Envía un mensaje a Gemini y guarda la conversación.
+
+        Body JSON:
+        - mensaje: str (obligatorio)
+        - chatbot_id: int (opcional; si no, usa el primero o crea uno)
+        """
+        mensaje = request.data.get('mensaje', '')
+        chatbot_id = request.data.get('chatbot_id')
+
+        if chatbot_id:
+            try:
+                chatbot = Chatbot.objects.get(id=chatbot_id)
+            except Chatbot.DoesNotExist:
+                return Response({'error': 'chatbot_id no válido'}, status=status.HTTP_400_BAD_REQUEST)
+        else:
+            chatbot = Chatbot.objects.order_by('id').first()
+            if chatbot is None:
+                chatbot = Chatbot.objects.create()
+
+        return self._send_and_persist(chatbot=chatbot, mensaje=mensaje)
     
     @action(detail=True, methods=['post'])
     def send_message(self, request, pk=None):
@@ -965,20 +1035,8 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         """
         chatbot = self.get_object()
         mensaje = request.data.get('mensaje', '')
-        
-        respuesta = f"Respuesta del chatbot a: {mensaje}"
-        
-        if 'conversaciones' not in chatbot.memoria:
-            chatbot.memoria['conversaciones'] = []
-        
-        chatbot.memoria['conversaciones'].append({
-            'mensaje': mensaje,
-            'respuesta': respuesta,
-            'timestamp': str(timezone.now())
-        })
-        chatbot.save()
-        
-        return Response({'respuesta': respuesta})
+
+        return self._send_and_persist(chatbot=chatbot, mensaje=mensaje)
 
 
 class JugadorPartidaViewSet(viewsets.ModelViewSet):
