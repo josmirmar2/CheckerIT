@@ -130,6 +130,18 @@ GEMINI_API_VERSION=v1
 # Opcional: reintentos cuando Gemini esté saturado (503) o limitado (429)
 GEMINI_MAX_RETRIES=2
 GEMINI_RETRY_BACKOFF_SECONDS=0.6
+
+# Opcional: hacer el chatbot más restrictivo
+GEMINI_SYSTEM_PROMPT=Eres un asistente de CheckerIT; responde solo sobre reglas e interfaz.
+GEMINI_TEMPERATURE=0.2
+GEMINI_MAX_OUTPUT_TOKENS=256
+CHATBOT_MAX_INPUT_CHARS=400
+
+# Hard gate (rechaza fuera de dominio sin llamar a Gemini)
+CHATBOT_DOMAIN_ENFORCE=True
+# Si lo dejas vacío, usa una lista por defecto.
+CHATBOT_DOMAIN_KEYWORDS=checkerit,reglas,tablero,pieza,movimiento,turno,interfaz
+CHATBOT_REFUSAL_MESSAGE=Solo puedo ayudarte con CheckerIT (reglas del juego e interfaz).
 ```
 
 Endpoint:

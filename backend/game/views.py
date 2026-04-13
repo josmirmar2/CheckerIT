@@ -971,8 +971,91 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 history.append({"role": "model", "parts": [{"text": str(respuesta)}]})
         return history
 
+    def _get_domain_keywords(self) -> list[str]:
+        raw = getattr(settings, 'CHATBOT_DOMAIN_KEYWORDS', '')
+        keywords: list[str] = []
+        if raw and str(raw).strip():
+            keywords = [k.strip().lower() for k in str(raw).split(',') if k.strip()]
+        if not keywords:
+            keywords = [
+                'checkerit',
+                'damas',
+                'damas chinas',
+                'reglas',
+                'movimiento',
+                'mover',
+                'salto',
+                'saltos',
+                'cadena',
+                'ronda',
+                'turno',
+                'partida',
+                'tablero',
+                'pieza',
+                'piezas',
+                'jugador',
+                'interfaz',
+                'ui',
+                'boton',
+                'botón',
+                'pausa',
+                'musica',
+                'música',
+                'ayuda',
+                'asistente',
+                'cómo jugar',
+                'como jugar',
+                'hola',
+                'buenas',
+            ]
+        return keywords
+
+    def _is_in_domain(self, mensaje: str) -> bool:
+        if mensaje is None:
+            return False
+        texto = str(mensaje).lower()
+        for kw in self._get_domain_keywords():
+            if kw and kw in texto:
+                return True
+        return False
+
     def _send_and_persist(self, *, chatbot: Chatbot, mensaje: str) -> Response:
         api_key = getattr(settings, 'GEMINI_API_KEY', None)
+        try:
+            max_chars = int(getattr(settings, 'CHATBOT_MAX_INPUT_CHARS', 400))
+        except Exception:
+            max_chars = 400
+        if max_chars < 1:
+            max_chars = 400
+        if mensaje is None:
+            mensaje = ''
+        mensaje = str(mensaje)
+
+        if len(mensaje.strip()) == 0:
+            return Response({'error': 'El mensaje no puede estar vacío'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(mensaje) > max_chars:
+            return Response(
+                {'error': f'El mensaje es demasiado largo (máx {max_chars} caracteres)'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Hard gate: si se fuerza dominio y el mensaje no es del dominio, rechazar sin IA
+        if getattr(settings, 'CHATBOT_DOMAIN_ENFORCE', True) and not self._is_in_domain(mensaje):
+            respuesta = getattr(
+                settings,
+                'CHATBOT_REFUSAL_MESSAGE',
+                'Solo puedo ayudarte con CheckerIT (reglas del juego e interfaz).',
+            )
+            if 'conversaciones' not in chatbot.memoria:
+                chatbot.memoria['conversaciones'] = []
+            chatbot.memoria['conversaciones'].append({
+                'mensaje': mensaje,
+                'respuesta': respuesta,
+                'timestamp': str(timezone.now())
+            })
+            chatbot.save()
+            return Response({'chatbot_id': chatbot.id, 'respuesta': respuesta}, status=status.HTTP_200_OK)
+
         if not api_key:
             # Fallback para entornos sin configuración de Gemini (tests, dev)
             respuesta = f"Respuesta del chatbot a: {mensaje}"
@@ -985,6 +1068,9 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                     api_version=getattr(settings, 'GEMINI_API_VERSION', 'v1'),
                     max_retries=int(getattr(settings, 'GEMINI_MAX_RETRIES', 2)),
                     retry_backoff_seconds=float(getattr(settings, 'GEMINI_RETRY_BACKOFF_SECONDS', 0.6)),
+                    system_prompt=getattr(settings, 'GEMINI_SYSTEM_PROMPT', None),
+                    temperature=float(getattr(settings, 'GEMINI_TEMPERATURE', 0.2)),
+                    max_output_tokens=int(getattr(settings, 'GEMINI_MAX_OUTPUT_TOKENS', 256)),
                     user_message=mensaje,
                     history=self._build_gemini_history(chatbot, limit_turns=10),
                 )

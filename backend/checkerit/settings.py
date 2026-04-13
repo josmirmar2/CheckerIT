@@ -172,3 +172,26 @@ GEMINI_API_VERSION = os.getenv('GEMINI_API_VERSION', 'v1')
 GEMINI_TIMEOUT_SECONDS = int(os.getenv('GEMINI_TIMEOUT_SECONDS', '15'))
 GEMINI_MAX_RETRIES = int(os.getenv('GEMINI_MAX_RETRIES', '2'))
 GEMINI_RETRY_BACKOFF_SECONDS = float(os.getenv('GEMINI_RETRY_BACKOFF_SECONDS', '0.6'))
+
+# Restricciones / comportamiento del chatbot
+GEMINI_SYSTEM_PROMPT = os.getenv(
+    'GEMINI_SYSTEM_PROMPT',
+    (
+        "Eres un asistente de la aplicación CheckerIT (Damas Chinas). "
+        "Responde únicamente sobre: reglas del juego, interfaz, y cómo jugar. "
+        "Si te preguntan algo fuera de ese contexto, responde que no puedes ayudar con ese tema. "
+        "Sé breve y claro."
+    ),
+)
+GEMINI_TEMPERATURE = float(os.getenv('GEMINI_TEMPERATURE', '0.2'))
+GEMINI_MAX_OUTPUT_TOKENS = int(os.getenv('GEMINI_MAX_OUTPUT_TOKENS', '256'))
+CHATBOT_MAX_INPUT_CHARS = int(os.getenv('CHATBOT_MAX_INPUT_CHARS', '400'))
+
+# Restricción de dominio (hard gate en backend)
+CHATBOT_DOMAIN_ENFORCE = os.getenv('CHATBOT_DOMAIN_ENFORCE', 'True') == 'True'
+# Lista de palabras clave permitidas (separadas por coma). Si está vacío, se usa un conjunto por defecto.
+CHATBOT_DOMAIN_KEYWORDS = os.getenv('CHATBOT_DOMAIN_KEYWORDS', '')
+CHATBOT_REFUSAL_MESSAGE = os.getenv(
+    'CHATBOT_REFUSAL_MESSAGE',
+    'Solo puedo ayudarte con CheckerIT (reglas del juego e interfaz).',
+)

@@ -38,6 +38,9 @@ def generate_gemini_reply(
     api_version: str = "v1",
     max_retries: int = 2,
     retry_backoff_seconds: float = 0.6,
+    system_prompt: str | None = None,
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
 ) -> str:
     """Genera una respuesta con Gemini via REST API.
 
@@ -69,10 +72,32 @@ def generate_gemini_reply(
     def _post_generate(model_path: str):
         url = f"{_BASE_URL}/{api_version}/{model_path}:generateContent"
         try:
+            payload: dict = {"contents": contents}
+
+            if system_prompt and str(system_prompt).strip():
+                payload["systemInstruction"] = {
+                    "role": "system",
+                    "parts": [{"text": str(system_prompt)}],
+                }
+
+            generation_config: dict = {}
+            if temperature is not None:
+                try:
+                    generation_config["temperature"] = float(temperature)
+                except Exception:
+                    pass
+            if max_output_tokens is not None:
+                try:
+                    generation_config["maxOutputTokens"] = int(max_output_tokens)
+                except Exception:
+                    pass
+            if generation_config:
+                payload["generationConfig"] = generation_config
+
             return requests.post(
                 url,
                 params={"key": api_key},
-                json={"contents": contents},
+                json=payload,
                 timeout=timeout_seconds,
             )
         except requests.RequestException as exc:
