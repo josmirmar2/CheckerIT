@@ -37,6 +37,7 @@ function Game() {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState(null);
   const [showChatInfo, setShowChatInfo] = useState(false);
+  const [hintMove, setHintMove] = useState(null); // { origen, destino, secuencia?, token }
 
   const sendChatMessage = async () => {
     const mensaje = (chatInput || '').trim();
@@ -70,6 +71,10 @@ function Game() {
         setChatbotId(data.chatbot_id);
       }
       setChatMessages((prev) => [...prev, { role: 'assistant', text: data?.respuesta || '' }]);
+
+      if (data?.tipo === 'mostrar_movimiento' && data?.sugerencia) {
+        setHintMove({ ...data.sugerencia, token: Date.now() });
+      }
     } catch (err) {
       setChatError(err?.message || 'Error enviando mensaje al chatbot');
     } finally {
@@ -661,6 +666,9 @@ function Game() {
         setActualRound({ id_ronda: nuevaRonda.id_ronda, numero: nuevaRonda.numero, inicio: nuevaRonda.inicio });
         const nextPlayerIdx = dbJugadores.findIndex(j => j.numero === nextNumero);
         if (nextPlayerIdx >= 0) setCurrentPlayerIndex(nextPlayerIdx);
+
+        // Una vez validado el cambio de ronda/turno, quitar la recomendación visual del movimiento
+        setHintMove(null);
       }
       return nuevaRonda;
     } catch (error) {
@@ -921,6 +929,7 @@ function Game() {
               initialBoardState={initialBoardState}
               pieceByPos={pieceByPos}
               aiMove={aiMoveCmd}
+              hintMove={hintMove}
               disablePlayerActions={isPaused || isAITurn || aiThinking}
               blockAiMoves={isPaused}
             />

@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import './Board.css';
 
-const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, partidaId = null, onMove = null, moveMade = false, lockedPiecePos = null, undoToken = 0, undoToOriginalToken = 0, originalPiecePos = null, initialBoardState = null, pieceByPos = new Map(), aiMove = null, disablePlayerActions = false, blockAiMoves = false }) => {
+const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, partidaId = null, onMove = null, moveMade = false, lockedPiecePos = null, undoToken = 0, undoToOriginalToken = 0, originalPiecePos = null, initialBoardState = null, pieceByPos = new Map(), aiMove = null, hintMove = null, disablePlayerActions = false, blockAiMoves = false }) => {
   const BOARD_COLORS = ['#FFFFFF', '#0000ffff', '#00ff00ff', '#000000', '#ff0000ff', '#ffbf00ff'];
   const LIGHT_COLORS = ['#ffffffcf', '#8888ffaf', '#9af89aab', '#666666af', '#ffa2a2a1', '#ffe988b6'];
 
@@ -247,6 +247,33 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
   const [turnStartPieceMap, setTurnStartPieceMap] = useState(null);
   const [turnStartPositionsList, setTurnStartPositionsList] = useState(null);
   const [firstMoveWasSimple, setFirstMoveWasSimple] = useState(false);
+
+  const hintKeys = useMemo(() => {
+    if (!hintMove || (!hintMove.origen && !hintMove.destino)) {
+      return { fromKey: null, toKey: null, path: new Set() };
+    }
+
+    const fromKey = hintMove.origen ? String(hintMove.origen) : null;
+
+    let toKey = hintMove.destino ? String(hintMove.destino) : null;
+    const path = new Set();
+
+    if (fromKey) path.add(fromKey);
+    if (toKey) path.add(toKey);
+
+    const seq = Array.isArray(hintMove.secuencia) ? hintMove.secuencia : null;
+    if (seq && seq.length > 0) {
+      for (const step of seq) {
+        const o = step?.origen;
+        const d = step?.destino;
+        if (o) path.add(String(o));
+        if (d) path.add(String(d));
+        if (d) toKey = String(d);
+      }
+    }
+
+    return { fromKey, toKey, path };
+  }, [hintMove?.token]);
 
   const activePuntas = getActivePuntas(jugadoresConfig.length);
   const puntaToPlayerIndex = activePuntas.reduce((acc, puntaIdx, playerIdx) => {
@@ -616,7 +643,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
               return (
                 <div
                   key={hueco.id}
-                  className={`board-cell${isSelected ? ' selected' : ''}${isValidMove ? ' valid-move' : ''}`}
+                  className={`board-cell${isSelected ? ' selected' : ''}${isValidMove ? ' valid-move' : ''}${hintKeys.fromKey && cellKey === hintKeys.fromKey ? ' hint-from' : ''}${hintKeys.toKey && cellKey === hintKeys.toKey ? ' hint-to' : ''}${hintKeys.path && hintKeys.path.has(cellKey) && cellKey !== hintKeys.fromKey && cellKey !== hintKeys.toKey ? ' hint-path' : ''}`}
                   style={{
                     backgroundColor,
                     borderColor,

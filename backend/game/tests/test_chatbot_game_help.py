@@ -53,6 +53,21 @@ def test_chatbot_best_move_returns_local_suggestion_without_gemini(settings, mon
     assert isinstance(res.data.get("sugerencia"), dict)
     assert res.data["sugerencia"].get("heuristica") == "mcts"
 
+    chatbot_id = res.data.get("chatbot_id")
+    assert chatbot_id
+
+    res2 = client.post(
+        "/api/chatbot/send_message/",
+        {
+            "mensaje": "muéstramelo",
+            "chatbot_id": chatbot_id,
+        },
+        format="json",
+    )
+    assert res2.status_code == 200
+    assert res2.data.get("tipo") == "mostrar_movimiento"
+    assert isinstance(res2.data.get("sugerencia"), dict)
+
 
 @pytest.mark.django_db
 def test_chatbot_possible_moves_returns_local_moves_without_gemini(settings, monkeypatch):

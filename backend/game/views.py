@@ -1036,6 +1036,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
     def _maybe_answer_game_help(
         self,
         *,
+        chatbot: Chatbot,
         mensaje: str,
         partida_id: str | None,
         jugador_id: str | None,
@@ -1093,10 +1094,53 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             "como ganar",
         )
 
+        show_move_triggers = (
+            "muestramelo",
+            "muéstramelo",
+            "muestrame",
+            "muéstrame",
+            "muestra el movimiento",
+            "mostrar movimiento",
+            "muéstrame el movimiento",
+            "muestrame el movimiento",
+            "en pantalla",
+        )
+
+        confirm_triggers = (
+            "si",
+            "sí",
+            "vale",
+            "ok",
+            "de acuerdo",
+            "perfecto",
+        )
+
         wants_best = any(t in texto for t in best_move_triggers)
         wants_possible = any(t in texto for t in possible_moves_triggers)
         wants_how = any(t in texto for t in how_to_move_triggers)
         wants_end = any(t in texto for t in end_game_triggers)
+        wants_show = any(t in texto for t in show_move_triggers)
+
+        last_best_move = (chatbot.memoria or {}).get("last_best_move")
+        awaiting_show_move = bool((chatbot.memoria or {}).get("awaiting_show_move"))
+        texto_stripped = texto.strip()
+        confirms_show = awaiting_show_move and any(
+            texto_stripped == t or texto_stripped.startswith(f"{t} ")
+            for t in confirm_triggers
+        )
+
+        if (wants_show or confirms_show) and not wants_best:
+            if not isinstance(last_best_move, dict) or not last_best_move:
+                return (
+                    "Primero pídeme 'cuál es la mejor jugada' y después dime 'muéstramelo' para resaltarla en el tablero.",
+                    {"tipo": "mostrar_movimiento_no_disponible"},
+                )
+            origen = last_best_move.get("origen")
+            destino = last_best_move.get("destino")
+            return (
+                f"De acuerdo. Te muestro en pantalla el movimiento sugerido: {origen} -> {destino}.",
+                {"tipo": "mostrar_movimiento", "sugerencia": last_best_move},
+            )
 
         if wants_end and not wants_best:
             respuesta = (
@@ -1141,7 +1185,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 {"tipo": "faltan_parametros"},
             )
 
-        # Validar existencia de partida/jugador y evitar respuestas confusas
+        # Validar existencia de partida/jugador y    evitar respuestas confusas
         if not Partida.objects.filter(id_partida=str(partida_id)).exists():
             return (f"partida_id no válido: {partida_id}", {"tipo": "error", "campo": "partida_id"})
         if not Jugador.objects.filter(id_jugador=str(jugador_id)).exists():
@@ -1166,9 +1210,9 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             secuencia = sugerencia.get("secuencia")
             if isinstance(secuencia, list) and secuencia:
                 pasos = " -> ".join([str(origen)] + [str(step.get("destino")) for step in secuencia if step.get("destino")])
-                respuesta = f"El mejor movimiento que se puede realizar según el análisis realizado por la aplicación es: {pasos}"
+                respuesta = f"El mejor movimiento que se puede realizar según el análisis realizado por la aplicación es: {pasos}.\n\n¿Quieres que te muestre en pantalla el movimiento?"
             else:
-                respuesta = f"El mejor movimiento que se puede realizar según el análisis realizado por la aplicación es: {origen} -> {destino}"
+                respuesta = f"El mejor movimiento que se puede realizar según el análisis realizado por la aplicación es: {origen} -> {destino}.\n\n¿Quieres que te muestre en pantalla el movimiento?"
 
             return respuesta, {"tipo": "mejor_jugada", "sugerencia": sugerencia}
 
@@ -1204,6 +1248,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
 
         # Si el mensaje pide ayuda de jugadas/movimientos y se aporta contexto, responder sin Gemini.
         respuesta_local, extra = self._maybe_answer_game_help(
+            chatbot=chatbot,
             mensaje=mensaje,
             partida_id=partida_id,
             jugador_id=jugador_id,
@@ -1213,6 +1258,15 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             respuesta_local = self._sanitize_llm_text(respuesta_local)
             if 'conversaciones' not in chatbot.memoria:
                 chatbot.memoria['conversaciones'] = []
+
+            # Persistir estado útil para "muéstramelo"
+            if isinstance(extra, dict):
+                if extra.get("tipo") == "mejor_jugada" and isinstance(extra.get("sugerencia"), dict):
+                    chatbot.memoria["last_best_move"] = extra.get("sugerencia")
+                    chatbot.memoria["awaiting_show_move"] = True
+                elif extra.get("tipo") in {"mostrar_movimiento", "mostrar_movimiento_no_disponible"}:
+                    chatbot.memoria["awaiting_show_move"] = False
+
             chatbot.memoria['conversaciones'].append({
                 'mensaje': mensaje,
                 'respuesta': respuesta_local,
