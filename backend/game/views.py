@@ -1141,11 +1141,12 @@ class ChatbotViewSet(viewsets.ModelViewSet):
 
         if wants_best:
             try:
-                agent = MaxHeuristicAgent()
+                agent = MCTSAgent()
                 sugerencia = agent.suggest_move(
                     partida_id=str(partida_id),
                     jugador_id=str(jugador_id),
                     allow_simple=True,
+                    iterations=250,
                 )
             except ValueError as exc:
                 return (f"No pude calcular la mejor jugada: {exc}", {"tipo": "error", "motivo": "sin_jugadas"})
@@ -1157,9 +1158,9 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             secuencia = sugerencia.get("secuencia")
             if isinstance(secuencia, list) and secuencia:
                 pasos = " -> ".join([str(origen)] + [str(step.get("destino")) for step in secuencia if step.get("destino")])
-                respuesta = f"Sugerencia (heurística): {pasos}"
+                respuesta = f"Sugerencia (MCTS): {pasos}"
             else:
-                respuesta = f"Sugerencia (heurística): {origen} -> {destino}"
+                respuesta = f"Sugerencia (MCTS): {origen} -> {destino}"
 
             return respuesta, {"tipo": "mejor_jugada", "sugerencia": sugerencia}
 
