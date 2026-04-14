@@ -1098,7 +1098,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         wants_how = any(t in texto for t in how_to_move_triggers)
         wants_end = any(t in texto for t in end_game_triggers)
 
-        if wants_end and not (wants_best or wants_possible):
+        if wants_end and not wants_best:
             respuesta = (
                 "Puedes terminar una partida de dos formas:\n\n"
                 "1) Cancelarla / finalizarla manualmente (antes de que haya ganador):\n"
@@ -1111,7 +1111,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             )
             return respuesta, {"tipo": "fin_partida"}
 
-        if wants_how and not (wants_best or wants_possible):
+        if wants_how and not wants_best:
             respuesta = (
                 "En CheckerIT puedes mover una pieza de dos formas:\n"
                 "1) Movimiento simple: a una casilla vecina vacía.\n"
@@ -1124,7 +1124,15 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             )
             return respuesta, {"tipo": "reglas_movimiento"}
 
-        if not (wants_best or wants_possible):
+        # Desactivado: no se ofrece la funcionalidad de "movimientos posibles" desde el chatbot.
+        if wants_possible and not wants_best:
+            return (
+                "Ahora mismo el asistente no ofrece la opción de listar 'movimientos/posiciones posibles'. "
+                "Si quieres, puedes preguntar por 'la mejor jugada' o por 'cómo se mueve una pieza'.",
+                {"tipo": "movimientos_no_disponible"},
+            )
+
+        if not wants_best:
             return None, None
 
         if not partida_id or not jugador_id:
@@ -1158,56 +1166,13 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             secuencia = sugerencia.get("secuencia")
             if isinstance(secuencia, list) and secuencia:
                 pasos = " -> ".join([str(origen)] + [str(step.get("destino")) for step in secuencia if step.get("destino")])
-                respuesta = f"Sugerencia (MCTS): {pasos}"
+                respuesta = f"El mejor movimiento que se puede realizar según el análisis realizado por la aplicación es: {pasos}"
             else:
-                respuesta = f"Sugerencia (MCTS): {origen} -> {destino}"
+                respuesta = f"El mejor movimiento que se puede realizar según el análisis realizado por la aplicación es: {origen} -> {destino}"
 
             return respuesta, {"tipo": "mejor_jugada", "sugerencia": sugerencia}
 
-        # Movimientos/posiciones posibles
-        piezas_qs = Pieza.objects.filter(partida_id=str(partida_id), jugador_id=str(jugador_id))
-        if pieza_id:
-            piezas_qs = piezas_qs.filter(id_pieza=str(pieza_id))
-
-        piezas = list(piezas_qs)
-        if not piezas:
-            return (
-                "No encontré piezas para ese jugador en esta partida.",
-                {"tipo": "movimientos", "movimientos": {}},
-            )
-
-        occupied = get_occupied_positions(str(partida_id))
-        movimientos: dict[str, dict] = {}
-
-        for pieza in piezas:
-            if not pieza.posicion:
-                continue
-            destinos = sorted(get_valid_moves_from(str(pieza.posicion), occupied, allow_simple=True))
-            if destinos:
-                movimientos[str(pieza.id_pieza)] = {
-                    "origen": str(pieza.posicion),
-                    "destinos": destinos,
-                }
-
-        total = sum(len(v.get("destinos") or []) for v in movimientos.values())
-        if total == 0:
-            return (
-                "No encontré movimientos legales disponibles en esta posición.",
-                {"tipo": "movimientos", "movimientos": movimientos},
-            )
-
-        lineas = [f"Movimientos posibles: {total} (mostrando hasta 12 piezas)"]
-        shown = 0
-        for _pid, info in movimientos.items():
-            if shown >= 12:
-                break
-            origen = info.get("origen")
-            destinos = info.get("destinos") or []
-            destinos_str = ", ".join(destinos[:10]) + ("..." if len(destinos) > 10 else "")
-            lineas.append(f"- {origen} -> {destinos_str}")
-            shown += 1
-
-        return "\n".join(lineas), {"tipo": "movimientos", "movimientos": movimientos}
+        # Nota: el caso de movimientos posibles se gestiona arriba como "no disponible".
 
     def _send_and_persist(
         self,
