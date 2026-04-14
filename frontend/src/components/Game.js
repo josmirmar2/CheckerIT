@@ -67,7 +67,7 @@ function Game() {
         throw new Error(data?.error || 'Error enviando mensaje al chatbot');
       }
 
-      if (data?.chatbot_id && !chatbotId) {
+      if (data?.chatbot_id && data.chatbot_id !== chatbotId) {
         setChatbotId(data.chatbot_id);
       }
       setChatMessages((prev) => [...prev, { role: 'assistant', text: data?.respuesta || '' }]);
@@ -110,6 +110,55 @@ function Game() {
   const [aiSeqIndex, setAiSeqIndex] = useState(0);
   const aiSeqTokenRef = useRef(null);
   const isPausedRef = useRef(false);
+
+  void aiAutoFinishToken;
+  void aiError;
+
+  // Al cambiar de jugador en la misma partida, cambiar también el flujo conversacional.
+  useEffect(() => {
+    const partidaId = partida?.id_partida;
+    const jugadorId =
+      currentPlayerIndex !== null && currentPlayerIndex !== undefined
+        ? (dbJugadores?.[currentPlayerIndex]?.id_jugador || null)
+        : null;
+
+    if (!partidaId || !jugadorId) return;
+
+    let cancelled = false;
+    const loadChatbotForContext = async () => {
+      try {
+        setChatError(null);
+        const url = `http://localhost:8000/api/chatbot/for_context/?partida_id=${encodeURIComponent(partidaId)}&jugador_id=${encodeURIComponent(jugadorId)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data?.error || 'Error cargando historial del chatbot');
+        }
+        if (cancelled) return;
+
+        const convo = Array.isArray(data?.conversaciones) ? data.conversaciones : [];
+        const messages = [];
+        for (const turn of convo) {
+          if (turn?.mensaje) messages.push({ role: 'user', text: String(turn.mensaje) });
+          if (turn?.respuesta) messages.push({ role: 'assistant', text: String(turn.respuesta) });
+        }
+
+        setChatbotId(data?.chatbot_id || null);
+        setChatMessages(messages);
+      } catch (err) {
+        if (cancelled) return;
+        // Si falla, al menos no mezclar conversaciones de jugadores distintos
+        setChatbotId(null);
+        setChatMessages([]);
+        setChatError(err?.message || 'Error cargando historial del chatbot');
+      }
+    };
+
+    loadChatbotForContext();
+    return () => {
+      cancelled = true;
+    };
+  }, [partida?.id_partida, currentPlayerIndex, dbJugadores]);
 
   const AI_FIRST_DELAY_MS = 200;
   const AI_CHAIN_DELAY_MS = 200;
