@@ -269,17 +269,24 @@ class AgenteInteligente(models.Model):
 class Chatbot(models.Model):
     """
     Modelo para representar el chatbot de ayuda
-    Relación: Chatbot 1 --> 1 agente Inteligente
+    Relación: Partida 1 --> 0..* Chatbot
+    Relación: Jugador 1 --> 0..* Chatbot
     """
-    agente_inteligente = models.OneToOneField(
-        AgenteInteligente,
+    partida = models.ForeignKey(
+        Partida,
         on_delete=models.CASCADE,
-        related_name='chatbot',  # Chatbot 1 --> 1 agente Inteligente
+        related_name='chatbots',
         null=True,
-        blank=True
+        blank=True,
+    )
+    jugador = models.ForeignKey(
+        Jugador,
+        on_delete=models.CASCADE,
+        related_name='chatbots',
+        null=True,
+        blank=True,
     )
     memoria = models.JSONField(default=dict)
-    contexto = models.JSONField(default=dict)
 
     class Meta:
         verbose_name_plural = "Chatbots"

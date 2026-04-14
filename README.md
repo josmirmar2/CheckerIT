@@ -114,6 +114,41 @@ DEBUG=True
 ALLOWED_HOSTS=localhost,127.0.0.1
 ```
 
+## Chatbot (Gemini)
+
+El chatbot se ejecuta en el backend (Django) y llama a Gemini usando una API key guardada en variables de entorno.
+
+En `backend/.env` añade:
+
+```env
+GEMINI_API_KEY=tu_api_key_de_gemini
+# Opcional: si no lo defines, el backend intentará auto-seleccionar un modelo compatible.
+GEMINI_MODEL=
+# Opcional: 'v1' (recomendado) o 'v1beta'
+GEMINI_API_VERSION=v1
+
+# Opcional: reintentos cuando Gemini esté saturado (503) o limitado (429)
+GEMINI_MAX_RETRIES=2
+GEMINI_RETRY_BACKOFF_SECONDS=0.6
+
+# Opcional: hacer el chatbot más restrictivo
+GEMINI_SYSTEM_PROMPT=Eres un asistente de CheckerIT; responde solo sobre reglas e interfaz.
+GEMINI_TEMPERATURE=0.2
+GEMINI_MAX_OUTPUT_TOKENS=256
+CHATBOT_MAX_INPUT_CHARS=400
+
+# Hard gate (rechaza fuera de dominio sin llamar a Gemini)
+CHATBOT_DOMAIN_ENFORCE=True
+# Si lo dejas vacío, usa una lista por defecto.
+CHATBOT_DOMAIN_KEYWORDS=checkerit,reglas,tablero,pieza,movimiento,turno,interfaz
+CHATBOT_REFUSAL_MESSAGE=Solo puedo ayudarte con CheckerIT (reglas del juego e interfaz).
+```
+
+Endpoint:
+
+- `POST /api/chatbot/send_message/` con body JSON `{ "mensaje": "...", "chatbot_id": 1 }`.
+    - `chatbot_id` es opcional: si no lo envías, el backend usará/creará uno.
+
 
 
 ## Reglas de movimiento

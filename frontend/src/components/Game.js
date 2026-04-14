@@ -29,6 +29,58 @@ function Game() {
   const [loading, setLoading] = useState(true);
   const [elapsed, setElapsed] = useState(0);
   const [showHelp, setShowHelp] = useState(false);
+
+  // Chatbot (Gemini vía backend)
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState([]); // { role: 'user'|'assistant', text: string }
+  const [chatbotId, setChatbotId] = useState(null);
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState(null);
+  const [showChatInfo, setShowChatInfo] = useState(false);
+  const [hintMove, setHintMove] = useState(null); // { origen, destino, secuencia?, token }
+
+  const sendChatMessage = async () => {
+    const mensaje = (chatInput || '').trim();
+    if (!mensaje || chatLoading) return;
+
+    setChatError(null);
+    setChatLoading(true);
+    setChatMessages((prev) => [...prev, { role: 'user', text: mensaje }]);
+    setChatInput('');
+
+    try {
+      const res = await fetch('http://localhost:8000/api/chatbot/send_message/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mensaje,
+          chatbot_id: chatbotId,
+          partida_id: partida?.id_partida || null,
+          jugador_id:
+            currentPlayerIndex !== null && currentPlayerIndex !== undefined
+              ? (dbJugadores?.[currentPlayerIndex]?.id_jugador || null)
+              : null,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data?.error || 'Error enviando mensaje al chatbot');
+      }
+
+      if (data?.chatbot_id && data.chatbot_id !== chatbotId) {
+        setChatbotId(data.chatbot_id);
+      }
+      setChatMessages((prev) => [...prev, { role: 'assistant', text: data?.respuesta || '' }]);
+
+      if (data?.tipo === 'mostrar_movimiento' && data?.sugerencia) {
+        setHintMove({ ...data.sugerencia, token: Date.now() });
+      }
+    } catch (err) {
+      setChatError(err?.message || 'Error enviando mensaje al chatbot');
+    } finally {
+      setChatLoading(false);
+    }
+  };
   const [isPlayingMusic, setIsPlayingMusic] = useState(false);
   const [currentMusicIndex, setCurrentMusicIndex] = useState(-1);
   const audioRef = useRef(null);
@@ -58,6 +110,55 @@ function Game() {
   const [aiSeqIndex, setAiSeqIndex] = useState(0);
   const aiSeqTokenRef = useRef(null);
   const isPausedRef = useRef(false);
+
+  void aiAutoFinishToken;
+  void aiError;
+
+  // Al cambiar de jugador en la misma partida, cambiar también el flujo conversacional.
+  useEffect(() => {
+    const partidaId = partida?.id_partida;
+    const jugadorId =
+      currentPlayerIndex !== null && currentPlayerIndex !== undefined
+        ? (dbJugadores?.[currentPlayerIndex]?.id_jugador || null)
+        : null;
+
+    if (!partidaId || !jugadorId) return;
+
+    let cancelled = false;
+    const loadChatbotForContext = async () => {
+      try {
+        setChatError(null);
+        const url = `http://localhost:8000/api/chatbot/for_context/?partida_id=${encodeURIComponent(partidaId)}&jugador_id=${encodeURIComponent(jugadorId)}`;
+        const res = await fetch(url);
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data?.error || 'Error cargando historial del chatbot');
+        }
+        if (cancelled) return;
+
+        const convo = Array.isArray(data?.conversaciones) ? data.conversaciones : [];
+        const messages = [];
+        for (const turn of convo) {
+          if (turn?.mensaje) messages.push({ role: 'user', text: String(turn.mensaje) });
+          if (turn?.respuesta) messages.push({ role: 'assistant', text: String(turn.respuesta) });
+        }
+
+        setChatbotId(data?.chatbot_id || null);
+        setChatMessages(messages);
+      } catch (err) {
+        if (cancelled) return;
+        // Si falla, al menos no mezclar conversaciones de jugadores distintos
+        setChatbotId(null);
+        setChatMessages([]);
+        setChatError(err?.message || 'Error cargando historial del chatbot');
+      }
+    };
+
+    loadChatbotForContext();
+    return () => {
+      cancelled = true;
+    };
+  }, [partida?.id_partida, currentPlayerIndex, dbJugadores]);
 
   const AI_FIRST_DELAY_MS = 200;
   const AI_CHAIN_DELAY_MS = 200;
@@ -614,6 +715,9 @@ function Game() {
         setActualRound({ id_ronda: nuevaRonda.id_ronda, numero: nuevaRonda.numero, inicio: nuevaRonda.inicio });
         const nextPlayerIdx = dbJugadores.findIndex(j => j.numero === nextNumero);
         if (nextPlayerIdx >= 0) setCurrentPlayerIndex(nextPlayerIdx);
+
+        // Una vez validado el cambio de ronda/turno, quitar la recomendación visual del movimiento
+        setHintMove(null);
       }
       return nuevaRonda;
     } catch (error) {
@@ -874,6 +978,7 @@ function Game() {
               initialBoardState={initialBoardState}
               pieceByPos={pieceByPos}
               aiMove={aiMoveCmd}
+              hintMove={hintMove}
               disablePlayerActions={isPaused || isAITurn || aiThinking}
               blockAiMoves={isPaused}
             />
@@ -896,14 +1001,88 @@ function Game() {
         </main>
 
         <aside className={`help-panel ${showHelp ? 'open' : ''}`}>
-          <button className="help-toggle" onClick={() => setShowHelp((prev) => !prev)}>
+          <button
+            className="help-toggle"
+            onClick={() => {
+              setShowHelp((prev) => {
+                const next = !prev;
+                if (!next) setShowChatInfo(false);
+                return next;
+              });
+            }}
+          >
             {showHelp ? 'Cerrar Ayuda' : 'Abrir Ayuda'}
           </button>
           {showHelp && (
             <div className="help-content">
-              <h3>Asistente</h3>
-              <p>Chatbot de ayuda</p>
-              <p className="help-placeholder">Aquí aparecerán sugerencias y respuestas.</p>
+              <div className="help-header">
+                <h3>Asistente</h3>
+                <button
+                  className="chatbot-infoButton"
+                  type="button"
+                  aria-label="Ver ejemplos de preguntas"
+                  aria-expanded={showChatInfo}
+                  onClick={() => setShowChatInfo((prev) => !prev)}
+                >
+                  i
+                </button>
+              </div>
+
+              {showChatInfo && (
+                <div className="chatbot-infoPanel">
+                  <div className="chatbot-infoTitle">Ejemplos de preguntas:</div>
+                  <ul className="chatbot-infoList">
+                    <li>"¿Cuáles son las reglas del juego?"</li>
+                    <li>"¿Cómo se mueve una pieza?"</li>
+                    <li>"¿Cuál es la mejor jugada?"</li>
+                    <li>"¿Cómo puedo cancelar o finalizar una partida?"</li>
+                    <li>"¿Qué hace el botón de Pausa y cómo se reanuda?"</li>
+                  </ul>
+                </div>
+              )}
+              <div className="chatbot">
+                <div className="chatbot-messages" aria-live="polite">
+                  {chatMessages.length === 0 ? (
+                    <p className="help-placeholder">Escribe una pregunta y pulsa Enviar.</p>
+                  ) : (
+                    chatMessages.map((m, idx) => (
+                      <div
+                        key={idx}
+                        className={`chatbot-message ${m.role === 'user' ? 'user' : 'assistant'}`}
+                      >
+                        <div className="chatbot-bubble">
+                          <div className="chatbot-author">{m.role === 'user' ? 'Tú' : 'Asistente'}</div>
+                          <div className="chatbot-text">{m.text}</div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {chatError && <div className="chatbot-error">{chatError}</div>}
+
+                <div className="chatbot-inputRow">
+                  <input
+                    className="chatbot-input"
+                    type="text"
+                    value={chatInput}
+                    placeholder="Pregunta al asistente..."
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') sendChatMessage();
+                    }}
+                    disabled={chatLoading}
+                  />
+                  <button
+                    className="chatbot-sendButton"
+                    onClick={sendChatMessage}
+                    disabled={chatLoading}
+                    type="button"
+                  >
+                    {chatLoading ? 'Enviando...' : 'Enviar'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </aside>

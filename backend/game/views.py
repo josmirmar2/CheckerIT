@@ -5,6 +5,8 @@ from django.utils import timezone
 from django.conf import settings
 from datetime import datetime
 from collections import deque
+import re
+from .ai.gemini_api import generate_gemini_reply, GeminiError, GeminiHttpError
 from .models import Jugador, Partida, Pieza, Ronda, Movimiento, AgenteInteligente, Chatbot, JugadorPartida
 from .ai.max_agent import MaxHeuristicAgent
 from .ai.mcts_agent import MCTSAgent
@@ -957,6 +959,436 @@ class ChatbotViewSet(viewsets.ModelViewSet):
     """
     queryset = Chatbot.objects.all()
     serializer_class = ChatbotSerializer
+
+    def _build_gemini_history(self, chatbot: Chatbot, *, limit_turns: int = 10) -> list[dict]:
+        conversaciones = (chatbot.memoria or {}).get('conversaciones') or []
+        history: list[dict] = []
+        for turn in conversaciones[-limit_turns:]:
+            mensaje = (turn or {}).get('mensaje')
+            respuesta = (turn or {}).get('respuesta')
+            if mensaje:
+                history.append({"role": "user", "parts": [{"text": str(mensaje)}]})
+            if respuesta:
+                history.append({"role": "model", "parts": [{"text": str(respuesta)}]})
+        return history
+
+    def _sanitize_llm_text(self, text: str | None) -> str:
+        if text is None:
+            return ""
+        s = str(text)
+
+        # Quitar marcas típicas de negrita Markdown conservando el contenido.
+        s = re.sub(r"\*\*(.+?)\*\*", r"\1", s, flags=re.DOTALL)
+        s = re.sub(r"__(.+?)__", r"\1", s, flags=re.DOTALL)
+
+        # Si quedaron marcadores sueltos, eliminarlos.
+        s = s.replace("**", "").replace("__", "")
+        return s
+
+    def _get_domain_keywords(self) -> list[str]:
+        raw = getattr(settings, 'CHATBOT_DOMAIN_KEYWORDS', '')
+        keywords: list[str] = []
+        if raw and str(raw).strip():
+            keywords = [k.strip().lower() for k in str(raw).split(',') if k.strip()]
+        if not keywords:
+            keywords = [
+                'checkerit',
+                'damas',
+                'damas chinas',
+                'reglas',
+                'movimiento',
+                'mover',
+                'salto',
+                'saltos',
+                'cadena',
+                'ronda',
+                'turno',
+                'partida',
+                'tablero',
+                'pieza',
+                'piezas',
+                'jugador',
+                'interfaz',
+                'ui',
+                'boton',
+                'botón',
+                'pausa',
+                'musica',
+                'música',
+                'ayuda',
+                'asistente',
+                'cómo jugar',
+                'como jugar',
+                'hola',
+                'buenas',
+            ]
+        return keywords
+
+    def _is_in_domain(self, mensaje: str) -> bool:
+        if mensaje is None:
+            return False
+        texto = str(mensaje).lower()
+        for kw in self._get_domain_keywords():
+            if kw and kw in texto:
+                return True
+        return False
+
+    def _maybe_answer_game_help(
+        self,
+        *,
+        chatbot: Chatbot,
+        mensaje: str,
+        partida_id: str | None,
+        jugador_id: str | None,
+        pieza_id: str | None = None,
+    ) -> tuple[str | None, dict | None]:
+        """Respuestas deterministas basadas en estado de partida.
+
+        Devuelve (respuesta_texto, extra_payload) o (None, None) si no aplica.
+        """
+        texto = (str(mensaje) if mensaje is not None else "").lower()
+
+        best_move_triggers = (
+            "mejor jugada",
+            "mejor movimiento",
+            "sugerir jugada",
+            "sugerencia",
+            "recomienda",
+            "qué jugada",
+            "que jugada",
+            "best move",
+        )
+        possible_moves_triggers = (
+            "movimientos posibles",
+            "posibles movimientos",
+            "posiciones posibles",
+            "donde puedo mover",
+            "dónde puedo mover",
+            "a donde puedo mover",
+            "a dónde puedo mover",
+            "ver movimientos",
+        )
+        how_to_move_triggers = (
+            "como se mueve",
+            "cómo se mueve",
+            "como mover",
+            "cómo mover",
+            "como puedo mover",
+            "cómo puedo mover",
+        )
+
+        end_game_triggers = (
+            "terminar partida",
+            "acabar partida",
+            "finalizar partida",
+            "cancelar partida",
+            "cómo terminar",
+            "como terminar",
+            "cómo acabar",
+            "como acabar",
+            "finalizar",
+            "cancelar",
+            "ganador",
+            "victoria",
+            "cómo ganar",
+            "como ganar",
+        )
+
+        show_move_triggers = (
+            "muestramelo",
+            "muéstramelo",
+            "muestrame",
+            "muéstrame",
+            "muestra el movimiento",
+            "mostrar movimiento",
+            "muéstrame el movimiento",
+            "muestrame el movimiento",
+            "en pantalla",
+        )
+
+        confirm_triggers = (
+            "si",
+            "sí",
+            "vale",
+            "ok",
+            "de acuerdo",
+            "perfecto",
+        )
+
+        wants_best = any(t in texto for t in best_move_triggers)
+        wants_possible = any(t in texto for t in possible_moves_triggers)
+        wants_how = any(t in texto for t in how_to_move_triggers)
+        wants_end = any(t in texto for t in end_game_triggers)
+        wants_show = any(t in texto for t in show_move_triggers)
+
+        last_best_move = (chatbot.memoria or {}).get("last_best_move")
+        awaiting_show_move = bool((chatbot.memoria or {}).get("awaiting_show_move"))
+        texto_stripped = texto.strip()
+        confirms_show = awaiting_show_move and any(
+            texto_stripped == t or texto_stripped.startswith(f"{t} ")
+            for t in confirm_triggers
+        )
+
+        if (wants_show or confirms_show) and not wants_best:
+            if not isinstance(last_best_move, dict) or not last_best_move:
+                return (
+                    "Primero pídeme 'cuál es la mejor jugada' y después dime 'muéstramelo' para resaltarla en el tablero.",
+                    {"tipo": "mostrar_movimiento_no_disponible"},
+                )
+            origen = last_best_move.get("origen")
+            destino = last_best_move.get("destino")
+            return (
+                f"De acuerdo. Te muestro en pantalla el movimiento sugerido: {origen} -> {destino}.",
+                {"tipo": "mostrar_movimiento", "sugerencia": last_best_move},
+            )
+
+        if wants_end and not wants_best:
+            respuesta = (
+                "Puedes terminar una partida de dos formas:\n\n"
+                "1) Cancelarla / finalizarla manualmente (antes de que haya ganador):\n"
+                "   - Pausa el juego y pulsa el botón de Finalizar.\n"
+                "   - Confirma la acción: volverás al inicio y se pierde el progreso de la partida.\n\n"
+                "2) Terminarla de forma normal (con ganador):\n"
+                "   - Sigue jugando turnos hasta que un jugador complete su objetivo.\n"
+                "   - La partida termina cuando todas las piezas de un jugador llegan a la zona objetivo (la punta opuesta).\n"
+                "   - En ese momento se muestra la pantalla de victoria con el ganador."
+            )
+            return respuesta, {"tipo": "fin_partida"}
+
+        if wants_how and not wants_best:
+            respuesta = (
+                "En CheckerIT puedes mover una pieza de dos formas:\n"
+                "1) Movimiento simple: a una casilla vecina vacía.\n"
+                "2) Salto: si hay una pieza adyacente (propia o rival), puedes saltarla y caer en la casilla colineal detrás si está vacía.\n\n"
+                "Los saltos se pueden encadenar si, tras aterrizar, existe otro salto legal.\n\n"
+                "Botones durante tu turno:\n"
+                "- Pasar Ronda: cede el turno sin mover (si aún no has hecho un movimiento).\n"
+                "- Deshacer: revierte el movimiento que acabas de realizar en la ronda actual.\n"
+                "- Continuar: confirma el movimiento hecho y pasa al siguiente turno."
+            )
+            return respuesta, {"tipo": "reglas_movimiento"}
+
+        # Desactivado: no se ofrece la funcionalidad de "movimientos posibles" desde el chatbot.
+        if wants_possible and not wants_best:
+            return (
+                "Ahora mismo el asistente no ofrece la opción de listar 'movimientos/posiciones posibles'. "
+                "Si quieres, puedes preguntar por 'la mejor jugada' o por 'cómo se mueve una pieza'.",
+                {"tipo": "movimientos_no_disponible"},
+            )
+
+        if not wants_best:
+            return None, None
+
+        if not partida_id or not jugador_id:
+            return (
+                "Para poder ayudarte con jugadas/movimientos necesito el estado de la partida (partida_id) y el jugador actual (jugador_id).",
+                {"tipo": "faltan_parametros"},
+            )
+
+        # Validar existencia de partida/jugador y    evitar respuestas confusas
+        if not Partida.objects.filter(id_partida=str(partida_id)).exists():
+            return (f"partida_id no válido: {partida_id}", {"tipo": "error", "campo": "partida_id"})
+        if not Jugador.objects.filter(id_jugador=str(jugador_id)).exists():
+            return (f"jugador_id no válido: {jugador_id}", {"tipo": "error", "campo": "jugador_id"})
+
+        if wants_best:
+            try:
+                agent = MCTSAgent()
+                sugerencia = agent.suggest_move(
+                    partida_id=str(partida_id),
+                    jugador_id=str(jugador_id),
+                    allow_simple=True,
+                    iterations=250,
+                )
+            except ValueError as exc:
+                return (f"No pude calcular la mejor jugada: {exc}", {"tipo": "error", "motivo": "sin_jugadas"})
+            except Exception as exc:
+                return (f"No se pudo calcular la jugada: {exc}", {"tipo": "error"})
+
+            origen = sugerencia.get("origen")
+            destino = sugerencia.get("destino")
+            secuencia = sugerencia.get("secuencia")
+            if isinstance(secuencia, list) and secuencia:
+                pasos = " -> ".join([str(origen)] + [str(step.get("destino")) for step in secuencia if step.get("destino")])
+                respuesta = f"El mejor movimiento que se puede realizar según el análisis realizado por la aplicación es: {pasos}.\n\n¿Quieres que te muestre en pantalla el movimiento?"
+            else:
+                respuesta = f"El mejor movimiento que se puede realizar según el análisis realizado por la aplicación es: {origen} -> {destino}.\n\n¿Quieres que te muestre en pantalla el movimiento?"
+
+            return respuesta, {"tipo": "mejor_jugada", "sugerencia": sugerencia}
+
+        # Nota: el caso de movimientos posibles se gestiona arriba como "no disponible".
+
+    def _send_and_persist(
+        self,
+        *,
+        chatbot: Chatbot,
+        mensaje: str,
+        partida_id: str | None = None,
+        jugador_id: str | None = None,
+        pieza_id: str | None = None,
+    ) -> Response:
+        api_key = getattr(settings, 'GEMINI_API_KEY', None)
+        try:
+            max_chars = int(getattr(settings, 'CHATBOT_MAX_INPUT_CHARS', 400))
+        except Exception:
+            max_chars = 400
+        if max_chars < 1:
+            max_chars = 400
+        if mensaje is None:
+            mensaje = ''
+        mensaje = str(mensaje)
+
+        if len(mensaje.strip()) == 0:
+            return Response({'error': 'El mensaje no puede estar vacío'}, status=status.HTTP_400_BAD_REQUEST)
+        if len(mensaje) > max_chars:
+            return Response(
+                {'error': f'El mensaje es demasiado largo (máx {max_chars} caracteres)'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Si el mensaje pide ayuda de jugadas/movimientos y se aporta contexto, responder sin Gemini.
+        respuesta_local, extra = self._maybe_answer_game_help(
+            chatbot=chatbot,
+            mensaje=mensaje,
+            partida_id=partida_id,
+            jugador_id=jugador_id,
+            pieza_id=pieza_id,
+        )
+        if respuesta_local is not None:
+            respuesta_local = self._sanitize_llm_text(respuesta_local)
+            if 'conversaciones' not in chatbot.memoria:
+                chatbot.memoria['conversaciones'] = []
+
+            # Persistir estado útil para "muéstramelo"
+            if isinstance(extra, dict):
+                if extra.get("tipo") == "mejor_jugada" and isinstance(extra.get("sugerencia"), dict):
+                    chatbot.memoria["last_best_move"] = extra.get("sugerencia")
+                    chatbot.memoria["awaiting_show_move"] = True
+                elif extra.get("tipo") in {"mostrar_movimiento", "mostrar_movimiento_no_disponible"}:
+                    chatbot.memoria["awaiting_show_move"] = False
+
+            chatbot.memoria['conversaciones'].append({
+                'mensaje': mensaje,
+                'respuesta': respuesta_local,
+                'timestamp': str(timezone.now())
+            })
+            chatbot.save()
+
+            payload = {'chatbot_id': chatbot.id, 'respuesta': respuesta_local}
+            if isinstance(extra, dict) and extra:
+                payload.update(extra)
+            return Response(payload, status=status.HTTP_200_OK)
+
+        # Hard gate: si se fuerza dominio y el mensaje no es del dominio, rechazar sin IA
+        if getattr(settings, 'CHATBOT_DOMAIN_ENFORCE', True) and not self._is_in_domain(mensaje):
+            respuesta = getattr(
+                settings,
+                'CHATBOT_REFUSAL_MESSAGE',
+                'Solo puedo ayudarte con CheckerIT (reglas del juego e interfaz).',
+            )
+            if 'conversaciones' not in chatbot.memoria:
+                chatbot.memoria['conversaciones'] = []
+            chatbot.memoria['conversaciones'].append({
+                'mensaje': mensaje,
+                'respuesta': respuesta,
+                'timestamp': str(timezone.now())
+            })
+            chatbot.save()
+            return Response({'chatbot_id': chatbot.id, 'respuesta': respuesta}, status=status.HTTP_200_OK)
+
+        if not api_key:
+            # Fallback para entornos sin configuración de Gemini (tests, dev)
+            respuesta = f"Respuesta del chatbot a: {mensaje}"
+        else:
+            try:
+                respuesta = generate_gemini_reply(
+                    api_key=api_key,
+                    model=getattr(settings, 'GEMINI_MODEL', None),
+                    timeout_seconds=int(getattr(settings, 'GEMINI_TIMEOUT_SECONDS', 15)),
+                    api_version=getattr(settings, 'GEMINI_API_VERSION', 'v1'),
+                    max_retries=int(getattr(settings, 'GEMINI_MAX_RETRIES', 2)),
+                    retry_backoff_seconds=float(getattr(settings, 'GEMINI_RETRY_BACKOFF_SECONDS', 0.6)),
+                    system_prompt=getattr(settings, 'GEMINI_SYSTEM_PROMPT', None),
+                    temperature=float(getattr(settings, 'GEMINI_TEMPERATURE', 0.2)),
+                    max_output_tokens=int(getattr(settings, 'GEMINI_MAX_OUTPUT_TOKENS', 256)),
+                    user_message=mensaje,
+                    history=self._build_gemini_history(chatbot, limit_turns=10),
+                )
+            except GeminiHttpError as exc:
+                return Response({'error': str(exc)}, status=exc.status_code)
+            except GeminiError as exc:
+                return Response({'error': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        respuesta = self._sanitize_llm_text(respuesta)
+
+        if 'conversaciones' not in chatbot.memoria:
+            chatbot.memoria['conversaciones'] = []
+
+        chatbot.memoria['conversaciones'].append({
+            'mensaje': mensaje,
+            'respuesta': respuesta,
+            'timestamp': str(timezone.now())
+        })
+        chatbot.save()
+
+        return Response({'chatbot_id': chatbot.id, 'respuesta': respuesta}, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['post'], url_path='send_message')
+    def send_message_global(self, request):
+        """Envía un mensaje a Gemini y guarda la conversación.
+
+        Body JSON:
+        - mensaje: str (obligatorio)
+        - chatbot_id: int (opcional)
+        - partida_id / jugador_id (opcionales): si se aportan y no hay chatbot_id, se usa/crea un chatbot asociado a esa partida y jugador
+        """
+        mensaje = request.data.get('mensaje', '')
+        chatbot_id = request.data.get('chatbot_id')
+        partida_id = request.data.get('partida_id')
+        jugador_id = request.data.get('jugador_id')
+        pieza_id = request.data.get('pieza_id')
+
+        if chatbot_id:
+            try:
+                chatbot = Chatbot.objects.get(id=chatbot_id)
+            except Chatbot.DoesNotExist:
+                return Response({'error': 'chatbot_id no válido'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Si se aporta contexto de partida/jugador y el chatbot_id no corresponde,
+            # cambiar automáticamente al chatbot asociado a ese (partida, jugador).
+            if partida_id and jugador_id:
+                if str(getattr(chatbot, 'partida_id', '') or '') != str(partida_id) or str(getattr(chatbot, 'jugador_id', '') or '') != str(jugador_id):
+                    chatbot = (
+                        Chatbot.objects
+                        .filter(partida_id=str(partida_id), jugador_id=str(jugador_id))
+                        .order_by('id')
+                        .first()
+                    )
+                    if chatbot is None:
+                        chatbot = Chatbot.objects.create(partida_id=str(partida_id), jugador_id=str(jugador_id))
+        else:
+            # Preferir un chatbot por (partida, jugador) cuando se aporta contexto.
+            if partida_id and jugador_id:
+                chatbot = (
+                    Chatbot.objects
+                    .filter(partida_id=str(partida_id), jugador_id=str(jugador_id))
+                    .order_by('id')
+                    .first()
+                )
+                if chatbot is None:
+                    chatbot = Chatbot.objects.create(partida_id=str(partida_id), jugador_id=str(jugador_id))
+            else:
+                chatbot = Chatbot.objects.order_by('id').first()
+                if chatbot is None:
+                    chatbot = Chatbot.objects.create()
+
+        return self._send_and_persist(
+            chatbot=chatbot,
+            mensaje=mensaje,
+            partida_id=partida_id,
+            jugador_id=jugador_id,
+            pieza_id=pieza_id,
+        )
     
     @action(detail=True, methods=['post'])
     def send_message(self, request, pk=None):
@@ -965,20 +1397,48 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         """
         chatbot = self.get_object()
         mensaje = request.data.get('mensaje', '')
-        
-        respuesta = f"Respuesta del chatbot a: {mensaje}"
-        
-        if 'conversaciones' not in chatbot.memoria:
-            chatbot.memoria['conversaciones'] = []
-        
-        chatbot.memoria['conversaciones'].append({
-            'mensaje': mensaje,
-            'respuesta': respuesta,
-            'timestamp': str(timezone.now())
-        })
-        chatbot.save()
-        
-        return Response({'respuesta': respuesta})
+        partida_id = request.data.get('partida_id')
+        jugador_id = request.data.get('jugador_id')
+        pieza_id = request.data.get('pieza_id')
+
+        return self._send_and_persist(
+            chatbot=chatbot,
+            mensaje=mensaje,
+            partida_id=partida_id,
+            jugador_id=jugador_id,
+            pieza_id=pieza_id,
+        )
+
+    @action(detail=False, methods=['get'], url_path='for_context')
+    def for_context(self, request):
+        """Devuelve el chatbot (y su historial) para una pareja (partida_id, jugador_id).
+
+        Query params:
+        - partida_id: str (obligatorio)
+        - jugador_id: str (obligatorio)
+
+        No crea el chatbot si no existe.
+        """
+        partida_id = request.query_params.get('partida_id')
+        jugador_id = request.query_params.get('jugador_id')
+
+        if not partida_id or not jugador_id:
+            return Response({'error': 'partida_id y jugador_id son requeridos'}, status=status.HTTP_400_BAD_REQUEST)
+
+        chatbot = (
+            Chatbot.objects
+            .filter(partida_id=str(partida_id), jugador_id=str(jugador_id))
+            .order_by('id')
+            .first()
+        )
+        if chatbot is None:
+            return Response({'chatbot_id': None, 'conversaciones': []}, status=status.HTTP_200_OK)
+
+        conversaciones = (chatbot.memoria or {}).get('conversaciones') or []
+        if not isinstance(conversaciones, list):
+            conversaciones = []
+
+        return Response({'chatbot_id': chatbot.id, 'conversaciones': conversaciones}, status=status.HTTP_200_OK)
 
 
 class JugadorPartidaViewSet(viewsets.ModelViewSet):

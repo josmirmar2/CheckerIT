@@ -460,21 +460,18 @@ class TestRelacionesEntreEntidades:
         assert agente.pk == j.pk
 
     @pytest.mark.django_db
-    def test_one_to_one_chatbot_desde_ia_y_chatbot_puede_ser_null(self, make_jugador, make_agente_inteligente):
-        j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
-        agente = make_agente_inteligente(jugador=j, nivel=1)
+    def test_chatbot_puede_asociarse_a_partida_y_jugador(self, make_jugador, make_partida):
+        j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        p = make_partida(id_partida="P1", numero_jugadores=2)
 
-        chatbot = Chatbot.objects.create(agente_inteligente=agente, memoria={"a": 1}, contexto={"b": 2})
-        assert agente.chatbot == chatbot
-
-        chatbot_sin_ia = Chatbot.objects.create(memoria={}, contexto={})
-        assert chatbot_sin_ia.agente_inteligente is None
+        chatbot = Chatbot.objects.create(jugador=j, partida=p, memoria={"a": 1})
+        assert chatbot.jugador == j
+        assert chatbot.partida == p
 
     @pytest.mark.django_db
     def test_related_name_piezas_desde_chatbot_funciona(self, make_jugador, make_agente_inteligente, make_partida, make_pieza):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
-        agente = make_agente_inteligente(jugador=j, nivel=2)
-        chatbot = Chatbot.objects.create(agente_inteligente=agente, memoria={}, contexto={})
+        chatbot = Chatbot.objects.create(jugador=j, memoria={})
         p = make_partida(id_partida="P1", numero_jugadores=2)
 
         make_pieza(
@@ -535,7 +532,7 @@ class TestRelacionesEntreEntidades:
     def test_borrado_jugador_hace_cascade_a_ia_chatbot_y_dependencias(self, make_jugador, make_agente_inteligente, make_partida, make_pieza, make_ronda, make_movimiento):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
         agente = make_agente_inteligente(jugador=j, nivel=2)
-        Chatbot.objects.create(agente_inteligente=agente, memoria={}, contexto={})
+        Chatbot.objects.create(jugador=j, memoria={})
         p = make_partida(id_partida="P1", numero_jugadores=2)
         JugadorPartida.objects.create(jugador=j, partida=p, orden_participacion=1)
 
@@ -567,10 +564,10 @@ class TestRelacionesEntreEntidades:
         assert JugadorPartida.objects.count() == 0
 
     @pytest.mark.django_db
-    def test_borrado_ia_hace_cascade_a_chatbot_pero_no_a_piezas(self, make_jugador, make_agente_inteligente, make_pieza):
+    def test_borrado_agente_inteligente_no_borra_chatbot_ni_piezas(self, make_jugador, make_agente_inteligente, make_pieza):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
         agente = make_agente_inteligente(jugador=j, nivel=2)
-        Chatbot.objects.create(agente_inteligente=agente, memoria={}, contexto={})
+        Chatbot.objects.create(jugador=j, memoria={})
 
         pieza_1 = make_pieza(
             id_pieza="X1",
@@ -587,15 +584,14 @@ class TestRelacionesEntreEntidades:
 
         agente.delete()
 
-        assert Chatbot.objects.count() == 0
+        assert Chatbot.objects.count() == 1
         assert Pieza.objects.filter(id_pieza=pieza_1.id_pieza).count() == 1
         assert Pieza.objects.filter(id_pieza=pieza_2.id_pieza).count() == 1
 
     @pytest.mark.django_db
     def test_borrado_chatbot_hace_cascade_a_piezas_asociadas(self, make_agente_inteligente, make_jugador, make_pieza):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
-        agente = make_agente_inteligente(jugador=j, nivel=2)
-        chatbot = Chatbot.objects.create(agente_inteligente=agente, memoria={}, contexto={})
+        chatbot = Chatbot.objects.create(jugador=j, memoria={})
 
         pieza_cb = make_pieza(
             id_pieza="X_CB",

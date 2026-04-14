@@ -468,11 +468,40 @@ def test_crear_jugador_ia_normaliza_nombre(api_client):
 
 
 @pytest.mark.django_db
-def test_chatbot_send_message_responde(api_client, make_jugador, make_agente_inteligente):
+def test_chatbot_send_message_responde(api_client, make_jugador):
     j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
-    agente = make_agente_inteligente(jugador=j, nivel=1)
-    chatbot = Chatbot.objects.create(agente_inteligente=agente, memoria={}, contexto={})
+    chatbot = Chatbot.objects.create(jugador=j, memoria={})
 
     res = api_client.post(f"/api/chatbot/{chatbot.pk}/send_message/", {"mensaje": "hola"}, format="json")
     assert res.status_code == 200
     assert "respuesta" in res.json()
+
+
+@pytest.mark.django_db
+def test_chatbot_for_context_devuelve_vacio_si_no_existe(api_client, make_jugador, make_partida):
+    j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    p = make_partida(id_partida="P1", numero_jugadores=2)
+
+    res = api_client.get(f"/api/chatbot/for_context/?partida_id={p.id_partida}&jugador_id={j.id_jugador}")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["chatbot_id"] is None
+    assert data["conversaciones"] == []
+
+
+@pytest.mark.django_db
+def test_chatbot_for_context_devuelve_historial_si_existe(api_client, make_jugador, make_partida):
+    j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+    p = make_partida(id_partida="P1", numero_jugadores=2)
+    cb = Chatbot.objects.create(
+        jugador=j,
+        partida=p,
+        memoria={"conversaciones": [{"mensaje": "hola", "respuesta": "buenas", "timestamp": "t"}]},
+    )
+
+    res = api_client.get(f"/api/chatbot/for_context/?partida_id={p.id_partida}&jugador_id={j.id_jugador}")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["chatbot_id"] == cb.id
+    assert isinstance(data["conversaciones"], list)
+    assert data["conversaciones"][0]["mensaje"] == "hola"

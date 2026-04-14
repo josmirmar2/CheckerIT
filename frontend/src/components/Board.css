@@ -179,6 +179,23 @@
   transform: scale(1.15);
 }
 
+.board-cell.hint-from {
+  outline: 3px solid rgba(213, 139, 42, 1);
+  outline-offset: -2px;
+  box-shadow: 0 0 18px rgba(213, 139, 42, 0.65);
+}
+
+.board-cell.hint-to {
+  outline: 3px solid rgba(136, 89, 27, 1);
+  outline-offset: -2px;
+  box-shadow: 0 0 18px rgba(136, 89, 27, 0.65);
+}
+
+.board-cell.hint-path {
+  outline: 2px dashed rgba(136, 89, 27, 0.85);
+  outline-offset: -2px;
+}
+
 @keyframes pulse {
   0%, 100% {
     box-shadow: 0 0 10px var(--valid-move-color, rgba(68, 221, 68, 0.4));

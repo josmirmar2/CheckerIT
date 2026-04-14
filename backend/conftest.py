@@ -28,6 +28,16 @@ def make_jugador(db):
     return _make_jugador
 
 
+@pytest.fixture(autouse=True)
+def _disable_gemini_in_tests(settings):
+    """Evita llamadas externas a Gemini en tests.
+
+    Los tests que quieran cubrir la integración con Gemini deben establecer
+    `settings.GEMINI_API_KEY` y mockear `requests` explícitamente.
+    """
+    settings.GEMINI_API_KEY = None
+
+
 @pytest.fixture()
 def make_partida(db):
     from game.models import Partida
