@@ -1339,7 +1339,8 @@ class ChatbotViewSet(viewsets.ModelViewSet):
 
         Body JSON:
         - mensaje: str (obligatorio)
-        - chatbot_id: int (opcional; si no, usa el primero o crea uno)
+        - chatbot_id: int (opcional)
+        - partida_id / jugador_id (opcionales): si se aportan y no hay chatbot_id, se usa/crea un chatbot asociado a esa partida y jugador
         """
         mensaje = request.data.get('mensaje', '')
         chatbot_id = request.data.get('chatbot_id')
@@ -1352,10 +1353,34 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 chatbot = Chatbot.objects.get(id=chatbot_id)
             except Chatbot.DoesNotExist:
                 return Response({'error': 'chatbot_id no válido'}, status=status.HTTP_400_BAD_REQUEST)
+
+            # Si se aporta contexto de partida/jugador y el chatbot_id no corresponde,
+            # cambiar automáticamente al chatbot asociado a ese (partida, jugador).
+            if partida_id and jugador_id:
+                if str(getattr(chatbot, 'partida_id', '') or '') != str(partida_id) or str(getattr(chatbot, 'jugador_id', '') or '') != str(jugador_id):
+                    chatbot = (
+                        Chatbot.objects
+                        .filter(partida_id=str(partida_id), jugador_id=str(jugador_id))
+                        .order_by('id')
+                        .first()
+                    )
+                    if chatbot is None:
+                        chatbot = Chatbot.objects.create(partida_id=str(partida_id), jugador_id=str(jugador_id))
         else:
-            chatbot = Chatbot.objects.order_by('id').first()
-            if chatbot is None:
-                chatbot = Chatbot.objects.create()
+            # Preferir un chatbot por (partida, jugador) cuando se aporta contexto.
+            if partida_id and jugador_id:
+                chatbot = (
+                    Chatbot.objects
+                    .filter(partida_id=str(partida_id), jugador_id=str(jugador_id))
+                    .order_by('id')
+                    .first()
+                )
+                if chatbot is None:
+                    chatbot = Chatbot.objects.create(partida_id=str(partida_id), jugador_id=str(jugador_id))
+            else:
+                chatbot = Chatbot.objects.order_by('id').first()
+                if chatbot is None:
+                    chatbot = Chatbot.objects.create()
 
         return self._send_and_persist(
             chatbot=chatbot,
@@ -1383,6 +1408,37 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             jugador_id=jugador_id,
             pieza_id=pieza_id,
         )
+
+    @action(detail=False, methods=['get'], url_path='for_context')
+    def for_context(self, request):
+        """Devuelve el chatbot (y su historial) para una pareja (partida_id, jugador_id).
+
+        Query params:
+        - partida_id: str (obligatorio)
+        - jugador_id: str (obligatorio)
+
+        No crea el chatbot si no existe.
+        """
+        partida_id = request.query_params.get('partida_id')
+        jugador_id = request.query_params.get('jugador_id')
+
+        if not partida_id or not jugador_id:
+            return Response({'error': 'partida_id y jugador_id son requeridos'}, status=status.HTTP_400_BAD_REQUEST)
+
+        chatbot = (
+            Chatbot.objects
+            .filter(partida_id=str(partida_id), jugador_id=str(jugador_id))
+            .order_by('id')
+            .first()
+        )
+        if chatbot is None:
+            return Response({'chatbot_id': None, 'conversaciones': []}, status=status.HTTP_200_OK)
+
+        conversaciones = (chatbot.memoria or {}).get('conversaciones') or []
+        if not isinstance(conversaciones, list):
+            conversaciones = []
+
+        return Response({'chatbot_id': chatbot.id, 'conversaciones': conversaciones}, status=status.HTTP_200_OK)
 
 
 class JugadorPartidaViewSet(viewsets.ModelViewSet):

@@ -177,8 +177,6 @@ class AgenteInteligenteSerializer(serializers.ModelSerializer):
 
 
 class ChatbotSerializer(serializers.ModelSerializer):
-    agente_inteligente_jugador = serializers.CharField(source='agente_inteligente.jugador.nombre', read_only=True)
-    
     class Meta:
         model = Chatbot
-        fields = ['id', 'agente_inteligente', 'agente_inteligente_jugador', 'memoria', 'contexto']
+        fields = ['id', 'partida', 'jugador', 'memoria']

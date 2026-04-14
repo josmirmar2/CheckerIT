@@ -47,7 +47,7 @@ class AgenteInteligenteAdmin(admin.ModelAdmin):
 
 @admin.register(Chatbot)
 class ChatbotAdmin(admin.ModelAdmin):
-    list_display = ['id', 'agente_inteligente']
+    list_display = ['id', 'partida', 'jugador']
 
 
 @admin.register(JugadorPartida)
