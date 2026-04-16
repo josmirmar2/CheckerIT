@@ -6,20 +6,22 @@
 }
 
 .tutorial-content {
-  max-width: 900px;
+  max-width: 1300px;
   width: 100%;
   background: rgba(255, 255, 255, 0.95);
   border-radius: 20px;
   padding: 40px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(213, 139, 42, 0.18);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
 
 .tutorial-title {
   text-align: center;
   color: #DEA357;
   font-size: 2.5rem;
-  margin-bottom: 40px;
-  margin-top: 20px;
+  margin: 6px 0 0;
 }
 
 .tutorial-sections {
@@ -40,6 +42,25 @@
   color: #DEA357;
   font-size: 1.5rem;
   margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tutorial-section h2::before {
+  content: '';
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #D58B2A;
+  box-shadow: 0 0 0 4px rgba(213, 139, 42, 0.15);
+  flex: 0 0 auto;
+}
+
+.tutorial-section h3 {
+  color: #88591B;
+  font-size: 1.15rem;
+  margin: 18px 0 8px;
 }
 
 .tutorial-section p {
@@ -63,6 +84,74 @@
 .tutorial-section strong {
   color: #88591B;
   font-weight: 600;
+}
+
+.tutorial-finish-actions {
+  margin-top: 18px;
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.tutorial-finish-button {
+  padding: 16px 28px;
+  font-size: 1.05rem;
+  font-weight: 700;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border: none;
+}
+
+.tutorial-finish-primary {
+  background: linear-gradient(135deg, #D58B2A 0%, #AF7223 100%);
+  color: white;
+  box-shadow: 0 4px 15px rgba(213, 139, 42, 0.4);
+}
+
+.tutorial-finish-primary:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(213, 139, 42, 0.6);
+}
+
+.tutorial-finish-secondary {
+  background: white;
+  color: #AF7223;
+  border: 2px solid #AF7223;
+}
+
+.tutorial-finish-secondary:hover {
+  background: #AF7223;
+  color: white;
+  transform: translateY(-3px);
+  box-shadow: 0 10px 25px rgba(213, 139, 42, 0.3);
+}
+
+.tutorial-finish-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.tutorial-finish-error {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  color: #b42318;
+  font-weight: 600;
+}
+
+.tutorial-finish-note {
+  margin-top: 14px;
+  color: #333;
+  font-size: 1rem;
+  line-height: 1.7;
 }
 
 .tutorial-actions {
@@ -172,6 +261,289 @@
   transform: translateY(-2px);
 }
 
+.tutorial-hero {
+  margin: 6px 0 24px;
+  padding: 22px 22px 18px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(213, 139, 42, 0.18), rgba(255, 255, 255, 0.75));
+  border: 1px solid rgba(213, 139, 42, 0.25);
+}
+
+.tutorial-hero-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.tutorial-hero-badge {
+  background: rgba(213, 139, 42, 0.12);
+  border: 1px solid rgba(213, 139, 42, 0.35);
+  color: #88591B;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 800;
+  font-size: 0.9rem;
+}
+
+.tutorial-hero-step {
+  color: #88591B;
+  font-weight: 800;
+  font-size: 1rem;
+}
+
+.tutorial-hero-subtitle {
+  margin: 10px auto 0;
+  max-width: 72ch;
+  text-align: center;
+  color: #333;
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.tutorial-progress {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.tutorial-progress-track {
+  flex: 1;
+  height: 10px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: rgba(136, 89, 27, 0.12);
+  border: 1px solid rgba(136, 89, 27, 0.15);
+}
+
+.tutorial-progress-fill {
+  height: 100%;
+  width: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #D58B2A, #AF7223);
+  transition: width 250ms ease;
+}
+
+.tutorial-progress-text {
+  min-width: 130px;
+  text-align: right;
+  color: #88591B;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.tutorial-finish-list {
+  margin-top: 12px;
+  border-radius: 12px;
+  padding: 14px 18px;
+  background: rgba(213, 139, 42, 0.08);
+  border: 1px dashed rgba(213, 139, 42, 0.35);
+}
+
+.tutorial-finish-list li {
+  margin-bottom: 8px;
+}
+
+.tutorial-chatbot {
+  margin-top: 28px;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(213, 139, 42, 0.2);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+}
+
+.tutorial-chatbot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, rgba(213, 139, 42, 0.16), rgba(255, 255, 255, 0.85));
+  border-bottom: 1px solid rgba(213, 139, 42, 0.18);
+}
+
+.tutorial-chatbot-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #88591B;
+  font-weight: 900;
+}
+
+.tutorial-chatbot-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #D58B2A;
+  box-shadow: 0 0 0 4px rgba(213, 139, 42, 0.16);
+}
+
+.tutorial-chatbot-toggle {
+  padding: 8px 12px;
+  border-radius: 10px;
+  border: 2px solid #AF7223;
+  background: white;
+  color: #AF7223;
+  font-weight: 900;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tutorial-chatbot-toggle:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(175, 114, 35, 0.2);
+}
+
+.tutorial-chatbot-toggle:active {
+  transform: translateY(0);
+}
+
+.tutorial-chatbot-toggle:focus-visible {
+  outline: 3px solid rgba(213, 139, 42, 0.35);
+  outline-offset: 3px;
+}
+
+.tutorial-chatbot-body {
+  padding: 14px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tutorial-chatbot-hint {
+  color: #333;
+  background: rgba(213, 139, 42, 0.08);
+  border: 1px solid rgba(213, 139, 42, 0.18);
+  border-radius: 12px;
+  padding: 10px 12px;
+  line-height: 1.5;
+}
+
+.tutorial-chatbot-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tutorial-chatbot-chip {
+  border: 1px solid rgba(136, 89, 27, 0.25);
+  background: white;
+  color: #88591B;
+  border-radius: 999px;
+  padding: 8px 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tutorial-chatbot-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.08);
+}
+
+.tutorial-chatbot-chip:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.tutorial-chatbot-messages {
+  max-height: 260px;
+  overflow: auto;
+  padding: 10px;
+  border-radius: 12px;
+  background: #fbfbfb;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.tutorial-chatbot-empty {
+  color: #555;
+  padding: 10px 8px;
+  text-align: center;
+}
+
+.tutorial-chatbot-bubble {
+  padding: 10px 12px;
+  border-radius: 14px;
+  line-height: 1.55;
+  font-size: 0.98rem;
+  white-space: pre-wrap;
+}
+
+.tutorial-chatbot-bubble.is-user {
+  align-self: flex-end;
+  color: white;
+  background: linear-gradient(135deg, #D58B2A 0%, #AF7223 100%);
+  box-shadow: 0 10px 20px rgba(213, 139, 42, 0.25);
+}
+
+.tutorial-chatbot-bubble.is-assistant {
+  align-self: flex-start;
+  background: white;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.tutorial-chatbot-error {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  color: #b42318;
+  font-weight: 700;
+}
+
+.tutorial-chatbot-inputRow {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.tutorial-chatbot-input {
+  flex: 1;
+  resize: vertical;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  padding: 10px 12px;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+.tutorial-chatbot-input:focus-visible {
+  outline: 3px solid rgba(213, 139, 42, 0.35);
+  outline-offset: 2px;
+}
+
+.tutorial-chatbot-send {
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: none;
+  cursor: pointer;
+  font-weight: 900;
+  color: white;
+  background: linear-gradient(135deg, #D58B2A 0%, #AF7223 100%);
+  box-shadow: 0 10px 22px rgba(213, 139, 42, 0.25);
+  transition: all 0.2s ease;
+}
+
+.tutorial-chatbot-send:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 30px rgba(213, 139, 42, 0.35);
+}
+
+.tutorial-chatbot-send:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
 @media (max-width: 768px) {
   .tutorial-content {
     padding: 30px 20px;
@@ -194,9 +566,36 @@
   .tutorial-section ol {
     font-size: 1rem;
   }
-  
+
+  .tutorial-finish-button {
+    padding: 14px 22px;
+    font-size: 0.95rem;
+  }
+
   .start-playing-button {
     padding: 15px 35px;
     font-size: 1rem;
+  }
+
+  .tutorial-hero {
+    padding: 18px 16px 14px;
+  }
+
+  .tutorial-progress {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tutorial-progress-text {
+    min-width: auto;
+    text-align: left;
+  }
+
+  .tutorial-chatbot-inputRow {
+    flex-direction: column;
+  }
+
+  .tutorial-chatbot-send {
+    width: 100%;
   }
 }
