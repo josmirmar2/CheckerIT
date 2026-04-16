@@ -1,55 +1,57 @@
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Tutorial.css';
 
 function Tutorial() {
   const navigate = useNavigate();
+  const [currentPage, setCurrentPage] = useState(0);
 
   const handleGoBack = () => {
     navigate('/');
   };
 
-  return (
-    <div className="tutorial-container">
-      <div className="tutorial-content">
-        <button className="back-button" onClick={handleGoBack}>
-          ← Volver al Inicio
-        </button>
-        
-        <h1 className="tutorial-title">Tutorial - Damas Chinas</h1>
-        
-        <div className="tutorial-sections">
-          <section className="tutorial-section">
-            <h2>🎯 Objetivo del Juego</h2>
-            <p>
-              El objetivo de las Damas Chinas es ser el primero en mover todas 
-              tus piezas desde tu zona inicial hasta la zona objetivo opuesta 
-              del tablero estrellado.
-            </p>
-          </section>
+  const pages = useMemo(
+    () => [
+      {
+        key: 'intro',
+        sections: (
+          <>
+            <section className="tutorial-section">
+              <h2>🎯 Objetivo del Juego</h2>
+              <p>
+                El objetivo de las Damas Chinas es ser el primero en mover todas
+                tus piezas desde tu zona inicial hasta la zona objetivo opuesta
+                del tablero estrellado.
+              </p>
+            </section>
 
-          <section className="tutorial-section">
-            <h2>📋 Reglas Básicas</h2>
-            <ul>
-              <li>
-                <strong>Movimiento Simple:</strong> Puedes mover una pieza a 
-                cualquier casilla adyacente vacía.
-              </li>
-              <li>
-                <strong>Saltos:</strong> Puedes saltar sobre una pieza (tuya o 
-                del oponente) a una casilla vacía al otro lado.
-              </li>
-              <li>
-                <strong>Saltos Múltiples:</strong> Si después de un salto puedes 
-                realizar otro, puedes continuar saltando en la misma ronda.
-              </li>
-              <li>
-                <strong>No se Captura:</strong> A diferencia de las damas 
-                tradicionales, en las Damas Chinas NO se capturan piezas.
-              </li>
-            </ul>
-          </section>
-
+            <section className="tutorial-section">
+              <h2>📋 Reglas Básicas</h2>
+              <ul>
+                <li>
+                  <strong>Movimiento Simple:</strong> Puedes mover una pieza a
+                  cualquier casilla adyacente vacía.
+                </li>
+                <li>
+                  <strong>Saltos:</strong> Puedes saltar sobre una pieza (tuya o
+                  del oponente) a una casilla vacía al otro lado.
+                </li>
+                <li>
+                  <strong>Saltos Múltiples:</strong> Si después de un salto puedes
+                  realizar otro, puedes continuar saltando en la misma ronda.
+                </li>
+                <li>
+                  <strong>No se Captura:</strong> A diferencia de las damas
+                  tradicionales, en las Damas Chinas NO se capturan piezas.
+                </li>
+              </ul>
+            </section>
+          </>
+        ),
+      },
+      {
+        key: 'how-to-play',
+        sections: (
           <section className="tutorial-section">
             <h2>🎮 Cómo Jugar</h2>
             <ol>
@@ -59,15 +61,23 @@ function Tutorial() {
               <li>La ronda pasa al siguiente jugador</li>
             </ol>
           </section>
-
+        ),
+      },
+      {
+        key: 'win',
+        sections: (
           <section className="tutorial-section">
             <h2>🏆 Ganar la Partida</h2>
             <p>
-              El primer jugador que consiga colocar todas sus piezas en la 
-              zona objetivo opuesta del tablero gana la partida.
+              El primer jugador que consiga colocar todas sus piezas en la zona
+              objetivo opuesta del tablero gana la partida.
             </p>
           </section>
-
+        ),
+      },
+      {
+        key: 'tips',
+        sections: (
           <section className="tutorial-section">
             <h2>💡 Consejos Estratégicos</h2>
             <ul>
@@ -77,12 +87,66 @@ function Tutorial() {
               <li>Controla el centro del tablero para tener más opciones</li>
             </ul>
           </section>
-        </div>
+        ),
+      },
+    ],
+    []
+  );
+
+  const totalPages = pages.length;
+  const isFirstPage = currentPage === 0;
+  const isLastPage = currentPage === totalPages - 1;
+
+  const goPrev = () => setCurrentPage((p) => Math.max(0, p - 1));
+  const goNext = () => setCurrentPage((p) => Math.min(totalPages - 1, p + 1));
+
+  return (
+    <div className="tutorial-container">
+      <div className="tutorial-content">
+        <button className="back-button" onClick={handleGoBack}>
+          ← Volver al Inicio
+        </button>
+
+        <h1 className="tutorial-title">Tutorial - Damas Chinas</h1>
+
+        <div className="tutorial-sections">{pages[currentPage].sections}</div>
 
         <div className="tutorial-actions">
           <button className="start-playing-button" onClick={() => navigate('/game')}>
             ¡Empezar a Jugar!
           </button>
+        </div>
+
+        <div className="tutorial-pagination" aria-label="Navegación del tutorial">
+          <div className="tutorial-pagination-slot tutorial-pagination-left">
+            {!isFirstPage && (
+              <button
+                type="button"
+                className="tutorial-nav-button"
+                onClick={goPrev}
+                aria-label="Página anterior"
+              >
+                ←
+              </button>
+            )}
+          </div>
+
+          <div className="tutorial-page-indicator">
+            Página {currentPage + 1} de {totalPages}
+          </div>
+
+          <div className="tutorial-pagination-slot tutorial-pagination-right">
+            {!isLastPage && (
+              <button
+                type="button"
+                className="tutorial-nav-button"
+                onClick={goNext}
+                aria-label="Página siguiente"
+              >
+                →
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

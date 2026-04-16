@@ -66,7 +66,7 @@
 }
 
 .tutorial-actions {
-  margin-top: 40px;
+  margin-top: 30px;
   display: flex;
   justify-content: center;
 }
@@ -88,6 +88,69 @@
 .start-playing-button:hover {
   transform: translateY(-3px);
   box-shadow: 0 10px 25px rgba(213, 139, 42, 0.4);
+}
+
+.tutorial-pagination {
+  margin-top: 30px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+}
+
+.tutorial-pagination-slot {
+  display: flex;
+}
+
+.tutorial-pagination-left {
+  justify-content: flex-start;
+}
+
+.tutorial-pagination-right {
+  justify-content: flex-end;
+}
+
+/* Botones tipo "música" (compact-button de la partida) */
+.tutorial-nav-button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  margin: 0;
+  border: 2px solid #D58B2A;
+  border-radius: 50%;
+  background: white;
+  color: #D58B2A;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: 0 3px 8px rgba(213, 139, 42, 0.25);
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.tutorial-nav-button:hover {
+  transform: scale(1.08);
+  box-shadow: 0 5px 12px rgba(213, 139, 42, 0.35);
+}
+
+.tutorial-nav-button:active {
+  transform: scale(0.96);
+  box-shadow: 0 2px 4px rgba(213, 139, 42, 0.15);
+}
+
+.tutorial-nav-button:focus-visible {
+  outline: 3px solid rgba(213, 139, 42, 0.35);
+  outline-offset: 3px;
+}
+
+.tutorial-page-indicator {
+  color: #88591B;
+  font-weight: 600;
+  font-size: 1rem;
+  text-align: center;
 }
 
 .back-button {
