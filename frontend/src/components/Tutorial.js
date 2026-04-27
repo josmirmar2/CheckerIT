@@ -2,6 +2,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './Tutorial.css';
 
+import tutorialMoveSimple from './images/tutorial/Movimiento simple.gif';
+import tutorialJump from './images/tutorial/Salto.gif';
+import tutorialJumpChain from './images/tutorial/Salto en cadena.gif';
+
 const API_URL = 'http://localhost:8000/api';
 
 function Tutorial() {
@@ -305,6 +309,44 @@ function Tutorial() {
                 saltos pueden cambiar de dirección en cada salto.
               </li>
             </ul>
+
+            <div className="tutorial-moveGallery" aria-label="Ejemplos visuales de movimientos">
+              <figure className="tutorial-moveCard">
+                <img
+                  className="tutorial-moveImage"
+                  src={tutorialMoveSimple}
+                  alt="Ejemplo de movimiento simple a una casilla adyacente"
+                  loading="lazy"
+                />
+                <figcaption className="tutorial-moveCaption">
+                  <strong>Movimiento simple</strong>
+                </figcaption>
+              </figure>
+
+              <figure className="tutorial-moveCard">
+                <img
+                  className="tutorial-moveImage"
+                  src={tutorialJump}
+                  alt="Ejemplo de salto en línea recta sobre una pieza"
+                  loading="lazy"
+                />
+                <figcaption className="tutorial-moveCaption">
+                  <strong>Salto</strong>
+                </figcaption>
+              </figure>
+
+              <figure className="tutorial-moveCard">
+                <img
+                  className="tutorial-moveImage"
+                  src={tutorialJumpChain}
+                  alt="Ejemplo de salto en cadena con varios saltos en el mismo turno"
+                  loading="lazy"
+                />
+                <figcaption className="tutorial-moveCaption">
+                  <strong>Salto en cadena</strong>
+                </figcaption>
+              </figure>
+            </div>
           </section>
 
           <section className="tutorial-section">
