@@ -7,6 +7,7 @@ import tutorialJump from './images/tutorial/Salto.gif';
 import tutorialJumpChain from './images/tutorial/Salto en cadena.gif';
 
 import tutorialBoard from './images/tutorial/Tablero.gif';
+import tutorialPlayers from './images/tutorial/Jugadores.png';
 import tutorialTurns from './images/tutorial/Turnos.gif';
 import tutorialTimer from './images/tutorial/Temporizador.gif';
 import tutorialMusic from './images/tutorial/Musica.gif';
@@ -239,11 +240,29 @@ function Tutorial() {
         <>
           <section className="tutorial-section">
             <h2>Objetivo del juego</h2>
-            <p>
-              El objetivo principal es ser el primer jugador en mover todas tus diez piezas desde
-              tu punto de partida (una de las puntas de la estrella) hasta la punta de la estrella
-              directamente opuesta a la tuya.
-            </p>
+            <div className="tutorial-uiItem tutorial-uiItem--objective">
+              <div className="tutorial-uiText">
+                <p>
+                  El objetivo principal es ser el primer jugador en mover todas tus diez piezas desde
+                  tu punto de partida (una de las puntas de la estrella) hasta la punta de la estrella
+                  directamente opuesta a la tuya.
+                </p>
+                <p>
+                  El primer jugador en mover todas sus diez piezas a los diez espacios de su área de
+                  destino gana el juego. Si dos jugadores completan sus bases en el mismo turno, se
+                  puede considerar un empate o establecer una regla de desempate (por ejemplo, el jugador
+                  cuyo turno era primero).
+                </p>
+              </div>
+              <div className="tutorial-uiMedia">
+                <img
+                  className="tutorial-uiImage tutorial-uiImage--objective"
+                  src={tutorialBoard}
+                  alt="Tablero de Damas Chinas con forma de estrella"
+                  loading="lazy"
+                />
+              </div>
+            </div>
           </section>
 
           <section className="tutorial-section">
@@ -271,27 +290,41 @@ function Tutorial() {
                 excepción de si ya hay una pieza en esa posición.
               </li>
               <li>
-                Los jugadores se turnan para mover una de sus piezas. El orden de los turnos estará
-                predefinido en el sistema, siguiendo el orden que se ha establecido al inicio al
-                crear los jugadores participantes.
-              </li>
-              <li>
                 Los jugadores pueden bloquear el paso de los oponentes ocupando espacios clave. Sin
                 embargo, no puedes ocupar permanentemente los espacios de la base de inicio o destino
                 de otro jugador si eso impide que ese jugador complete su objetivo. Puedes moverte a
                 través de ellos, pero tu objetivo es llenar tu propia base de destino.
               </li>
-            </ul>
-          </section>
+              <li>
+                Los jugadores se turnan para mover una de sus piezas. El orden de los turnos estará
+                predefinido en el sistema, siguiendo el orden que se ha establecido al inicio al
+                crear los jugadores participantes. Cuando creas los jugadores, el orden en el que aparecen es el mismo orden en el que se
+                establece el turno durante la partida.
+                <div className="tutorial-turnOrderVisual" aria-label="Relación entre jugadores y turnos">
+                  <div className="tutorial-turnOrderCard">
+                    <img
+                      className="tutorial-turnOrderImage"
+                      src={tutorialPlayers}
+                      alt="Imagen de jugadores creados"
+                      loading="lazy"
+                    />
+                  </div>
 
-          <section className="tutorial-section">
-            <h2>¿Cómo se puede ganar?</h2>
-            <p>
-              El primer jugador en mover todas sus diez piezas a los diez espacios de su área de
-              destino gana el juego. Si dos jugadores completan sus bases en el mismo turno, se
-              puede considerar un empate o establecer una regla de desempate (por ejemplo, el jugador
-              cuyo turno era primero).
-            </p>
+                  <div className="tutorial-turnOrderArrow" aria-hidden="true">
+                    →
+                  </div>
+
+                  <div className="tutorial-turnOrderCard">
+                    <img
+                      className="tutorial-turnOrderImage"
+                      src={tutorialTurns}
+                      alt="Imagen del orden de turnos"
+                      loading="lazy"
+                    />
+                  </div>
+                </div>
+              </li>
+            </ul>
           </section>
         </>
       ),
