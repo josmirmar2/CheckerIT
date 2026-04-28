@@ -175,14 +175,20 @@
 
 .tutorial-turnOrderCard {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(251, 246, 237, 0.96) 100%);
-  border: 1px solid rgba(213, 139, 42, 0.1);
+  border: 1.2px solid rgba(213, 139, 42, 0.18);
   border-radius: 20px;
-  padding: 14px;
-  box-shadow: 0 12px 28px rgba(136, 89, 27, 0.12);
+  padding: 16px;
+  box-shadow: 0 6px 18px rgba(136, 89, 27, 0.12);
   justify-self: center;
   width: 100%;
   max-width: 360px;
   overflow: hidden;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.tutorial-turnOrderCard:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 28px rgba(136, 89, 27, 0.16);
 }
 
 .tutorial-turnOrderImage {
@@ -191,11 +197,14 @@
   max-height: 340px;
   display: block;
   object-fit: contain;
-  border-radius: 16px;
-  transform: scale(1.1);
-  transform-origin: center;
-  background: rgba(255, 255, 255, 0.7);
-  padding: 6px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.8);
+  padding: 8px;
+  transition: transform 200ms ease;
+}
+
+.tutorial-turnOrderCard:hover .tutorial-turnOrderImage {
+  transform: scale(1.05);
 }
 
 .tutorial-turnOrderArrow {
@@ -217,56 +226,73 @@
   margin-top: 28px;
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 30px;
+  gap: 32px;
 }
 
 .tutorial-moveCard {
   margin: 0;
-  background: rgba(213, 139, 42, 0.06);
-  border: 1px solid rgba(213, 139, 42, 0.2);
-  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(251, 246, 237, 0.94) 100%);
+  border: 1.5px solid rgba(213, 139, 42, 0.28);
+  border-radius: 16px;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  box-shadow: 0 6px 20px rgba(136, 89, 27, 0.14);
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+
+.tutorial-moveCard:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 32px rgba(136, 89, 27, 0.18);
 }
 
 .tutorial-moveImage {
   width: 100%;
-  height: 400px;
+  height: 380px;
   display: block;
   object-fit: contain;
-  padding: 14px;
-  background: rgba(255, 255, 255, 0.92);
-  border-radius: 10px;
+  padding: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 239, 226, 0.96) 100%);
+  border-radius: 12px;
   overflow: hidden;
-  border-bottom: 1px solid rgba(213, 139, 42, 0.18);
+  border-bottom: 1.5px solid rgba(213, 139, 42, 0.22);
+  margin: 8px;
 }
 
 .tutorial-moveCaption {
-  padding: 10px 12px;
-  color: #333;
-  line-height: 2;
-  font-size: 1.5rem;
+  padding: 14px 16px;
+  color: #88591B;
+  line-height: 1.6;
+  font-size: 1.15rem;
   text-align: center;
+  font-weight: 600;
+  background: rgba(213, 139, 42, 0.03);
+  border-top: 1px solid rgba(213, 139, 42, 0.12);
 }
 
 .tutorial-uiList {
   margin-top: 14px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 22px;
 }
 
 .tutorial-uiItem {
   display: grid;
   grid-template-columns: 1fr minmax(240px, 360px);
-  gap: 18px;
+  gap: 24px;
   align-items: center;
-  padding: 14px;
-  border-radius: 14px;
-  background: rgba(213, 139, 42, 0.05);
-  border: 1px solid rgba(213, 139, 42, 0.16);
+  padding: 18px 20px;
+  border-radius: 16px;
+  background: rgba(213, 139, 42, 0.04);
+  border: 1.2px solid rgba(213, 139, 42, 0.18);
+  box-shadow: 0 2px 8px rgba(136, 89, 27, 0.06);
+  transition: border-color 200ms ease, box-shadow 200ms ease;
+}
+
+.tutorial-uiItem:hover {
+  border-color: rgba(213, 139, 42, 0.28);
+  box-shadow: 0 4px 12px rgba(136, 89, 27, 0.1);
 }
 
 .tutorial-uiItem.is-left {
@@ -302,11 +328,16 @@
 
 .tutorial-uiMedia {
   width: 100%;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(213, 139, 42, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(251, 246, 237, 0.94) 100%);
+  border: 1.2px solid rgba(213, 139, 42, 0.2);
   border-radius: 16px;
-  padding: 12px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+  padding: 16px;
+  box-shadow: 0 4px 14px rgba(136, 89, 27, 0.1);
+  transition: box-shadow 200ms ease;
+}
+
+.tutorial-uiItem:hover .tutorial-uiMedia {
+  box-shadow: 0 6px 18px rgba(136, 89, 27, 0.13);
 }
 
 .tutorial-uiImage {
@@ -314,7 +345,9 @@
   height: auto;
   object-fit: contain;
   display: block;
-  border-radius: 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  padding: 4px;
 }
 
 .tutorial-uiItem--board .tutorial-uiText p {
@@ -386,7 +419,12 @@
 .tutorial-uiItem--compact .tutorial-uiMedia {
   width: auto;
   flex: 0 0 auto;
-  max-width: 290px;
+  max-width: 320px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(251, 246, 237, 0.94) 100%);
+  border: 1.2px solid rgba(213, 139, 42, 0.2);
+  border-radius: 16px;
+  padding: 14px;
+  box-shadow: 0 4px 14px rgba(136, 89, 27, 0.1);
 }
 
 .tutorial-uiItem--compactReverse {
@@ -407,7 +445,12 @@
 
 .tutorial-uiItem--action .tutorial-uiMedia {
   width: 100%;
-  max-width: 290px;
+  max-width: 340px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(251, 246, 237, 0.94) 100%);
+  border: 1.2px solid rgba(213, 139, 42, 0.2);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 4px 14px rgba(136, 89, 27, 0.1);
 }
 
 .tutorial-uiItem--pauseResume {
@@ -433,49 +476,49 @@
 }
 
 .tutorial-uiImage--board {
-  max-height: 420px;
+  max-height: 440px;
 }
 
 .tutorial-uiImage--turns {
-  max-height: 320px;
+  max-height: 360px;
 }
 
 .tutorial-uiImage--timer {
-  max-height: 78px;
+  max-height: 100px;
 }
 
 .tutorial-uiImage--music {
-  width: 92px;
-  max-width: 92px;
-  height: 92px;
-  max-height: 92px;
+  width: 110px;
+  max-width: 110px;
+  height: 110px;
+  max-height: 110px;
 }
 
 .tutorial-uiImage--home {
-  width: 92px;
-  max-width: 92px;
-  height: 92px;
-  max-height: 92px;
+  width: 110px;
+  max-width: 110px;
+  height: 110px;
+  max-height: 110px;
 }
 
 .tutorial-uiImage--pause {
-  max-height: 280px;
+  max-height: 340px;
 }
 
 .tutorial-uiImage--help {
-  max-height: 520px;
+  max-height: 580px;
 }
 
 .tutorial-uiImage--passRound {
-  max-height: 120px;
+  max-height: 90px;
 }
 
 .tutorial-uiImage--continue {
-  max-height: 140px;
+  max-height: 180px;
 }
 
 .tutorial-uiImage--undo {
-  max-height: 140px;
+  max-height: 180px;
 }
 
 .tutorial-uiItem.is-below .tutorial-uiMedia {
