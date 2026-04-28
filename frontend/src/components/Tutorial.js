@@ -19,6 +19,8 @@ import tutorialContinue from './images/tutorial/Cotinuar.gif';
 import tutorialUndo from './images/tutorial/Deshacer.gif';
 
 const API_URL = 'http://localhost:8000/api';
+const TUTORIAL_CHAT_MAX_CHARS = 400;
+const TUTORIAL_CHAT_TIMEOUT_MS = 12000;
 
 function Tutorial() {
   const navigate = useNavigate();
@@ -143,10 +145,20 @@ function Tutorial() {
     const mensaje = String(overrideMessage ?? chatInput ?? '').trim();
     if (!mensaje || chatLoading) return;
 
+    if (mensaje.length > TUTORIAL_CHAT_MAX_CHARS) {
+      setChatError(
+        'La pregunta es demasiado larga. Resúmela un poco, por ejemplo con "reglas del juego", "cómo se mueve una pieza" o "qué hace la pausa".',
+      );
+      return;
+    }
+
     setChatError('');
     setChatLoading(true);
     setChatMessages((prev) => [...prev, { role: 'user', text: mensaje }]);
     setChatInput('');
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), TUTORIAL_CHAT_TIMEOUT_MS);
 
     try {
       let id = chatbotId;
@@ -163,12 +175,19 @@ function Tutorial() {
       const res = await fetch(`${API_URL}/chatbot/send_message/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify(payload),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data?.error || 'Error enviando mensaje al chatbot.');
+        const serverMessage = String(data?.error || 'Error enviando mensaje al chatbot.');
+        if (serverMessage.includes('demasiado largo')) {
+          throw new Error(
+            'La pregunta es demasiado larga. Intenta resumirla, por ejemplo con "reglas del juego" o "cómo se mueve una pieza".',
+          );
+        }
+        throw new Error(serverMessage);
       }
 
       if (data?.chatbot_id) {
@@ -177,8 +196,15 @@ function Tutorial() {
 
       setChatMessages((prev) => [...prev, { role: 'assistant', text: String(data?.respuesta || '') }]);
     } catch (err) {
-      setChatError(err?.message || 'Error enviando mensaje al chatbot.');
+      if (err?.name === 'AbortError') {
+        setChatError(
+          'La respuesta está tardando demasiado. Prueba con una pregunta más corta, como "reglas del juego" o "cómo se mueve una pieza".',
+        );
+      } else {
+        setChatError(err?.message || 'Error enviando mensaje al chatbot.');
+      }
     } finally {
+      window.clearTimeout(timeoutId);
       setChatLoading(false);
     }
   };
@@ -803,7 +829,9 @@ function Tutorial() {
             {chatOpen && (
               <div className="tutorial-chatbot-body">
                 <div className="tutorial-chatbot-hint">
-                  Pregunta sobre reglas, movimientos, interfaz o sobre el propio CheckerIT.
+                  Pregunta cosas concretas y resumidas, como reglas del juego, movimientos o la
+                  interfaz. Si la consulta es muy larga, resúmela un poco para que el chatbot te
+                  responda mejor.
                 </div>
 
                 <div className="tutorial-chatbot-suggestions" aria-label="Preguntas sugeridas">

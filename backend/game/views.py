@@ -985,6 +985,47 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         s = s.replace("**", "").replace("__", "")
         return s
 
+    def _friendly_gemini_reply(self, *, reason: str) -> str:
+        if reason == 'too_long':
+            return (
+                'Tu pregunta es demasiado larga para responderla bien. ' \
+                'Resúmela un poco y vuelve a intentarlo, por ejemplo con "reglas del juego", ' \
+                '"cómo se mueve una pieza" o "qué hace la pausa".'
+            )
+
+        if reason == 'rate_limit':
+            return (
+                'Ahora mismo estoy recibiendo muchas peticiones y voy lento. ' \
+                'Prueba de nuevo dentro de un momento o haz una pregunta más corta sobre reglas, ' \
+                'movimientos o la interfaz.'
+            )
+
+        if reason == 'timeout':
+            return (
+                'Ahora mismo Gemini está tardando demasiado en responder. ' \
+                'Prueba de nuevo en unos momentos o resume un poco tu pregunta.'
+            )
+
+        return (
+            'Ahora mismo no puedo responder con Gemini. ' \
+            'Prueba más tarde o haz una pregunta más breve sobre reglas, movimientos o interfaz.'
+        )
+
+    def _gemini_error_reason(self, exc: Exception) -> str:
+        if isinstance(exc, GeminiHttpError):
+            if exc.status_code == 429:
+                return 'rate_limit'
+            if exc.status_code in {408, 425, 500, 502, 503, 504}:
+                return 'timeout'
+            return 'unavailable'
+
+        message = str(exc).lower()
+        if any(token in message for token in ('timeout', 'tiempo de espera', 'tard', 'abort')):
+            return 'timeout'
+        if any(token in message for token in ('429', 'rate limit', 'rate-limit', 'demasiadas peticiones')):
+            return 'rate_limit'
+        return 'unavailable'
+
     def _get_domain_keywords(self) -> list[str]:
         raw = getattr(settings, 'CHATBOT_DOMAIN_KEYWORDS', '')
         keywords: list[str] = []
@@ -1238,91 +1279,67 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             mensaje = ''
         mensaje = str(mensaje)
 
+        respuesta = None
+
         if len(mensaje.strip()) == 0:
             return Response({'error': 'El mensaje no puede estar vacío'}, status=status.HTTP_400_BAD_REQUEST)
         if len(mensaje) > max_chars:
-            return Response(
-                {'error': f'El mensaje es demasiado largo (máx {max_chars} caracteres)'},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+            respuesta = self._friendly_gemini_reply(reason='too_long')
 
         # Si el mensaje pide ayuda de jugadas/movimientos y se aporta contexto, responder sin Gemini.
-        respuesta_local, extra = self._maybe_answer_game_help(
-            chatbot=chatbot,
-            mensaje=mensaje,
-            partida_id=partida_id,
-            jugador_id=jugador_id,
-            pieza_id=pieza_id,
-        )
-        if respuesta_local is not None:
-            respuesta_local = self._sanitize_llm_text(respuesta_local)
-            if 'conversaciones' not in chatbot.memoria:
-                chatbot.memoria['conversaciones'] = []
-
-            # Persistir estado útil para "muéstramelo"
-            if isinstance(extra, dict):
-                if extra.get("tipo") == "mejor_jugada" and isinstance(extra.get("sugerencia"), dict):
-                    chatbot.memoria["last_best_move"] = extra.get("sugerencia")
-                    chatbot.memoria["awaiting_show_move"] = True
-                elif extra.get("tipo") in {"mostrar_movimiento", "mostrar_movimiento_no_disponible"}:
-                    chatbot.memoria["awaiting_show_move"] = False
-
-            chatbot.memoria['conversaciones'].append({
-                'mensaje': mensaje,
-                'respuesta': respuesta_local,
-                'timestamp': str(timezone.now())
-            })
-            chatbot.save()
-
-            payload = {'chatbot_id': chatbot.id, 'respuesta': respuesta_local}
-            if isinstance(extra, dict) and extra:
-                payload.update(extra)
-            return Response(payload, status=status.HTTP_200_OK)
-
-        # Hard gate: si se fuerza dominio y el mensaje no es del dominio, rechazar sin IA
-        if getattr(settings, 'CHATBOT_DOMAIN_ENFORCE', True) and not self._is_in_domain(mensaje):
-            respuesta = getattr(
-                settings,
-                'CHATBOT_REFUSAL_MESSAGE',
-                'Solo puedo ayudarte con CheckerIT (reglas del juego e interfaz).',
+        respuesta_local, extra = (None, None)
+        if respuesta is None:
+            respuesta_local, extra = self._maybe_answer_game_help(
+                chatbot=chatbot,
+                mensaje=mensaje,
+                partida_id=partida_id,
+                jugador_id=jugador_id,
+                pieza_id=pieza_id,
             )
-            if 'conversaciones' not in chatbot.memoria:
-                chatbot.memoria['conversaciones'] = []
-            chatbot.memoria['conversaciones'].append({
-                'mensaje': mensaje,
-                'respuesta': respuesta,
-                'timestamp': str(timezone.now())
-            })
-            chatbot.save()
-            return Response({'chatbot_id': chatbot.id, 'respuesta': respuesta}, status=status.HTTP_200_OK)
+            if respuesta_local is not None:
+                respuesta = respuesta_local
 
-        if not api_key:
-            # Fallback para entornos sin configuración de Gemini (tests, dev)
-            respuesta = f"Respuesta del chatbot a: {mensaje}"
-        else:
-            try:
-                respuesta = generate_gemini_reply(
-                    api_key=api_key,
-                    model=getattr(settings, 'GEMINI_MODEL', None),
-                    timeout_seconds=int(getattr(settings, 'GEMINI_TIMEOUT_SECONDS', 15)),
-                    api_version=getattr(settings, 'GEMINI_API_VERSION', 'v1'),
-                    max_retries=int(getattr(settings, 'GEMINI_MAX_RETRIES', 2)),
-                    retry_backoff_seconds=float(getattr(settings, 'GEMINI_RETRY_BACKOFF_SECONDS', 0.6)),
-                    system_prompt=getattr(settings, 'GEMINI_SYSTEM_PROMPT', None),
-                    temperature=float(getattr(settings, 'GEMINI_TEMPERATURE', 0.2)),
-                    max_output_tokens=int(getattr(settings, 'GEMINI_MAX_OUTPUT_TOKENS', 256)),
-                    user_message=mensaje,
-                    history=self._build_gemini_history(chatbot, limit_turns=10),
+        if respuesta is None:
+            # Hard gate: si se fuerza dominio y el mensaje no es del dominio, responder sin IA
+            if getattr(settings, 'CHATBOT_DOMAIN_ENFORCE', True) and not self._is_in_domain(mensaje):
+                respuesta = getattr(
+                    settings,
+                    'CHATBOT_REFUSAL_MESSAGE',
+                    'Solo puedo ayudarte con CheckerIT (reglas del juego e interfaz).',
                 )
-            except GeminiHttpError as exc:
-                return Response({'error': str(exc)}, status=exc.status_code)
-            except GeminiError as exc:
-                return Response({'error': str(exc)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            elif not api_key:
+                # Fallback para entornos sin configuración de Gemini (tests, dev)
+                respuesta = f"Respuesta del chatbot a: {mensaje}"
+            else:
+                try:
+                    respuesta = generate_gemini_reply(
+                        api_key=api_key,
+                        model=getattr(settings, 'GEMINI_MODEL', None),
+                        timeout_seconds=int(getattr(settings, 'GEMINI_TIMEOUT_SECONDS', 15)),
+                        api_version=getattr(settings, 'GEMINI_API_VERSION', 'v1'),
+                        max_retries=int(getattr(settings, 'GEMINI_MAX_RETRIES', 2)),
+                        retry_backoff_seconds=float(getattr(settings, 'GEMINI_RETRY_BACKOFF_SECONDS', 0.6)),
+                        system_prompt=getattr(settings, 'GEMINI_SYSTEM_PROMPT', None),
+                        temperature=float(getattr(settings, 'GEMINI_TEMPERATURE', 0.2)),
+                        max_output_tokens=int(getattr(settings, 'GEMINI_MAX_OUTPUT_TOKENS', 256)),
+                        user_message=mensaje,
+                        history=self._build_gemini_history(chatbot, limit_turns=10),
+                    )
+                except (GeminiHttpError, GeminiError) as exc:
+                    respuesta = self._friendly_gemini_reply(reason=self._gemini_error_reason(exc))
 
         respuesta = self._sanitize_llm_text(respuesta)
 
         if 'conversaciones' not in chatbot.memoria:
             chatbot.memoria['conversaciones'] = []
+
+        # Persistir estado útil para "muéstramelo"
+        if isinstance(extra, dict):
+            if extra.get("tipo") == "mejor_jugada" and isinstance(extra.get("sugerencia"), dict):
+                chatbot.memoria["last_best_move"] = extra.get("sugerencia")
+                chatbot.memoria["awaiting_show_move"] = True
+            elif extra.get("tipo") in {"mostrar_movimiento", "mostrar_movimiento_no_disponible"}:
+                chatbot.memoria["awaiting_show_move"] = False
 
         chatbot.memoria['conversaciones'].append({
             'mensaje': mensaje,
@@ -1331,7 +1348,10 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         })
         chatbot.save()
 
-        return Response({'chatbot_id': chatbot.id, 'respuesta': respuesta}, status=status.HTTP_200_OK)
+        payload = {'chatbot_id': chatbot.id, 'respuesta': respuesta}
+        if isinstance(extra, dict) and extra:
+            payload.update(extra)
+        return Response(payload, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['post'], url_path='send_message')
     def send_message_global(self, request):
