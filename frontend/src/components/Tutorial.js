@@ -6,6 +6,17 @@ import tutorialMoveSimple from './images/tutorial/Movimiento simple.gif';
 import tutorialJump from './images/tutorial/Salto.gif';
 import tutorialJumpChain from './images/tutorial/Salto en cadena.gif';
 
+import tutorialBoard from './images/tutorial/Tablero.gif';
+import tutorialTurns from './images/tutorial/Turnos.gif';
+import tutorialTimer from './images/tutorial/Temporizador.gif';
+import tutorialMusic from './images/tutorial/Musica.gif';
+import tutorialPause from './images/tutorial/Pausa.png';
+import tutorialHome from './images/tutorial/Hogar.png';
+import tutorialHelp from './images/tutorial/Ayuda.gif';
+import tutorialPassRound from './images/tutorial/Pasar Ronda.gif';
+import tutorialContinue from './images/tutorial/Cotinuar.gif';
+import tutorialUndo from './images/tutorial/Deshacer.gif';
+
 const API_URL = 'http://localhost:8000/api';
 
 function Tutorial() {
@@ -313,7 +324,7 @@ function Tutorial() {
             <div className="tutorial-moveGallery" aria-label="Ejemplos visuales de movimientos">
               <figure className="tutorial-moveCard">
                 <img
-                  className="tutorial-moveImage"
+                  className="tutorial-moveImage tutorial-moveImage--simple"
                   src={tutorialMoveSimple}
                   alt="Ejemplo de movimiento simple a una casilla adyacente"
                   loading="lazy"
@@ -325,7 +336,7 @@ function Tutorial() {
 
               <figure className="tutorial-moveCard">
                 <img
-                  className="tutorial-moveImage"
+                  className="tutorial-moveImage tutorial-moveImage--jump"
                   src={tutorialJump}
                   alt="Ejemplo de salto en línea recta sobre una pieza"
                   loading="lazy"
@@ -337,7 +348,7 @@ function Tutorial() {
 
               <figure className="tutorial-moveCard">
                 <img
-                  className="tutorial-moveImage"
+                  className="tutorial-moveImage tutorial-moveImage--jumpChain"
                   src={tutorialJumpChain}
                   alt="Ejemplo de salto en cadena con varios saltos en el mismo turno"
                   loading="lazy"
@@ -388,65 +399,210 @@ function Tutorial() {
           <h2>¿Qué representa cada elemento en la pantalla?</h2>
           <p>Una partida está compuesta por varios elementos que vamos a explicar a continuación.</p>
 
-          <h3>Tablero</h3>
-          <p>
-            El tablero, como se ha explicado antes, es una estrella de seis puntas: cada punta con
-            un color asignado y un jugador. Se encuentra en el centro de la pantalla y es el
-            elemento principal del juego.
-          </p>
+          <div className="tutorial-uiList" aria-label="Elementos de la interfaz">
+            <div className="tutorial-uiItem is-right tutorial-uiItem--board">
+              <div className="tutorial-uiText">
+                <h3>Tablero</h3>
+                <p>
+                  El tablero, como se ha explicado antes, es una estrella de seis puntas: cada punta con
+                  un color asignado y un jugador. Se encuentra en el centro de la pantalla y es el
+                  elemento principal del juego.
+                </p>
+                <p>
+                  Para mover una pieza, primero selecciona la ficha que
+                  quieras desplazar y, después, el destino al que quieres llevarla. El sistema te
+                  mostrará las casillas disponibles según la jugada que hayas elegido, para que puedas
+                  confirmar el movimiento con claridad antes de continuar.
+                </p>
+              </div>
+              <div className="tutorial-uiMedia">
+                <img
+                  className="tutorial-uiImage tutorial-uiImage--board"
+                  src={tutorialBoard}
+                  alt="Ejemplo del tablero con forma de estrella"
+                  loading="lazy"
+                />
+              </div>
+            </div>
 
-          <h3>Rondas</h3>
-          <p>
-            Se encuentra a la izquierda de la pantalla. Muestra los jugadores participantes en el
-            juego. Cada jugador puede ser controlado por un agente inteligente o un humano. Cada
-            agente inteligente tendrá dos modalidades: Fácil o Difícil. Cada jugador podrá mover
-            pieza en base al orden establecido en esa sección. También indica el número de ronda en
-            el que se encuentra en ese momento la partida y los colores asignados a cada jugador.
-          </p>
+            <div className="tutorial-uiItem is-left tutorial-uiItem--rounds">
+              <div className="tutorial-uiText">
+                <h3>Ronda y Jugadores</h3>
+                <p>
+                  Esta zona aparece en el lateral izquierdo de la partida y te muestra quién juega en cada
+                  turno, el color de cada participante y el número de ronda actual. También indica si cada
+                  jugador es humano o IA y, en caso de IA, su dificultad (Fácil o Difícil). Úsala para
+                  planificar mejor tus movimientos y saber con claridad a quién le toca jugar ahora.
+                </p>
+              </div>
+              <div className="tutorial-uiMedia">
+                <img
+                  className="tutorial-uiImage tutorial-uiImage--turns"
+                  src={tutorialTurns}
+                  alt="Panel de rondas con el turno actual y jugadores"
+                  loading="lazy"
+                />
+              </div>
+            </div>
 
-          <h3>Temporizador</h3>
-          <p>
-            Se encuentra en la parte superior de la pantalla. Muestra el tiempo transcurrido de la
-            partida. Cuando se pausa la partida ese tiempo deja de contarse, por lo que es el tiempo
-            jugado. No hay límite de tiempo ni para hacer cada jugada ni para terminar la partida.
-          </p>
+            <div className="tutorial-uiItem is-below">
+              <div className="tutorial-uiText">
+                <h3>Temporizador</h3>
+                <p>
+                  Se encuentra en la parte superior de la pantalla. Muestra el tiempo transcurrido de la
+                  partida. Cuando se pausa la partida ese tiempo deja de contarse, por lo que es el tiempo
+                  jugado. No hay límite de tiempo ni para hacer cada jugada ni para terminar la partida.
+                </p>
+              </div>
+              <div className="tutorial-uiMedia">
+                <img
+                  className="tutorial-uiImage tutorial-uiImage--timer"
+                  src={tutorialTimer}
+                  alt="Temporizador de la partida"
+                  loading="lazy"
+                />
+              </div>
+            </div>
 
-          <h3>Música</h3>
-          <p>
-            Se encuentra a la izquierda del temporizador. Reproduce audios musicales establecidos
-            en el sistema a gusto del usuario. Si desea reproducir una canción aleatoria, pulse una
-            vez el botón. Para desactivar la música, pulse de nuevo.
-          </p>
+            <div className="tutorial-uiDoubleRow" aria-label="Controles superiores de música y pausa">
+              <div className="tutorial-uiItem tutorial-uiItem--compact tutorial-uiItem--compactReverse">
+                <div className="tutorial-uiMedia">
+                  <img
+                    className="tutorial-uiImage tutorial-uiImage--music"
+                    src={tutorialMusic}
+                    alt="Botón de música"
+                    loading="lazy"
+                  />
+                </div>
+                <div className="tutorial-uiText">
+                  <h3>Música</h3>
+                  <p>
+                    Está situada a la izquierda del temporizador. Al pulsarla, activas o desactivas la
+                    música de la partida y puedes ambientar el juego mientras juegas.
+                  </p>
+                </div>
+              </div>
 
-          <h3>Pausa / Reanudar / Cancelar</h3>
-          <p>
-            Se encuentra a la derecha del temporizador. Este botón sirve para pausar el transcurso
-            de la partida. Una vez pulsado el botón, tiene dos opciones: reanudar la partida desde
-            el punto de guardado, pudiendo continuar; o cancelar la partida de forma definitiva,
-            eliminando la partida. Una vez que cancele la partida no podrá continuar desde el momento
-            en el que lo pausó, ya que toda la información relacionada con esa partida habrá sido
-            eliminada.
-          </p>
+              <div className="tutorial-uiItem tutorial-uiItem--compact">
+                <div className="tutorial-uiText">
+                  <h3>Pausa</h3>
+                  <p>
+                    A la derecha del temporizador tienes el acceso de pausa. Desde ahí puedes abrir el
+                    menú de pausa y, además, volver al inicio con el botón Hogar cuando lo necesites.
+                  </p>
+                </div>
+                <div className="tutorial-uiMedia">
+                  <img
+                    className="tutorial-uiImage tutorial-uiImage--home"
+                    src={tutorialHome}
+                    alt="Botón Hogar del panel de pausa"
+                    loading="lazy"
+                  />
+                </div>
+              </div>
+            </div>
 
-          <h3>Ayuda</h3>
-          <p>
-            Se encuentra a la derecha de la pantalla. Si necesita asistencia puede acceder a un
-            sistema de soporte al pulsar el botón “Abrir Ayuda”. Se mostrará un desplegable con un
-            asistente que resuelve dudas relacionadas con la partida. Si tiene dudas sobre qué le
-            puede preguntar, hay un botón de información indicando lo que puede responder. Abajo del
-            desplegable se encuentra un área de texto donde puede formular su pregunta y enviarla con
-            el botón “Enviar”. Cada jugador tendrá disponible un chatbot único por partida.
-          </p>
+            <div className="tutorial-uiItem is-left tutorial-uiItem--pauseResume">
+              <div className="tutorial-uiText">
+                <h3>Reanudar / Cancelar</h3>
+                <p>
+                  Al pulsar Pausa se abre este panel. Puedes elegir <strong>Reanudar</strong> para seguir
+                  la partida exactamente en el punto en el que estabas, o <strong>Cancelar</strong> para
+                  terminarla de forma definitiva. Si cancelas, se elimina la partida y no podrás retomarla.
+                </p>
+              </div>
+              <div className="tutorial-uiMedia">
+                <img
+                  className="tutorial-uiImage tutorial-uiImage--pause"
+                  src={tutorialPause}
+                  alt="Pantalla del juego pausado con los botones Reanudar y Finalizar"
+                  loading="lazy"
+                />
+              </div>
+            </div>
 
-          <h3>Pasar Ronda / Continuar / Deshacer</h3>
-          <p>
-            Se encuentra en la parte inferior de la pantalla. Si desea pasar de ronda sin realizar
-            ningún movimiento, puede pulsar “Pasar Ronda”, asignando el turno al siguiente jugador.
-            Si quiere mover una ficha, primero seleccione la pieza que quiera desplazar: se le
-            mostrarán en pantalla las diferentes posiciones a las que se puede mover. Tras mover la
-            pieza, tendrá dos opciones: “Deshacer”, que revierte el movimiento y permite mover otra
-            ficha; y “Continuar”, para validar la jugada y pasar al siguiente jugador.
-          </p>
+            <div className="tutorial-uiTripleRow" aria-label="Acciones de turno">
+              <div className="tutorial-uiItem tutorial-uiItem--action">
+                <div className="tutorial-uiText">
+                  <h3>Deshacer</h3>
+                  <p>
+                    Tras mover una pieza, puedes pulsar “Deshacer” para revertir el movimiento y elegir
+                    otra ficha o ruta antes de validarlo.
+                  </p>
+                </div>
+                <div className="tutorial-uiMedia">
+                  <img
+                    className="tutorial-uiImage tutorial-uiImage--undo"
+                    src={tutorialUndo}
+                    alt="Botón Deshacer"
+                    loading="lazy"
+                  />
+                </div>
+              </div>
+
+              <div className="tutorial-uiItem tutorial-uiItem--action">
+                <div className="tutorial-uiText">
+                  <h3>Pasar Ronda</h3>
+                  <p>
+                    Si en ese turno no quieres mover ninguna ficha, pulsa “Pasar Ronda” y el turno pasa al
+                    siguiente jugador automáticamente.
+                  </p>
+                </div>
+                <div className="tutorial-uiMedia">
+                  <img
+                    className="tutorial-uiImage tutorial-uiImage--passRound"
+                    src={tutorialPassRound}
+                    alt="Botón Pasar Ronda"
+                    loading="lazy"
+                  />
+                </div>
+              </div>
+
+              <div className="tutorial-uiItem tutorial-uiItem--action">
+                <div className="tutorial-uiText">
+                  <h3>Continuar</h3>
+                  <p>
+                    Después de seleccionar y mover tu ficha, pulsa “Continuar” para confirmar la jugada y
+                    ceder el turno al siguiente jugador.
+                  </p>
+                </div>
+                <div className="tutorial-uiMedia">
+                  <img
+                    className="tutorial-uiImage tutorial-uiImage--continue"
+                    src={tutorialContinue}
+                    alt="Botón Continuar"
+                    loading="lazy"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="tutorial-uiItem is-left tutorial-uiItem--help">
+              <div className="tutorial-uiText">
+                <h3>Ayuda</h3>
+                <p>
+                  Esta sección, situada a la derecha, abre un asistente para resolver dudas durante la
+                  partida. Puedes preguntarle, por ejemplo: cómo mover una ficha en una situación concreta,
+                  cuándo conviene encadenar saltos, para qué sirve cada botón de la interfaz, qué efecto
+                  tiene Pausa/Reanudar/Cancelar, cómo se calcula la ronda actual o qué estrategia básica te
+                  conviene según la posición de tus piezas.
+                </p>
+                <p>
+                  Al pulsar “Abrir Ayuda” verás el panel del asistente, un botón de información con ejemplos
+                  de preguntas y una zona de texto para escribir tu consulta y enviarla. Cada partida guarda
+                  su propio contexto de ayuda para que las respuestas sean útiles dentro del momento actual.
+                </p>
+              </div>
+              <div className="tutorial-uiMedia">
+                <img
+                  className="tutorial-uiImage tutorial-uiImage--help"
+                  src={tutorialHelp}
+                  alt="Panel de ayuda con asistente y botón Enviar"
+                  loading="lazy"
+                />
+              </div>
+            </div>
+          </div>
         </section>
       ),
     },

@@ -124,6 +124,261 @@
   text-align: center;
 }
 
+.tutorial-uiList {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.tutorial-uiItem {
+  display: grid;
+  grid-template-columns: 1fr minmax(240px, 360px);
+  gap: 18px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(213, 139, 42, 0.05);
+  border: 1px solid rgba(213, 139, 42, 0.16);
+}
+
+.tutorial-uiItem.is-left {
+  grid-template-columns: minmax(240px, 360px) 1fr;
+}
+
+.tutorial-uiItem.is-left .tutorial-uiText {
+  order: 2;
+}
+
+.tutorial-uiItem.is-left .tutorial-uiMedia {
+  order: 1;
+}
+
+.tutorial-uiItem.is-below {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.tutorial-uiItem.is-below .tutorial-uiText {
+  width: 100%;
+}
+
+.tutorial-uiText h3 {
+  margin-top: 0;
+}
+
+.tutorial-uiText p {
+  margin: 0;
+}
+
+.tutorial-uiMedia {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(213, 139, 42, 0.16);
+  border-radius: 16px;
+  padding: 12px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+.tutorial-uiImage {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  display: block;
+  border-radius: 14px;
+}
+
+.tutorial-uiItem--board .tutorial-uiText p {
+  font-size: 1.18rem;
+  line-height: 1.9;
+}
+
+.tutorial-uiItem--board .tutorial-uiText p + p {
+  margin-top: 12px;
+}
+
+.tutorial-uiItem--board .tutorial-uiText {
+  max-width: 72ch;
+}
+
+.tutorial-uiItem--rounds {
+  align-items: stretch;
+}
+
+.tutorial-uiItem--rounds .tutorial-uiText {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.tutorial-uiItem--rounds .tutorial-uiText p {
+  font-size: 1.08rem;
+  line-height: 1.8;
+}
+
+.tutorial-uiItem.is-plain {
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.tutorial-uiItem.is-plain .tutorial-uiMedia {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
+.tutorial-uiDoubleRow {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.tutorial-uiTripleRow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.tutorial-uiItem--compact {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  text-align: left;
+  gap: 18px;
+}
+
+.tutorial-uiItem--compact .tutorial-uiText {
+  width: auto;
+  flex: 1 1 0;
+}
+
+.tutorial-uiItem--compact .tutorial-uiMedia {
+  width: auto;
+  flex: 0 0 auto;
+  max-width: 290px;
+}
+
+.tutorial-uiItem--compactReverse {
+  flex-direction: row-reverse;
+}
+
+.tutorial-uiItem--action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: left;
+  gap: 14px;
+}
+
+.tutorial-uiItem--action .tutorial-uiText {
+  width: 100%;
+}
+
+.tutorial-uiItem--action .tutorial-uiMedia {
+  width: 100%;
+  max-width: 290px;
+}
+
+.tutorial-uiItem--pauseResume {
+  grid-template-columns: minmax(250px, 380px) 1fr;
+}
+
+.tutorial-uiItem--help {
+  margin-top: 4px;
+  background: linear-gradient(135deg, rgba(213, 139, 42, 0.06), rgba(255, 255, 255, 0.94));
+}
+
+.tutorial-uiItem--help .tutorial-uiText p {
+  font-size: 1.18rem;
+  line-height: 1.9;
+}
+
+.tutorial-uiItem--help .tutorial-uiText p + p {
+  margin-top: 12px;
+}
+
+.tutorial-uiItem--help .tutorial-uiText p + p {
+  margin-top: 12px;
+}
+
+.tutorial-uiImage--board {
+  max-height: 420px;
+}
+
+.tutorial-uiImage--turns {
+  max-height: 320px;
+}
+
+.tutorial-uiImage--timer {
+  max-height: 78px;
+}
+
+.tutorial-uiImage--music {
+  width: 92px;
+  max-width: 92px;
+  height: 92px;
+  max-height: 92px;
+}
+
+.tutorial-uiImage--home {
+  width: 92px;
+  max-width: 92px;
+  height: 92px;
+  max-height: 92px;
+}
+
+.tutorial-uiImage--pause {
+  max-height: 280px;
+}
+
+.tutorial-uiImage--help {
+  max-height: 520px;
+}
+
+.tutorial-uiImage--passRound {
+  max-height: 120px;
+}
+
+.tutorial-uiImage--continue {
+  max-height: 140px;
+}
+
+.tutorial-uiImage--undo {
+  max-height: 140px;
+}
+
+.tutorial-uiItem.is-below .tutorial-uiMedia {
+  max-width: 820px;
+}
+
+@media (max-width: 820px) {
+  .tutorial-uiItem,
+  .tutorial-uiItem.is-left,
+  .tutorial-uiItem--pauseResume {
+    grid-template-columns: 1fr;
+  }
+
+  .tutorial-uiDoubleRow,
+  .tutorial-uiTripleRow {
+    grid-template-columns: 1fr;
+  }
+
+  .tutorial-uiItem--compact,
+  .tutorial-uiItem--action,
+  .tutorial-uiItem--compactReverse {
+    flex-direction: column;
+  }
+
+  .tutorial-uiItem.is-left .tutorial-uiText,
+  .tutorial-uiItem.is-left .tutorial-uiMedia {
+    order: initial;
+  }
+}
+
 .tutorial-finish-actions {
   margin-top: 18px;
   display: flex;
@@ -237,7 +492,7 @@
   justify-content: flex-end;
 }
 
-/* Botones tipo "música" (compact-button de la partida) */
+/* Botones tipo "musica" (compact-button de la partida) */
 .tutorial-nav-button {
   width: 44px;
   height: 44px;
