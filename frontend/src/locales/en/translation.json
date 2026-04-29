@@ -240,4 +240,65 @@
       }
     }
   }
+  ,
+  "game": {
+    "loading": "Loading game...",
+    "player": {
+      "generic": "Player"
+    },
+    "round": {
+      "title": "Round",
+      "current": "Current: {{round}}",
+      "noPlayerData": "No player data",
+      "currentIndicator": "Current round"
+    },
+    "controls": {
+      "continue": "Continue",
+      "undo": "Undo",
+      "passRound": "Pass Round"
+    },
+    "help": {
+      "open": "Open Help",
+      "close": "Close Help",
+      "title": "Assistant",
+      "placeholder": "Type a question and press Send.",
+      "examples": {
+        "ariaLabel": "View example questions",
+        "title": "Example questions:",
+        "questions": [
+          "\"What are the rules of the game?\"",
+          "\"How does a piece move?\"",
+          "\"What is the best move?\"",
+          "\"How can I cancel or finish a game?\"",
+          "\"What does the Pause button do and how do I resume?\""
+        ]
+      }
+    },
+    "chat": {
+      "assistantName": "Assistant",
+      "inputPlaceholder": "Ask the assistant...",
+      "errors": {
+        "send": "Error sending message to the chatbot",
+        "loadHistory": "Error loading chatbot history"
+      }
+    },
+    "pause": {
+      "title": "Game Paused",
+      "resume": "Resume",
+      "end": "Finish"
+    },
+    "confirm": {
+      "title": "Finish Game",
+      "question": "Are you sure you want to end it early?",
+      "warning": "This action cannot be undone. You will lose the progress you have made in this game",
+      "cancel": "Cancel",
+      "backHome": "Back to home"
+    }
+  },
+  "board": {
+    "empty": "Empty",
+    "warnings": {
+      "invalidMove": "Invalid move: you must move to an empty adjacent cell or jump over a piece to an empty cell"
+    }
+  }
 }

@@ -25,7 +25,7 @@ const TUTORIAL_CHAT_TIMEOUT_MS = 12000;
 
 function Tutorial() {
   const navigate = useNavigate();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [currentPage, setCurrentPage] = useState(0);
   const [startingMode, setStartingMode] = useState(null); // 'quick' | 'demo' | null
   const [startError, setStartError] = useState('');
@@ -169,7 +169,7 @@ function Tutorial() {
         id = null;
       }
 
-      const payload = { mensaje };
+      const payload = { mensaje, lang: i18n.resolvedLanguage || i18n.language };
       if (id) payload.chatbot_id = id;
 
       const res = await fetch(`${API_URL}/chatbot/send_message/`, {
@@ -182,7 +182,7 @@ function Tutorial() {
       const data = await res.json();
       if (!res.ok) {
         const serverMessage = String(data?.error || t('tutorial.chat.errors.send'));
-        if (serverMessage.includes('demasiado largo')) {
+        if (serverMessage.toLowerCase().includes('demasiado largo') || serverMessage.toLowerCase().includes('too long')) {
           throw new Error(t('tutorial.chat.errors.tooLongShort'));
         }
         throw new Error(serverMessage || t('tutorial.chat.errors.send'));

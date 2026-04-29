@@ -240,4 +240,65 @@
       }
     }
   }
+  ,
+  "game": {
+    "loading": "Cargando partida...",
+    "player": {
+      "generic": "Jugador"
+    },
+    "round": {
+      "title": "Ronda",
+      "current": "Actual: {{round}}",
+      "noPlayerData": "Sin datos de jugadores",
+      "currentIndicator": "Ronda actual"
+    },
+    "controls": {
+      "continue": "Continuar",
+      "undo": "Deshacer",
+      "passRound": "Pasar Ronda"
+    },
+    "help": {
+      "open": "Abrir Ayuda",
+      "close": "Cerrar Ayuda",
+      "title": "Asistente",
+      "placeholder": "Escribe una pregunta y pulsa Enviar.",
+      "examples": {
+        "ariaLabel": "Ver ejemplos de preguntas",
+        "title": "Ejemplos de preguntas:",
+        "questions": [
+          "\"¿Cuáles son las reglas del juego?\"",
+          "\"¿Cómo se mueve una pieza?\"",
+          "\"¿Cuál es la mejor jugada?\"",
+          "\"¿Cómo puedo cancelar o finalizar una partida?\"",
+          "\"¿Qué hace el botón de Pausa y cómo se reanuda?\""
+        ]
+      }
+    },
+    "chat": {
+      "assistantName": "Asistente",
+      "inputPlaceholder": "Pregunta al asistente...",
+      "errors": {
+        "send": "Error enviando mensaje al chatbot",
+        "loadHistory": "Error cargando historial del chatbot"
+      }
+    },
+    "pause": {
+      "title": "Juego Pausado",
+      "resume": "Reanudar",
+      "end": "Finalizar"
+    },
+    "confirm": {
+      "title": "Finalizar Partida",
+      "question": "¿Seguro que quieres finalizarla antes de tiempo?",
+      "warning": "Esta acción no se podrá deshacer. Perderás el progreso que has conseguido en la partida",
+      "cancel": "Cancelar",
+      "backHome": "Volver al inicio"
+    }
+  },
+  "board": {
+    "empty": "Vacío",
+    "warnings": {
+      "invalidMove": "Movimiento no válido: debe mover a un vecino vacío o saltar sobre una pieza a un espacio vacío"
+    }
+  }
 }

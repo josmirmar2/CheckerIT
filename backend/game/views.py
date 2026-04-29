@@ -960,6 +960,33 @@ class ChatbotViewSet(viewsets.ModelViewSet):
     queryset = Chatbot.objects.all()
     serializer_class = ChatbotSerializer
 
+    def _normalize_lang(self, lang: str | None) -> str:
+        if not lang:
+            return 'es'
+        s = str(lang).strip().lower()
+        if not s:
+            return 'es'
+        # Aceptar formatos tipo en-US, es-ES, en_US
+        s = s.replace('_', '-')
+        base = s.split('-')[0]
+        if base in {'en', 'es'}:
+            return base
+        return 'es'
+
+    def _language_instruction(self, lang: str) -> str:
+        if lang == 'en':
+            return 'Respond in English.'
+        return 'Responde en español.'
+
+    def _refusal_message(self, lang: str) -> str:
+        # Si se configura explícitamente, respetar ese texto.
+        configured = getattr(settings, 'CHATBOT_REFUSAL_MESSAGE', None)
+        if configured:
+            return str(configured)
+        if lang == 'en':
+            return 'I can only help you with CheckerIT (game rules and interface).'
+        return 'Solo puedo ayudarte con CheckerIT (reglas del juego e interfaz).'
+
     def _build_gemini_history(self, chatbot: Chatbot, *, limit_turns: int = 10) -> list[dict]:
         conversaciones = (chatbot.memoria or {}).get('conversaciones') or []
         history: list[dict] = []
@@ -985,29 +1012,51 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         s = s.replace("**", "").replace("__", "")
         return s
 
-    def _friendly_gemini_reply(self, *, reason: str) -> str:
+    def _friendly_gemini_reply(self, *, reason: str, lang: str) -> str:
         if reason == 'too_long':
+            if lang == 'en':
+                return (
+                    'Your question is too long to answer well. '
+                    'Please shorten it and try again, for example: "game rules", '
+                    '"how does a piece move" or "what does pause do".'
+                )
             return (
-                'Tu pregunta es demasiado larga para responderla bien. ' \
-                'Resúmela un poco y vuelve a intentarlo, por ejemplo con "reglas del juego", ' \
+                'Tu pregunta es demasiado larga para responderla bien. '
+                'Resúmela un poco y vuelve a intentarlo, por ejemplo con "reglas del juego", '
                 '"cómo se mueve una pieza" o "qué hace la pausa".'
             )
 
         if reason == 'rate_limit':
+            if lang == 'en':
+                return (
+                    'I am receiving many requests right now and I am slow. '
+                    'Please try again in a moment or ask a shorter question about rules, '
+                    'moves, or the interface.'
+                )
             return (
-                'Ahora mismo estoy recibiendo muchas peticiones y voy lento. ' \
-                'Prueba de nuevo dentro de un momento o haz una pregunta más corta sobre reglas, ' \
+                'Ahora mismo estoy recibiendo muchas peticiones y voy lento. '
+                'Prueba de nuevo dentro de un momento o haz una pregunta más corta sobre reglas, '
                 'movimientos o la interfaz.'
             )
 
         if reason == 'timeout':
+            if lang == 'en':
+                return (
+                    'Gemini is taking too long to respond right now. '
+                    'Please try again in a moment or shorten your question.'
+                )
             return (
-                'Ahora mismo Gemini está tardando demasiado en responder. ' \
+                'Ahora mismo Gemini está tardando demasiado en responder. '
                 'Prueba de nuevo en unos momentos o resume un poco tu pregunta.'
             )
 
+        if lang == 'en':
+            return (
+                'I cannot answer with Gemini right now. '
+                'Please try again later or ask a shorter question about rules, moves, or the interface.'
+            )
         return (
-            'Ahora mismo no puedo responder con Gemini. ' \
+            'Ahora mismo no puedo responder con Gemini. '
             'Prueba más tarde o haz una pregunta más breve sobre reglas, movimientos o interfaz.'
         )
 
@@ -1036,32 +1085,59 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 'checkerit',
                 'damas',
                 'damas chinas',
+                'chinese checkers',
                 'reglas',
+                'rules',
                 'movimiento',
                 'mover',
+                'move',
+                'moves',
+                'moving',
                 'salto',
                 'saltos',
+                'jump',
+                'jumps',
                 'cadena',
+                'chain',
                 'ronda',
+                'round',
                 'turno',
+                'turn',
                 'partida',
+                'game',
+                'match',
                 'tablero',
+                'board',
                 'pieza',
                 'piezas',
+                'piece',
+                'pieces',
                 'jugador',
+                'player',
+                'players',
                 'interfaz',
+                'interface',
                 'ui',
                 'boton',
                 'botón',
+                'button',
+                'buttons',
                 'pausa',
+                'pause',
                 'musica',
                 'música',
+                'music',
                 'ayuda',
+                'help',
                 'asistente',
+                'assistant',
                 'cómo jugar',
                 'como jugar',
+                'how to play',
                 'hola',
                 'buenas',
+                'hi',
+                'hello',
             ]
         return keywords
 
@@ -1082,6 +1158,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         partida_id: str | None,
         jugador_id: str | None,
         pieza_id: str | None = None,
+        lang: str = 'es',
     ) -> tuple[str | None, dict | None]:
         """Respuestas deterministas basadas en estado de partida.
 
@@ -1098,6 +1175,9 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             "qué jugada",
             "que jugada",
             "best move",
+            "best moves",
+            "suggest a move",
+            "suggest move",
         )
         possible_moves_triggers = (
             "movimientos posibles",
@@ -1108,6 +1188,10 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             "a donde puedo mover",
             "a dónde puedo mover",
             "ver movimientos",
+            "possible moves",
+            "available moves",
+            "where can i move",
+            "show moves",
         )
         how_to_move_triggers = (
             "como se mueve",
@@ -1116,6 +1200,10 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             "cómo mover",
             "como puedo mover",
             "cómo puedo mover",
+            "how to move",
+            "how do i move",
+            "how does a piece move",
+            "how to move a piece",
         )
 
         end_game_triggers = (
@@ -1133,6 +1221,14 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             "victoria",
             "cómo ganar",
             "como ganar",
+            "end game",
+            "finish game",
+            "finish the game",
+            "cancel game",
+            "end the match",
+            "winner",
+            "victory",
+            "how to win",
         )
 
         show_move_triggers = (
@@ -1145,6 +1241,10 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             "muéstrame el movimiento",
             "muestrame el movimiento",
             "en pantalla",
+            "show it",
+            "show me",
+            "show the move",
+            "display the move",
         )
 
         confirm_triggers = (
@@ -1154,6 +1254,9 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             "ok",
             "de acuerdo",
             "perfecto",
+            "yes",
+            "yep",
+            "sure",
         )
 
         wants_best = any(t in texto for t in best_move_triggers)
@@ -1172,45 +1275,85 @@ class ChatbotViewSet(viewsets.ModelViewSet):
 
         if (wants_show or confirms_show) and not wants_best:
             if not isinstance(last_best_move, dict) or not last_best_move:
+                if lang == 'en':
+                    return (
+                        "First ask me 'what is the best move' and then say 'show it' to highlight it on the board.",
+                        {"tipo": "mostrar_movimiento_no_disponible"},
+                    )
                 return (
                     "Primero pídeme 'cuál es la mejor jugada' y después dime 'muéstramelo' para resaltarla en el tablero.",
                     {"tipo": "mostrar_movimiento_no_disponible"},
                 )
             origen = last_best_move.get("origen")
             destino = last_best_move.get("destino")
+            if lang == 'en':
+                return (
+                    f"Alright. I will show the suggested move on screen: {origen} -> {destino}.",
+                    {"tipo": "mostrar_movimiento", "sugerencia": last_best_move},
+                )
             return (
                 f"De acuerdo. Te muestro en pantalla el movimiento sugerido: {origen} -> {destino}.",
                 {"tipo": "mostrar_movimiento", "sugerencia": last_best_move},
             )
 
         if wants_end and not wants_best:
-            respuesta = (
-                "Puedes terminar una partida de dos formas:\n\n"
-                "1) Cancelarla / finalizarla manualmente (antes de que haya ganador):\n"
-                "   - Pausa el juego y pulsa el botón de Finalizar.\n"
-                "   - Confirma la acción: volverás al inicio y se pierde el progreso de la partida.\n\n"
-                "2) Terminarla de forma normal (con ganador):\n"
-                "   - Sigue jugando turnos hasta que un jugador complete su objetivo.\n"
-                "   - La partida termina cuando todas las piezas de un jugador llegan a la zona objetivo (la punta opuesta).\n"
-                "   - En ese momento se muestra la pantalla de victoria con el ganador."
-            )
+            if lang == 'en':
+                respuesta = (
+                    "You can end a game in two ways:\n\n"
+                    "1) Cancel / finish it manually (before there is a winner):\n"
+                    "   - Pause the game and press the Finish button.\n"
+                    "   - Confirm the action: you will return home and the game progress will be lost.\n\n"
+                    "2) Finish it normally (with a winner):\n"
+                    "   - Keep playing turns until a player completes their objective.\n"
+                    "   - The game ends when all pieces of a player reach the target area (the opposite tip).\n"
+                    "   - Then the victory screen is shown with the winner."
+                )
+            else:
+                respuesta = (
+                    "Puedes terminar una partida de dos formas:\n\n"
+                    "1) Cancelarla / finalizarla manualmente (antes de que haya ganador):\n"
+                    "   - Pausa el juego y pulsa el botón de Finalizar.\n"
+                    "   - Confirma la acción: volverás al inicio y se pierde el progreso de la partida.\n\n"
+                    "2) Terminarla de forma normal (con ganador):\n"
+                    "   - Sigue jugando turnos hasta que un jugador complete su objetivo.\n"
+                    "   - La partida termina cuando todas las piezas de un jugador llegan a la zona objetivo (la punta opuesta).\n"
+                    "   - En ese momento se muestra la pantalla de victoria con el ganador."
+                )
             return respuesta, {"tipo": "fin_partida"}
 
         if wants_how and not wants_best:
-            respuesta = (
-                "En CheckerIT puedes mover una pieza de dos formas:\n"
-                "1) Movimiento simple: a una casilla vecina vacía.\n"
-                "2) Salto: si hay una pieza adyacente (propia o rival), puedes saltarla y caer en la casilla colineal detrás si está vacía.\n\n"
-                "Los saltos se pueden encadenar si, tras aterrizar, existe otro salto legal.\n\n"
-                "Botones durante tu turno:\n"
-                "- Pasar Ronda: cede el turno sin mover (si aún no has hecho un movimiento).\n"
-                "- Deshacer: revierte el movimiento que acabas de realizar en la ronda actual.\n"
-                "- Continuar: confirma el movimiento hecho y pasa al siguiente turno."
-            )
+            if lang == 'en':
+                respuesta = (
+                    "In CheckerIT you can move a piece in two ways:\n"
+                    "1) Single move: to an adjacent empty cell.\n"
+                    "2) Jump: if there is an adjacent piece (yours or an opponent's), you can jump over it and land on the collinear cell behind it if it is empty.\n\n"
+                    "Jumps can be chained if, after landing, there is another legal jump.\n\n"
+                    "Buttons during your turn:\n"
+                    "- Pass Round: give up your turn without moving (if you haven't made a move yet).\n"
+                    "- Undo: revert the move you just made in the current round.\n"
+                    "- Continue: confirm the move and pass to the next turn."
+                )
+            else:
+                respuesta = (
+                    "En CheckerIT puedes mover una pieza de dos formas:\n"
+                    "1) Movimiento simple: a una casilla vecina vacía.\n"
+                    "2) Salto: si hay una pieza adyacente (propia o rival), puedes saltarla y caer en la casilla colineal detrás si está vacía.\n\n"
+                    "Los saltos se pueden encadenar si, tras aterrizar, existe otro salto legal.\n\n"
+                    "Botones durante tu turno:\n"
+                    "- Pasar Ronda: cede el turno sin mover (si aún no has hecho un movimiento).\n"
+                    "- Deshacer: revierte el movimiento que acabas de realizar en la ronda actual.\n"
+                    "- Continuar: confirma el movimiento hecho y pasa al siguiente turno."
+                )
             return respuesta, {"tipo": "reglas_movimiento"}
 
         # Desactivado: no se ofrece la funcionalidad de "movimientos posibles" desde el chatbot.
         if wants_possible and not wants_best:
+            if lang == 'en':
+                return (
+                    "Right now the assistant cannot list 'possible moves/positions'. "
+                    "If you want, you can ask for 'the best move' or 'how does a piece move'.",
+                    {"tipo": "movimientos_no_disponible"},
+                )
             return (
                 "Ahora mismo el asistente no ofrece la opción de listar 'movimientos/posiciones posibles'. "
                 "Si quieres, puedes preguntar por 'la mejor jugada' o por 'cómo se mueve una pieza'.",
@@ -1221,6 +1364,11 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             return None, None
 
         if not partida_id or not jugador_id:
+            if lang == 'en':
+                return (
+                    "To help you with moves I need the game state (partida_id) and the current player (jugador_id).",
+                    {"tipo": "faltan_parametros"},
+                )
             return (
                 "Para poder ayudarte con jugadas/movimientos necesito el estado de la partida (partida_id) y el jugador actual (jugador_id).",
                 {"tipo": "faltan_parametros"},
@@ -1228,8 +1376,12 @@ class ChatbotViewSet(viewsets.ModelViewSet):
 
         # Validar existencia de partida/jugador y    evitar respuestas confusas
         if not Partida.objects.filter(id_partida=str(partida_id)).exists():
+            if lang == 'en':
+                return (f"Invalid partida_id: {partida_id}", {"tipo": "error", "campo": "partida_id"})
             return (f"partida_id no válido: {partida_id}", {"tipo": "error", "campo": "partida_id"})
         if not Jugador.objects.filter(id_jugador=str(jugador_id)).exists():
+            if lang == 'en':
+                return (f"Invalid jugador_id: {jugador_id}", {"tipo": "error", "campo": "jugador_id"})
             return (f"jugador_id no válido: {jugador_id}", {"tipo": "error", "campo": "jugador_id"})
 
         if wants_best:
@@ -1242,8 +1394,12 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                     iterations=250,
                 )
             except ValueError as exc:
+                if lang == 'en':
+                    return (f"I could not compute the best move: {exc}", {"tipo": "error", "motivo": "sin_jugadas"})
                 return (f"No pude calcular la mejor jugada: {exc}", {"tipo": "error", "motivo": "sin_jugadas"})
             except Exception as exc:
+                if lang == 'en':
+                    return (f"Could not compute the move: {exc}", {"tipo": "error"})
                 return (f"No se pudo calcular la jugada: {exc}", {"tipo": "error"})
 
             origen = sugerencia.get("origen")
@@ -1251,9 +1407,15 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             secuencia = sugerencia.get("secuencia")
             if isinstance(secuencia, list) and secuencia:
                 pasos = " -> ".join([str(origen)] + [str(step.get("destino")) for step in secuencia if step.get("destino")])
-                respuesta = f"El mejor movimiento que se puede realizar según el análisis realizado por la aplicación es: {pasos}.\n\n¿Quieres que te muestre en pantalla el movimiento?"
+                if lang == 'en':
+                    respuesta = f"The best move according to the application's analysis is: {pasos}.\n\nDo you want me to show the move on screen?"
+                else:
+                    respuesta = f"El mejor movimiento que se puede realizar según el análisis realizado por la aplicación es: {pasos}.\n\n¿Quieres que te muestre en pantalla el movimiento?"
             else:
-                respuesta = f"El mejor movimiento que se puede realizar según el análisis realizado por la aplicación es: {origen} -> {destino}.\n\n¿Quieres que te muestre en pantalla el movimiento?"
+                if lang == 'en':
+                    respuesta = f"The best move according to the application's analysis is: {origen} -> {destino}.\n\nDo you want me to show the move on screen?"
+                else:
+                    respuesta = f"El mejor movimiento que se puede realizar según el análisis realizado por la aplicación es: {origen} -> {destino}.\n\n¿Quieres que te muestre en pantalla el movimiento?"
 
             return respuesta, {"tipo": "mejor_jugada", "sugerencia": sugerencia}
 
@@ -1267,6 +1429,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         partida_id: str | None = None,
         jugador_id: str | None = None,
         pieza_id: str | None = None,
+        lang: str | None = None,
     ) -> Response:
         api_key = getattr(settings, 'GEMINI_API_KEY', None)
         try:
@@ -1279,12 +1442,20 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             mensaje = ''
         mensaje = str(mensaje)
 
+        lang_norm = self._normalize_lang(lang or (chatbot.memoria or {}).get('lang'))
+
+        # Persistir idioma preferido por conversación para siguientes turnos.
+        if isinstance(chatbot.memoria, dict):
+            chatbot.memoria['lang'] = lang_norm
+
         respuesta = None
 
         if len(mensaje.strip()) == 0:
+            if lang_norm == 'en':
+                return Response({'error': 'Message cannot be empty'}, status=status.HTTP_400_BAD_REQUEST)
             return Response({'error': 'El mensaje no puede estar vacío'}, status=status.HTTP_400_BAD_REQUEST)
         if len(mensaje) > max_chars:
-            respuesta = self._friendly_gemini_reply(reason='too_long')
+            respuesta = self._friendly_gemini_reply(reason='too_long', lang=lang_norm)
 
         # Si el mensaje pide ayuda de jugadas/movimientos y se aporta contexto, responder sin Gemini.
         respuesta_local, extra = (None, None)
@@ -1295,6 +1466,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 partida_id=partida_id,
                 jugador_id=jugador_id,
                 pieza_id=pieza_id,
+                lang=lang_norm,
             )
             if respuesta_local is not None:
                 respuesta = respuesta_local
@@ -1302,16 +1474,21 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         if respuesta is None:
             # Hard gate: si se fuerza dominio y el mensaje no es del dominio, responder sin IA
             if getattr(settings, 'CHATBOT_DOMAIN_ENFORCE', True) and not self._is_in_domain(mensaje):
-                respuesta = getattr(
-                    settings,
-                    'CHATBOT_REFUSAL_MESSAGE',
-                    'Solo puedo ayudarte con CheckerIT (reglas del juego e interfaz).',
-                )
+                respuesta = self._refusal_message(lang_norm)
             elif not api_key:
                 # Fallback para entornos sin configuración de Gemini (tests, dev)
-                respuesta = f"Respuesta del chatbot a: {mensaje}"
+                if lang_norm == 'en':
+                    respuesta = f"Chatbot reply to: {mensaje}"
+                else:
+                    respuesta = f"Respuesta del chatbot a: {mensaje}"
             else:
                 try:
+                    base_system = getattr(settings, 'GEMINI_SYSTEM_PROMPT', None)
+                    lang_system = self._language_instruction(lang_norm)
+                    effective_system = (
+                        (str(base_system).strip() + "\n\n" if base_system and str(base_system).strip() else "")
+                        + lang_system
+                    )
                     respuesta = generate_gemini_reply(
                         api_key=api_key,
                         model=getattr(settings, 'GEMINI_MODEL', None),
@@ -1319,14 +1496,14 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                         api_version=getattr(settings, 'GEMINI_API_VERSION', 'v1'),
                         max_retries=int(getattr(settings, 'GEMINI_MAX_RETRIES', 2)),
                         retry_backoff_seconds=float(getattr(settings, 'GEMINI_RETRY_BACKOFF_SECONDS', 0.6)),
-                        system_prompt=getattr(settings, 'GEMINI_SYSTEM_PROMPT', None),
+                        system_prompt=effective_system,
                         temperature=float(getattr(settings, 'GEMINI_TEMPERATURE', 0.2)),
                         max_output_tokens=int(getattr(settings, 'GEMINI_MAX_OUTPUT_TOKENS', 256)),
                         user_message=mensaje,
                         history=self._build_gemini_history(chatbot, limit_turns=10),
                     )
                 except (GeminiHttpError, GeminiError) as exc:
-                    respuesta = self._friendly_gemini_reply(reason=self._gemini_error_reason(exc))
+                    respuesta = self._friendly_gemini_reply(reason=self._gemini_error_reason(exc), lang=lang_norm)
 
         respuesta = self._sanitize_llm_text(respuesta)
 
@@ -1367,6 +1544,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         partida_id = request.data.get('partida_id')
         jugador_id = request.data.get('jugador_id')
         pieza_id = request.data.get('pieza_id')
+        lang = request.data.get('lang') or request.data.get('language') or request.data.get('idioma')
 
         if chatbot_id:
             try:
@@ -1408,6 +1586,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             partida_id=partida_id,
             jugador_id=jugador_id,
             pieza_id=pieza_id,
+            lang=lang,
         )
     
     @action(detail=True, methods=['post'])
@@ -1420,6 +1599,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         partida_id = request.data.get('partida_id')
         jugador_id = request.data.get('jugador_id')
         pieza_id = request.data.get('pieza_id')
+        lang = request.data.get('lang') or request.data.get('language') or request.data.get('idioma')
 
         return self._send_and_persist(
             chatbot=chatbot,
@@ -1427,6 +1607,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             partida_id=partida_id,
             jugador_id=jugador_id,
             pieza_id=pieza_id,
+            lang=lang,
         )
 
     @action(detail=False, methods=['get'], url_path='for_context')

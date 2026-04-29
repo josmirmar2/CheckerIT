@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 import './Board.css';
 
 const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, partidaId = null, onMove = null, moveMade = false, lockedPiecePos = null, undoToken = 0, undoToOriginalToken = 0, originalPiecePos = null, initialBoardState = null, pieceByPos = new Map(), aiMove = null, hintMove = null, disablePlayerActions = false, blockAiMoves = false }) => {
@@ -54,6 +55,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
   const [validMoves, setValidMoves] = useState([]);
   const [warning, setWarning] = useState(null);
   const [selectedPieceColor, setSelectedPieceColor] = useState(null); 
+  const { t } = useTranslation();
 
   useEffect(() => {
     const loadPieces = async () => {
@@ -592,7 +594,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                     const destinationKey = `${colIdx}-${filaIdx}`;
                     
                     if (!validMoves.includes(destinationKey)) {
-                      setWarning('Movimiento no válido: debe mover a un vecino vacío o saltar sobre una pieza a un espacio vacío');
+                      setWarning(t('board.warnings.invalidMove'));
                       return;
                     }
                     
@@ -651,7 +653,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                       '--valid-move-color': selectedPieceColor,
                     }),
                   }}
-                  title={jugador ? `${jugador.nombre || 'Agente Inteligente'}` : 'Vacío'}
+                  title={jugador ? `${jugador.nombre || t('players.typeAI')}` : t('board.empty')}
                   onClick={onClick}
                 >
                   {jugador && (
@@ -660,7 +662,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                         src={jugador.icono === 'Robot-icon.jpg'
                           ? require('./images/Robot-icon.jpg')
                           : require(`./images/icons/${jugador.icono}`)}
-                        alt={jugador.nombre || 'Agente Inteligente'}
+                        alt={jugador.nombre || t('players.typeAI')}
                         className="cell-icon"
                       />
                     </div>
