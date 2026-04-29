@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
+import { useTranslation } from 'react-i18next';
 import './Players.css';
 
 const API_URL = 'http://localhost:8000/api';
@@ -27,6 +28,7 @@ const DIFICULTADES_IA = ['Fácil', 'Difícil'];
 
 function Players() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [numeroJugadores, setNumeroJugadores] = useState(2);
   const [jugadores, setJugadores] = useState([
     { nombre: '', icono: 'icono1.jpg', tipo: 'humano', dificultad: 'Baja' },
@@ -71,13 +73,13 @@ function Players() {
   const validarJugadores = () => {
     const jugadoresHumanos = jugadores.filter(j => j.tipo === 'humano');
     if (jugadoresHumanos.some(j => j.nombre.trim() === '')) {
-      setError('Todos los jugadores humanos deben tener un nombre');
+      setError(t('players.errors.humanNameRequired'));
       return false;
     }
     
     const nombresHumanos = jugadoresHumanos.map(j => j.nombre.trim().toLowerCase());
     if (new Set(nombresHumanos).size !== nombresHumanos.length) {
-      setError('Los nombres de los jugadores no pueden ser duplicados');
+      setError(t('players.errors.duplicateNames'));
       return false;
     }
 
@@ -106,7 +108,7 @@ function Players() {
       navigate('/game', { state: { partidaInicial: response.data, jugadoresConfig: jugadores.map((j, idx) => ({ ...j, numero: idx + 1 })) } });
     } catch (err) {
       console.error('Error al crear partida:', err);
-      setError('Error al crear la partida. Verifica que el servidor esté activo.');
+      setError(t('players.errors.createGame'));
     } finally {
       setLoading(false);
     }
@@ -120,11 +122,11 @@ function Players() {
     <div className="players-container">
       <div className="players-content">
         <h1 className="game-title">CheckerIT</h1>
-        <p className="game-subtitle">Selecciona y configura los jugadores antes de jugar</p>
+        <p className="game-subtitle">{t('players.subtitle')}</p>
 
         <div className="setup-section">
           <div className="player-count-section">
-            <label>Número de Jugadores:</label>
+            <label>{t('players.playerCount')}</label>
             <div className="player-count-buttons">
               {[2, 3, 4, 6].map(num => (
                 <button
@@ -139,20 +141,20 @@ function Players() {
           </div>
 
           <div className="players-input-section">
-            <label className="section-label">Configura los jugadores:</label>
+            <label className="section-label">{t('players.configurePlayers')}</label>
             <div className="players-grid" data-players={numeroJugadores}>
               {jugadores.map((jugador, index) => (
                 <div key={index} className="player-card">
                   <div className="player-card-header">
-                    <h3>Jugador {index + 1}</h3>
+                    <h3>{t('players.playerN', { num: index + 1 })}</h3>
                   </div>
 
                   <div className="player-icon-section">
-                    <label>Icono:</label>
+                    <label>{t('players.icon')}</label>
                     <div className="icon-preview">
                       <img
                         src={importarIcono(jugador.icono)}
-                        alt={`Icono Jugador ${index + 1}`}
+                        alt={`${t('players.icon')} ${t('players.playerN', { num: index + 1 })}`}
                       />
                     </div>
                     {jugador.tipo === 'humano' && (
@@ -174,30 +176,30 @@ function Players() {
                   </div>
 
                   <div className="player-type-section">
-                    <label>Tipo:</label>
+                    <label>{t('players.type')}</label>
                     <div className="type-buttons">
                       <button
                         className={`type-button ${jugador.tipo === 'humano' ? 'active' : ''}`}
                         onClick={() => handleJugadorChange(index, 'tipo', 'humano')}
                       >
-                        Humano
+                        {t('players.typeHuman')}
                       </button>
                       <button
                         className={`type-button ${jugador.tipo === 'ia' ? 'active' : ''}`}
                         onClick={() => handleJugadorChange(index, 'tipo', 'ia')}
                       >
-                        Agente Inteligente
+                        {t('players.typeAI')}
                       </button>
                     </div>
                   </div>
 
                   {jugador.tipo === 'humano' && (
                     <div className="player-name-section">
-                      <label htmlFor={`nombre-${index}`}>Nombre:</label>
+                      <label htmlFor={`nombre-${index}`}>{t('players.name')}</label>
                       <input
                         id={`nombre-${index}`}
                         type="text"
-                        placeholder="Introduce tu nombre"
+                        placeholder={t('players.namePlaceholder')}
                         value={jugador.nombre}
                         onChange={(e) => handleJugadorChange(index, 'nombre', e.target.value)}
                         maxLength="20"
@@ -207,14 +209,16 @@ function Players() {
 
                   {jugador.tipo === 'ia' && (
                     <div className="player-difficulty-section">
-                      <label>Dificultad:</label>
+                      <label>{t('players.difficulty')}</label>
                       <select
                         className="difficulty-selector"
                         value={jugador.dificultad}
                         onChange={(e) => handleJugadorChange(index, 'dificultad', e.target.value)}
                       >
                         {DIFICULTADES_IA.map(dif => (
-                          <option key={dif} value={dif}>{dif}</option>
+                          <option key={dif} value={dif}>
+                            {dif === 'Fácil' ? t('players.aiDifficulty.easy') : dif === 'Difícil' ? t('players.aiDifficulty.hard') : dif}
+                          </option>
                         ))}
                       </select>
                     </div>
@@ -236,7 +240,7 @@ function Players() {
               onClick={handleStartGame}
               disabled={loading}
             >
-              {loading ? 'Creando partida...' : 'Empezar Partida'}
+              {loading ? t('players.creatingGame') : t('players.startGame')}
             </button>
 
             <button
@@ -244,7 +248,7 @@ function Players() {
               onClick={handleBack}
               disabled={loading}
             >
-              Volver Atrás
+              {t('players.back')}
             </button>
           </div>
         </div>
