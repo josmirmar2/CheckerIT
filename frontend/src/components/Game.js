@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import './Game.css';
 import { MUSIC_LIST, getRandomMusicIndex } from './musicList';
 import Board from './Board';
@@ -25,6 +26,7 @@ const getActivePuntas = (numJugadores) => {
 function Game() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { t, i18n } = useTranslation();
   const [partida, setPartida] = useState(null);
   const [loading, setLoading] = useState(true);
   const [elapsed, setElapsed] = useState(0);
@@ -56,6 +58,7 @@ function Game() {
           mensaje,
           chatbot_id: chatbotId,
           partida_id: partida?.id_partida || null,
+          lang: i18n.resolvedLanguage || i18n.language,
           jugador_id:
             currentPlayerIndex !== null && currentPlayerIndex !== undefined
               ? (dbJugadores?.[currentPlayerIndex]?.id_jugador || null)
@@ -64,7 +67,7 @@ function Game() {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data?.error || 'Error enviando mensaje al chatbot');
+        throw new Error(data?.error || t('game.chat.errors.send'));
       }
 
       if (data?.chatbot_id && data.chatbot_id !== chatbotId) {
@@ -76,7 +79,7 @@ function Game() {
         setHintMove({ ...data.sugerencia, token: Date.now() });
       }
     } catch (err) {
-      setChatError(err?.message || 'Error enviando mensaje al chatbot');
+      setChatError(err?.message || t('game.chat.errors.send'));
     } finally {
       setChatLoading(false);
     }
@@ -132,7 +135,7 @@ function Game() {
         const res = await fetch(url);
         const data = await res.json();
         if (!res.ok) {
-          throw new Error(data?.error || 'Error cargando historial del chatbot');
+          throw new Error(data?.error || t('game.chat.errors.loadHistory'));
         }
         if (cancelled) return;
 
@@ -150,7 +153,7 @@ function Game() {
         // Si falla, al menos no mezclar conversaciones de jugadores distintos
         setChatbotId(null);
         setChatMessages([]);
-        setChatError(err?.message || 'Error cargando historial del chatbot');
+        setChatError(err?.message || t('game.chat.errors.loadHistory'));
       }
     };
 
@@ -158,7 +161,7 @@ function Game() {
     return () => {
       cancelled = true;
     };
-  }, [partida?.id_partida, currentPlayerIndex, dbJugadores]);
+  }, [partida?.id_partida, currentPlayerIndex, dbJugadores, t]);
 
   const AI_FIRST_DELAY_MS = 200;
   const AI_CHAIN_DELAY_MS = 200;
@@ -179,8 +182,15 @@ function Game() {
 
   const resolveNombreJugador = (configJugador, jugadorDb) => {
     const nombreDb = jugadorDb?.nombre;
-    if (typeof nombreDb === 'string' && nombreDb.trim().length > 0) {
-      return nombreDb.trim();
+    const nombreDbTrimmed = typeof nombreDb === 'string' ? nombreDb.trim() : '';
+    // Si el backend guarda un nombre por defecto para IA (p.ej. "Agente Inteligente"),
+    // tratamos ese valor como placeholder y lo traducimos.
+    const isAiDefaultName =
+      !!nombreDbTrimmed &&
+      (nombreDbTrimmed.toLowerCase() === 'agente inteligente' || nombreDbTrimmed.toLowerCase().startsWith('agente inteligente '));
+
+    if (nombreDbTrimmed && !(configJugador?.tipo === 'ia' && isAiDefaultName)) {
+      return nombreDbTrimmed;
     }
     const nombreConfig = configJugador?.nombre;
     if (typeof nombreConfig === 'string' && nombreConfig.trim().length > 0) {
@@ -188,9 +198,17 @@ function Game() {
     }
     if (configJugador?.tipo === 'ia') {
       const diff = configJugador?.dificultad;
-      return diff ? `Agente Inteligente ${diff}` : 'Agente Inteligente';
+      const diffKey = String(diff || '').trim().toLowerCase();
+      const diffLabel =
+        diffKey === 'fácil' || diffKey === 'facil' || diffKey === 'easy'
+          ? t('players.aiDifficulty.easy')
+          : diffKey === 'difícil' || diffKey === 'dificil' || diffKey === 'hard'
+            ? t('players.aiDifficulty.hard')
+            : diff;
+      const agentLabel = t('players.typeAI');
+      return diffLabel ? `${agentLabel} ${diffLabel}` : agentLabel;
     }
-    return 'Jugador';
+    return t('game.player.generic');
   };
 
   const handlePause = () => {
@@ -913,7 +931,7 @@ function Game() {
   if (loading) {
     return (
       <div className="game-container">
-        <div className="loading">Cargando partida...</div>
+        <div className="loading">{t('game.loading')}</div>
       </div>
     );
   }
@@ -922,11 +940,11 @@ function Game() {
     <div className="game-container">
       <div className="game-layout">
         <aside className="turns-panel">
-          <h3>Ronda</h3>
-          <div className="turn-counter">Actual: {roundCount}</div>
+          <h3>{t('game.round.title')}</h3>
+          <div className="turn-counter">{t('game.round.current', { round: roundCount })}</div>
           <div className="turns-list">
             {jugadoresConfig.length === 0 && (
-              <p className="turns-empty">Sin datos de jugadores</p>
+              <p className="turns-empty">{t('game.round.noPlayerData')}</p>
             )}
             {jugadoresConfig.map((jugador, idx) => {
               const isCurrent = idx === currentPlayerIndex;
@@ -945,7 +963,7 @@ function Game() {
                   <div className="turn-info">
                     <div className="turn-color-dot" style={{ backgroundColor: colorHex }} />
                     <span className="turn-name">{displayName}</span>
-                    {isCurrent && <span className="turn-indicator">Ronda actual</span>}
+                    {isCurrent && <span className="turn-indicator">{t('game.round.currentIndicator')}</span>}
                   </div>
                 </div>
               );
@@ -989,11 +1007,11 @@ function Game() {
               <>
                 {moveMade ? (
                   <>
-                    <button className="control-button" onClick={continueRound} disabled={isPaused || isAITurn || aiThinking}>Continuar</button>
-                    <button className="control-button" onClick={undoMove} disabled={isPaused || isAITurn || aiThinking}>Deshacer</button>
+                    <button className="control-button" onClick={continueRound} disabled={isPaused || isAITurn || aiThinking}>{t('game.controls.continue')}</button>
+                    <button className="control-button" onClick={undoMove} disabled={isPaused || isAITurn || aiThinking}>{t('game.controls.undo')}</button>
                   </>
                 ) : (
-                  <button className="control-button" onClick={passRound} disabled={isPaused || isAITurn || aiThinking}>Pasar Ronda</button>
+                  <button className="control-button" onClick={passRound} disabled={isPaused || isAITurn || aiThinking}>{t('game.controls.passRound')}</button>
                 )}
               </>
             )}
@@ -1011,16 +1029,16 @@ function Game() {
               });
             }}
           >
-            {showHelp ? 'Cerrar Ayuda' : 'Abrir Ayuda'}
+            {showHelp ? t('game.help.close') : t('game.help.open')}
           </button>
           {showHelp && (
             <div className="help-content">
               <div className="help-header">
-                <h3>Asistente</h3>
+                <h3>{t('game.help.title')}</h3>
                 <button
                   className="chatbot-infoButton"
                   type="button"
-                  aria-label="Ver ejemplos de preguntas"
+                  aria-label={t('game.help.examples.ariaLabel')}
                   aria-expanded={showChatInfo}
                   onClick={() => setShowChatInfo((prev) => !prev)}
                 >
@@ -1030,20 +1048,18 @@ function Game() {
 
               {showChatInfo && (
                 <div className="chatbot-infoPanel">
-                  <div className="chatbot-infoTitle">Ejemplos de preguntas:</div>
+                  <div className="chatbot-infoTitle">{t('game.help.examples.title')}</div>
                   <ul className="chatbot-infoList">
-                    <li>"¿Cuáles son las reglas del juego?"</li>
-                    <li>"¿Cómo se mueve una pieza?"</li>
-                    <li>"¿Cuál es la mejor jugada?"</li>
-                    <li>"¿Cómo puedo cancelar o finalizar una partida?"</li>
-                    <li>"¿Qué hace el botón de Pausa y cómo se reanuda?"</li>
+                    {t('game.help.examples.questions', { returnObjects: true }).map((q, i) => (
+                      <li key={i}>{q}</li>
+                    ))}
                   </ul>
                 </div>
               )}
               <div className="chatbot">
                 <div className="chatbot-messages" aria-live="polite">
                   {chatMessages.length === 0 ? (
-                    <p className="help-placeholder">Escribe una pregunta y pulsa Enviar.</p>
+                    <p className="help-placeholder">{t('game.help.placeholder')}</p>
                   ) : (
                     chatMessages.map((m, idx) => (
                       <div
@@ -1051,7 +1067,7 @@ function Game() {
                         className={`chatbot-message ${m.role === 'user' ? 'user' : 'assistant'}`}
                       >
                         <div className="chatbot-bubble">
-                          <div className="chatbot-author">{m.role === 'user' ? 'Tú' : 'Asistente'}</div>
+                          <div className="chatbot-author">{m.role === 'user' ? t('common.you') : t('game.chat.assistantName')}</div>
                           <div className="chatbot-text">{m.text}</div>
                         </div>
                       </div>
@@ -1066,7 +1082,7 @@ function Game() {
                     className="chatbot-input"
                     type="text"
                     value={chatInput}
-                    placeholder="Pregunta al asistente..."
+                    placeholder={t('game.chat.inputPlaceholder')}
                     onChange={(e) => setChatInput(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') sendChatMessage();
@@ -1079,7 +1095,7 @@ function Game() {
                     disabled={chatLoading}
                     type="button"
                   >
-                    {chatLoading ? 'Enviando...' : 'Enviar'}
+                    {chatLoading ? t('common.sending') : t('common.send')}
                   </button>
                 </div>
               </div>
@@ -1091,15 +1107,15 @@ function Game() {
       {isPaused && (
         <div className="pause-overlay">
           <div className="pause-dialog">
-            <h2>Juego Pausado</h2>
+            <h2>{t('game.pause.title')}</h2>
             <div className="pause-buttons">
               <button className="pause-button resume-button" onClick={handleResume}>
                 <i className="fas fa-play"></i>
-                Reanudar
+                {t('game.pause.resume')}
               </button>
               <button className="pause-button end-button" onClick={handleShowEndConfirm}>
                 <i className="fas fa-stop"></i>
-                Finalizar
+                {t('game.pause.end')}
               </button>
             </div>
           </div>
@@ -1109,19 +1125,19 @@ function Game() {
       {showEndConfirm && (
         <div className="confirm-overlay">
           <div className="confirm-dialog">
-            <h2>Finalizar Partida</h2>
+            <h2>{t('game.confirm.title')}</h2>
             <p className="confirm-question">
-              ¿Seguro que quieres finalizarla antes de tiempo?
+              {t('game.confirm.question')}
             </p>
             <p className="confirm-warning">
-              Esta acción no se podrá deshacer. Perderás el progreso que has conseguido en la partida
+              {t('game.confirm.warning')}
             </p>
             <div className="confirm-buttons">
               <button className="confirm-button cancel-button" onClick={handleCancelEnd}>
-                Cancelar
+                {t('game.confirm.cancel')}
               </button>
               <button className="confirm-button confirm-end-button" onClick={handleEndGame}>
-                Volver al inicio
+                {t('game.confirm.backHome')}
               </button>
             </div>
           </div>

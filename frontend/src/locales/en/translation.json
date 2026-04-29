@@ -1,0 +1,304 @@
+{
+  "common": {
+    "backToHome": "← Back to Home",
+    "language": "Language",
+    "languages": {
+      "es": "Spanish",
+      "en": "English"
+    },
+    "sending": "Sending...",
+    "send": "Send",
+    "you": "You"
+  },
+  "home": {
+    "subtitle": "The best online game to play Chinese Checkers",
+    "newGame": "New Game",
+    "tutorial": "Tutorial"
+  },
+  "players": {
+    "subtitle": "Select and configure players before playing",
+    "playerCount": "Number of players:",
+    "configurePlayers": "Set up players:",
+    "playerN": "Player {{num}}",
+    "icon": "Icon:",
+    "type": "Type:",
+    "typeHuman": "Human",
+    "typeAI": "AI Agent",
+    "name": "Name:",
+    "namePlaceholder": "Enter your name",
+    "difficulty": "Difficulty:",
+    "aiDifficulty": {
+      "easy": "Easy",
+      "hard": "Hard"
+    },
+    "errors": {
+      "humanNameRequired": "All human players must have a name",
+      "duplicateNames": "Player names cannot be duplicated",
+      "createGame": "Error creating the game. Check that the server is running."
+    },
+    "startGame": "Start Game",
+    "creatingGame": "Creating game...",
+    "back": "Go Back"
+  },
+  "victory": {
+    "title": "Game Finished!",
+    "winner": "Winner",
+    "statsTitle": "Game Statistics",
+    "time": "Time",
+    "playerCount": "Number of players",
+    "rounds": "Rounds",
+    "otherPlayers": "Other Players",
+    "backHome": "Back to Home"
+  },
+  "tutorial": {
+    "hero": {
+      "step": "Step {{current}}/{{total}}",
+      "title": "Tutorial - Chinese Checkers",
+      "progress": "{{pct}}% completed",
+      "summaryAria": "Tutorial step summary",
+      "progressAria": "Tutorial progress"
+    },
+    "pagination": {
+      "aria": "Tutorial navigation",
+      "previousAria": "Previous page",
+      "nextAria": "Next page",
+      "pageIndicator": "Page {{current}} of {{total}}"
+    },
+    "steps": {
+      "defaultTitle": "Tutorial",
+      "titles": [
+        "Goal and rules",
+        "Moves and strategy",
+        "Screen elements",
+        "End of tutorial"
+      ],
+      "subtitles": [
+        "What you need to achieve and the basic rules.",
+        "How to move and what usually gives you an advantage.",
+        "What each control means during a game.",
+        "Choose your next step or ask what you need."
+      ]
+    },
+    "sections": {
+      "objective": {
+        "title": "Objective",
+        "p1": "The main goal is to be the first player to move all ten of your pieces from your starting point (one tip of the star) to the tip directly opposite yours.",
+        "p2": "The first player to move all ten pieces into the ten spaces of their destination area wins. If two players complete their bases in the same turn, you can consider it a draw or apply a tie-break rule (for example, the player whose turn came first).",
+        "boardAlt": "Chinese Checkers star-shaped board"
+      },
+      "norms": {
+        "title": "Rules",
+        "item1": "The board is a six-point star. At the start, players are created, each assigned a color on the board with ten pieces placed on one tip of the star.",
+        "item2": "These starting positions are predefined in the system based on how many players participate.",
+        "item3": "Only one piece moves per turn. You can change the move or even change which piece you move before confirming.",
+        "item4": "Unlike traditional checkers, in Chinese Checkers you do not capture or remove pieces. All pieces remain in play until the end.",
+        "item5": "Any player can occupy any cell during the game, except when a piece is already on that position.",
+        "item6": "Players can block opponents by occupying key spaces. However, you cannot permanently occupy another player’s start or destination base if that prevents them from completing their objective. You may move through them, but your goal is to fill your own destination base.",
+        "item7": "Players take turns moving one of their pieces. Turn order is predefined by the system and follows the order established when creating the participants. When you create players, the order they appear is the same order used during the game.",
+        "turnOrderAria": "Relationship between players and turns",
+        "playersAlt": "Created players",
+        "turnsAlt": "Turn order"
+      },
+      "moves": {
+        "title": "Types of moves",
+        "simpleLabel": "Single move",
+        "jumpLabel": "Jump",
+        "chainLabel": "Jump chain",
+        "simpleDesc": "A piece may move to an adjacent empty space in any of the six possible directions (forward, backward, sideways, or diagonally).",
+        "jumpDesc": "A piece may jump over another piece (yours or an opponent’s) if there is an empty space immediately on the other side. The jump must be in a straight line.",
+        "chainDesc": "After a jump, if the piece can make another jump, it may do so in the same turn. Multiple jumps are not mandatory but can be very advantageous. Jumps may change direction each time.",
+        "galleryAria": "Visual examples of moves",
+        "simpleAlt": "Example of a single move to an adjacent cell",
+        "jumpAlt": "Example of a straight-line jump over a piece",
+        "chainAlt": "Example of a jump chain with several jumps in one turn"
+      },
+      "strategy": {
+        "title": "Strategy tips",
+        "item1b": "Prioritize long jumps:",
+        "item1": "Chaining jumps lets you advance much faster than single moves.",
+        "item2b": "Create bridges:",
+        "item2": "Place pieces so they can support jumps in future turns.",
+        "item3b": "Avoid isolating pieces:",
+        "item3": "Lone pieces advance slower because they cannot take advantage of jumps.",
+        "item4b": "Move in groups:",
+        "item4": "Keeping your pieces relatively close makes moves more efficient.",
+        "item5b": "Use opponents:",
+        "item5": "You can also jump over their pieces, so keep an eye on the whole board.",
+        "item6b": "Plan ahead:",
+        "item6": "Don’t focus only on the immediate move; try to prepare jump chains for upcoming turns."
+      },
+      "ui": {
+        "title": "What does each screen element mean?",
+        "intro": "A game is made up of several elements. Let’s explain them below.",
+        "listAria": "Interface elements",
+        "board": {
+          "title": "Board",
+          "p1": "As explained before, the board is a six-point star: each tip has an assigned color and a player. It is in the center of the screen and is the main element of the game.",
+          "p2": "To move a piece, first select the piece you want to move and then the destination. The system will show available cells based on your chosen move so you can confirm clearly before continuing.",
+          "alt": "Example of the star-shaped board"
+        },
+        "rounds": {
+          "title": "Round and players",
+          "p1": "This panel appears on the left side and shows whose turn it is, each participant’s color, and the current round number. It also indicates whether each player is human or AI and, for AI, its difficulty (Easy or Hard). Use it to plan your moves and clearly see who plays next.",
+          "alt": "Rounds panel with current turn and players"
+        },
+        "timer": {
+          "title": "Timer",
+          "p1": "It is at the top of the screen. It shows the elapsed game time. When the game is paused the time stops counting, so it reflects active play time. There is no time limit per move or for finishing the game.",
+          "alt": "Game timer"
+        },
+        "topControlsAria": "Top controls for music and pause",
+        "music": {
+          "title": "Music",
+          "p1": "It is located to the left of the timer. Clicking it enables or disables the game music.",
+          "alt": "Music button"
+        },
+        "pause": {
+          "title": "Pause",
+          "p1": "To the right of the timer you have the pause access. From there you can open the pause menu and also return home using the Home button when needed.",
+          "homeAlt": "Home button in the pause panel"
+        },
+        "pausePanel": {
+          "title": "Resume / Cancel",
+          "p1": "Pressing Pause opens this panel. You can choose Resume to continue exactly where you left off, or Cancel to end the game permanently. If you cancel, the game is deleted and cannot be resumed.",
+          "alt": "Paused game screen with Resume and Finish buttons"
+        },
+        "turnActionsAria": "Turn actions",
+        "undo": {
+          "title": "Undo",
+          "p1": "After moving a piece, you can press “Undo” to revert the move and choose another piece or route before confirming.",
+          "alt": "Undo button"
+        },
+        "passRound": {
+          "title": "Pass round",
+          "p1": "If you don’t want to move any piece this turn, press “Pass Round” and the turn moves to the next player automatically.",
+          "alt": "Pass Round button"
+        },
+        "continue": {
+          "title": "Continue",
+          "p1": "After selecting and moving your piece, press “Continue” to confirm the move and hand the turn to the next player.",
+          "alt": "Continue button"
+        },
+        "help": {
+          "title": "Help",
+          "p1": "This section on the right opens an assistant to answer questions during the game. You can ask, for example: how to move a piece in a concrete situation, when it’s convenient to chain jumps, what each UI button does, what Pause/Resume/Cancel means, how the current round is calculated, or what basic strategy fits your current position.",
+          "p2": "Pressing “Open Help” shows the assistant panel, an info button with question examples, and a text area to write and send your query. Each game keeps its own help context so answers are useful for the current moment.",
+          "alt": "Help panel with assistant and Send button"
+        }
+      },
+      "finish": {
+        "title": "End of tutorial",
+        "intro": "You’ve reached the end of the tutorial. What would you like to do now?",
+        "actionsAria": "Actions after finishing the tutorial",
+        "quick": {
+          "label": "Quick game:",
+          "desc": "A match where you’ll play against an Easy opponent."
+        },
+        "demo": {
+          "label": "Demo:",
+          "desc": "A match with two players facing each other on Hard difficulty."
+        },
+        "chatbot": {
+          "label": "Chatbot:",
+          "desc": "If you still have questions before playing, you can ask our conversational agent at the end of this screen."
+        },
+        "creatingGame": "Creating game...",
+        "quickCta": "Play quick game",
+        "creatingDemo": "Creating demo...",
+        "demoCta": "Watch demo"
+      }
+    },
+    "chat": {
+      "containerAria": "Tutorial help chatbot",
+      "title": "CheckerIT chatbot",
+      "toggle": {
+        "open": "Open",
+        "close": "Hide"
+      },
+      "hint": "Ask concrete and short questions, such as game rules, moves, or the interface. If your query is too long, shorten it so the chatbot can respond better.",
+      "suggestionsAria": "Suggested questions",
+      "suggestedQuestions": [
+        "How do you move a piece?",
+        "What is a jump chain?",
+        "How do you win a game?",
+        "What does the Pause button do?"
+      ],
+      "messages": {
+        "aria": "Chatbot messages",
+        "empty": "Type a question to start."
+      },
+      "input": {
+        "placeholder": "Type your question…"
+      },
+      "errors": {
+        "tooLong": "Your question is too long. Please shorten it, for example: \"game rules\", \"how to move a piece\" or \"what pause does\".",
+        "tooLongShort": "Your question is too long. Try shortening it, for example: \"game rules\" or \"how to move a piece\".",
+        "timeout": "The response is taking too long. Try a shorter question, like \"game rules\" or \"how to move a piece\".",
+        "send": "Error sending message to the chatbot.",
+        "start": "Could not start the chatbot.",
+        "loadHistory": "Could not load chatbot history."
+      }
+    }
+  }
+  ,
+  "game": {
+    "loading": "Loading game...",
+    "player": {
+      "generic": "Player"
+    },
+    "round": {
+      "title": "Round",
+      "current": "Current: {{round}}",
+      "noPlayerData": "No player data",
+      "currentIndicator": "Current round"
+    },
+    "controls": {
+      "continue": "Continue",
+      "undo": "Undo",
+      "passRound": "Pass Round"
+    },
+    "help": {
+      "open": "Open Help",
+      "close": "Close Help",
+      "title": "Assistant",
+      "placeholder": "Type a question and press Send.",
+      "examples": {
+        "ariaLabel": "View example questions",
+        "title": "Example questions:",
+        "questions": [
+          "\"What are the rules of the game?\"",
+          "\"How does a piece move?\"",
+          "\"What is the best move?\"",
+          "\"How can I cancel or finish a game?\"",
+          "\"What does the Pause button do and how do I resume?\""
+        ]
+      }
+    },
+    "chat": {
+      "assistantName": "Assistant",
+      "inputPlaceholder": "Ask the assistant...",
+      "errors": {
+        "send": "Error sending message to the chatbot",
+        "loadHistory": "Error loading chatbot history"
+      }
+    },
+    "pause": {
+      "title": "Game Paused",
+      "resume": "Resume",
+      "end": "Finish"
+    },
+    "confirm": {
+      "title": "Finish Game",
+      "question": "Are you sure you want to end it early?",
+      "warning": "This action cannot be undone. You will lose the progress you have made in this game",
+      "cancel": "Cancel",
+      "backHome": "Back to home"
+    }
+  },
+  "board": {
+    "empty": "Empty",
+    "warnings": {
+      "invalidMove": "Invalid move: you must move to an empty adjacent cell or jump over a piece to an empty cell"
+    }
+  }
+}
