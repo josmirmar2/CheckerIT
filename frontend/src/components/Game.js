@@ -200,9 +200,9 @@ function Game() {
       const diff = configJugador?.dificultad;
       const diffKey = String(diff || '').trim().toLowerCase();
       const diffLabel =
-        diffKey === 'fácil' || diffKey === 'facil' || diffKey === 'easy'
+        diffKey === 'fácil' || diffKey === 'facil' || diffKey === 'easy' || diffKey === 'bajo' || diffKey === 'baja' || diffKey === 'low'
           ? t('players.aiDifficulty.easy')
-          : diffKey === 'difícil' || diffKey === 'dificil' || diffKey === 'hard'
+          : diffKey === 'difícil' || diffKey === 'dificil' || diffKey === 'hard' || diffKey === 'alto' || diffKey === 'high'
             ? t('players.aiDifficulty.hard')
             : diff;
       const agentLabel = t('players.typeAI');

@@ -973,10 +973,66 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             return base
         return 'es'
 
+    def _detect_lang_from_message(self, mensaje: str | None) -> str | None:
+        """Heurística ligera para detectar si el mensaje está en ES o EN.
+
+        - No usa dependencias externas.
+        - Devuelve 'es', 'en' o None si es ambiguo.
+        """
+        if mensaje is None:
+            return None
+
+        text = str(mensaje).strip().lower()
+        if not text:
+            return None
+
+        # Señales fuertes de español
+        if any(ch in text for ch in ("¿", "¡", "ñ", "á", "é", "í", "ó", "ú", "ü")):
+            return 'es'
+
+        # Tokenización simple de palabras latinas (incluye tildes)
+        words = re.findall(r"[a-záéíóúüñ']+", text)
+        if not words:
+            return None
+
+        es_markers = {
+            'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas',
+            'de', 'del', 'al', 'y', 'o', 'pero', 'porque',
+            'que', 'qué', 'como', 'cómo', 'donde', 'dónde',
+            'cuando', 'cuándo', 'por', 'para', 'con', 'sin',
+            'hola', 'buenas', 'gracias', 'ayuda', 'reglas', 'tablero', 'turno', 'movimiento',
+            'hay', 'puedo', 'quiero', 'pasar', 'ronda', 'deshacer', 'tiempo', 'limite', 'límite', 'musica', 'música',
+        }
+        en_markers = {
+            'the', 'a', 'an', 'and', 'or', 'but', 'because',
+            'what', 'how', 'where', 'when', 'why',
+            'to', 'of', 'in', 'on', 'for', 'with', 'without',
+            'is', 'are', 'there', 'do', 'does', 'can', 'i', 'you', 'my', 'your',
+            'time', 'limit', 'music', 'undo', 'skip', 'pass',
+            'hello', 'hi', 'thanks', 'help', 'rules', 'board', 'turn', 'move', 'moves',
+        }
+
+        es_hits = sum(1 for w in words if w in es_markers)
+        en_hits = sum(1 for w in words if w in en_markers)
+
+        # Si hay una señal clara, decidir.
+        if es_hits >= en_hits + 2:
+            return 'es'
+        if en_hits >= es_hits + 2:
+            return 'en'
+
+        # Señales suaves: saludos cortos
+        if text in {'hola', 'buenas'}:
+            return 'es'
+        if text in {'hi', 'hello'}:
+            return 'en'
+
+        return None
+
     def _language_instruction(self, lang: str) -> str:
         if lang == 'en':
-            return 'Respond in English.'
-        return 'Responde en español.'
+            return 'Respond ONLY in English. Do not use Spanish.'
+        return 'Responde SOLO en español. No uses inglés.'
 
     def _refusal_message(self, lang: str) -> str:
         # Si se configura explícitamente, respetar ese texto.
@@ -1206,6 +1262,92 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             "how to move a piece",
         )
 
+        rules_triggers = (
+            "reglas",
+            "reglas del juego",
+            "reglas del tablero",
+            "como se juega",
+            "cómo se juega",
+            "como jugar",
+            "cómo jugar",
+            "how to play",
+            "game rules",
+            "rules of the game",
+            "rules",
+        )
+
+        pass_round_triggers = (
+            "pasar ronda",
+            "pasar de ronda",
+            "paso de ronda",
+            "pasar turno",
+            "saltar turno",
+            "ceder turno",
+            "no quiero mover",
+            "skip turn",
+            "pass round",
+            "pass turn",
+            "skip my turn",
+        )
+
+        undo_triggers = (
+            "deshacer",
+            "deshacer jugada",
+            "deshacer movimiento",
+            "revertir",
+            "rehacer",
+            "no la he validado",
+            "no lo he validado",
+            "sin validar",
+            "undo",
+            "revert",
+            "i haven't confirmed",
+            "not confirmed",
+        )
+
+        win_triggers = (
+            "ganar",
+            "ganador",
+            "victoria",
+            "cómo ganar",
+            "como ganar",
+            "cómo se gana",
+            "como se gana",
+            "how to win",
+            "win",
+            "winner",
+            "victory",
+        )
+
+        time_triggers = (
+            "límite de tiempo",
+            "limite de tiempo",
+            "tiempo límite",
+            "tiempo limite",
+            "hay limite de tiempo",
+            "hay límite de tiempo",
+            "tiempo",
+            "temporizador",
+            "timer",
+            "time limit",
+            "is there a time limit",
+        )
+
+        music_triggers = (
+            "música",
+            "musica",
+            "reproducir música",
+            "poner música",
+            "sonido",
+            "canción",
+            "canciones",
+            "music",
+            "play music",
+            "song",
+            "songs",
+            "sound",
+        )
+
         end_game_triggers = (
             "terminar partida",
             "acabar partida",
@@ -1262,6 +1404,12 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         wants_best = any(t in texto for t in best_move_triggers)
         wants_possible = any(t in texto for t in possible_moves_triggers)
         wants_how = any(t in texto for t in how_to_move_triggers)
+        wants_rules = any(t in texto for t in rules_triggers)
+        wants_pass_round = any(t in texto for t in pass_round_triggers)
+        wants_undo = any(t in texto for t in undo_triggers)
+        wants_win = any(t in texto for t in win_triggers)
+        wants_time = any(t in texto for t in time_triggers)
+        wants_music = any(t in texto for t in music_triggers)
         wants_end = any(t in texto for t in end_game_triggers)
         wants_show = any(t in texto for t in show_move_triggers)
 
@@ -1296,6 +1444,19 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 {"tipo": "mostrar_movimiento", "sugerencia": last_best_move},
             )
 
+        if wants_win and not wants_best:
+            if lang == 'en':
+                return (
+                    "To win the game you must be the first player to move all your pieces into the opposite target area.\n"
+                    "The game ends when a player completes that objective.",
+                    {"tipo": "ganar_partida"},
+                )
+            return (
+                "Para ganar la partida debes ser el primer jugador en llevar todas tus piezas a la zona objetivo opuesta.\n"
+                "La partida termina cuando un jugador completa ese objetivo.",
+                {"tipo": "ganar_partida"},
+            )
+
         if wants_end and not wants_best:
             if lang == 'en':
                 respuesta = (
@@ -1320,6 +1481,60 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                     "   - En ese momento se muestra la pantalla de victoria con el ganador."
                 )
             return respuesta, {"tipo": "fin_partida"}
+
+        if wants_pass_round and not wants_best:
+            if lang == 'en':
+                return (
+                    "If you do not want to move any piece in your current turn, press the 'Pass Round' button and the turn will move to the next player.\n"
+                    "That button is available when you have not moved a piece yet in this turn.",
+                    {"tipo": "pasar_ronda"},
+                )
+            return (
+                "Si en tu turno no quieres mover ninguna ficha, pulsa el botón 'Pasar Ronda' y el turno pasará al siguiente jugador.\n"
+                "Ese botón aparece cuando aún no has movido ninguna pieza en el turno.",
+                {"tipo": "pasar_ronda"},
+            )
+
+        if wants_undo and not wants_best:
+            if lang == 'en':
+                return (
+                    "After moving a piece, you can press 'Undo' to revert the move and choose a different piece or route before confirming it.\n"
+                    "Once you press 'Continue' to validate the move, you can no longer undo that turn.",
+                    {"tipo": "deshacer"},
+                )
+            return (
+                "Tras mover una pieza, puedes pulsar 'Deshacer' para revertir el movimiento y elegir otra ficha o ruta antes de validarlo.\n"
+                "Cuando pulsas 'Continuar' y confirmas la jugada, ya no se puede deshacer ese turno.",
+                {"tipo": "deshacer"},
+            )
+
+        if wants_time and not wants_best:
+            if lang == 'en':
+                return (
+                    "The game shows a timer with the elapsed match time at the top of the screen.\n"
+                    "When you pause the game, that time stops counting.\n"
+                    "There is no time limit per move and no global match time limit.",
+                    {"tipo": "tiempo"},
+                )
+            return (
+                "En la parte superior de la pantalla se muestra un temporizador con el tiempo transcurrido de la partida.\n"
+                "Cuando pausas la partida, ese tiempo deja de contarse.\n"
+                "No hay límite de tiempo ni para hacer cada jugada ni para terminar la partida.",
+                {"tipo": "tiempo"},
+            )
+
+        if wants_music and not wants_best:
+            if lang == 'en':
+                return (
+                    "Yes. You can toggle the game music from the music button at the top (to the left of the timer).\n"
+                    "The game plays its predefined tracks and selects one at random. It does not let you choose any external song.",
+                    {"tipo": "musica"},
+                )
+            return (
+                "Sí. Puedes activar o desactivar la música con el botón de música en la parte superior (a la izquierda del temporizador).\n"
+                "La música es la que viene predefinida en el juego y se elige de forma aleatoria. No permite escoger cualquier canción externa.",
+                {"tipo": "musica"},
+            )
 
         if wants_how and not wants_best:
             if lang == 'en':
@@ -1346,6 +1561,27 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 )
             return respuesta, {"tipo": "reglas_movimiento"}
 
+        if wants_rules and not wants_best and not wants_how:
+            if lang == 'en':
+                respuesta = (
+                    "Basic rules of CheckerIT (Chinese Checkers):\n"
+                    "- Goal: be the first player to move all your pieces to the opposite target area.\n"
+                    "- Turn order: players move one piece per turn, following the creation order.\n"
+                    "- Moves: you can step to an adjacent empty cell, or jump over an adjacent piece into the empty cell behind it. Jumps can be chained in the same turn.\n"
+                    "- During your turn you can undo before confirming, and then press Continue to validate the move and pass the turn.\n"
+                    "- Win condition: the game ends when a player completes their target area."
+                )
+            else:
+                respuesta = (
+                    "Reglas básicas de CheckerIT (Damas Chinas):\n"
+                    "- Objetivo: ser el primero en llevar todas tus piezas a la zona objetivo opuesta.\n"
+                    "- Orden de turnos: se mueve una pieza por turno y el orden sigue el orden de creación de jugadores.\n"
+                    "- Movimiento: puedes hacer un movimiento simple a una casilla vecina vacía, o un salto sobre una pieza a la casilla vacía justo detrás. Los saltos se pueden encadenar en el mismo turno.\n"
+                    "- Durante tu turno puedes deshacer antes de confirmar y luego pulsar Continuar para validar el movimiento y pasar el turno.\n"
+                    "- Victoria: la partida termina cuando un jugador completa su zona objetivo."
+                )
+            return respuesta, {"tipo": "reglas_juego"}
+
         # Desactivado: no se ofrece la funcionalidad de "movimientos posibles" desde el chatbot.
         if wants_possible and not wants_best:
             if lang == 'en':
@@ -1370,7 +1606,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                     {"tipo": "faltan_parametros"},
                 )
             return (
-                "Para poder ayudarte con jugadas/movimientos necesito el estado de la partida (partida_id) y el jugador actual (jugador_id).",
+                "No puedo responderte a esa pregunta. Para ello necesitas jugar una partida y formular de nuevo la pregunta. Si tienes dudas del juego o de la aplicación me puedes preguntar.",
                 {"tipo": "faltan_parametros"},
             )
 
@@ -1442,7 +1678,9 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             mensaje = ''
         mensaje = str(mensaje)
 
-        lang_norm = self._normalize_lang(lang or (chatbot.memoria or {}).get('lang'))
+        # Idioma: priorizar detección por contenido del mensaje.
+        detected = self._detect_lang_from_message(mensaje)
+        lang_norm = self._normalize_lang(detected or lang or (chatbot.memoria or {}).get('lang'))
 
         # Persistir idioma preferido por conversación para siguientes turnos.
         if isinstance(chatbot.memoria, dict):

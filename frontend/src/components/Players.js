@@ -26,6 +26,15 @@ const ICONOS_DISPONIBLES = [
 
 const DIFICULTADES_IA = ['Fácil', 'Difícil'];
 
+const normalizeAIDifficulty = (raw) => {
+  const key = String(raw || '').trim().toLowerCase();
+  if (!key) return 'Fácil';
+  if (key === 'difícil' || key === 'dificil' || key === 'hard' || key === 'alto' || key === 'high') return 'Difícil';
+  if (key === 'fácil' || key === 'facil' || key === 'easy' || key === 'bajo' || key === 'baja' || key === 'low') return 'Fácil';
+  // Si llega un valor inesperado, por defecto mantenemos fácil.
+  return 'Fácil';
+};
+
 function Players() {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -62,6 +71,7 @@ function Players() {
     if (campo === 'tipo' && valor === 'ia') {
       newJugadores[posicion].icono = 'Robot-icon.jpg';
       newJugadores[posicion].nombre = '';
+      newJugadores[posicion].dificultad = normalizeAIDifficulty(newJugadores[posicion].dificultad);
     }
     if (campo === 'tipo' && valor === 'humano' && newJugadores[posicion].icono === 'Robot-icon.jpg') {
       newJugadores[posicion].icono = ICONOS_DISPONIBLES[posicion % ICONOS_DISPONIBLES.length];
@@ -95,8 +105,15 @@ function Players() {
     setError('');
 
     try {
+      const jugadoresNormalized = jugadores.map((jugador) => {
+        if (jugador?.tipo === 'ia') {
+          return { ...jugador, dificultad: normalizeAIDifficulty(jugador?.dificultad) };
+        }
+        return jugador;
+      });
+
       const request = {
-        jugadores: jugadores.map((jugador, idx) => ({
+        jugadores: jugadoresNormalized.map((jugador, idx) => ({
           ...jugador,
           numero: idx + 1
         })),
@@ -105,7 +122,12 @@ function Players() {
 
       const response = await axios.post(`${API_URL}/partidas/start_game/`, request);
       
-      navigate('/game', { state: { partidaInicial: response.data, jugadoresConfig: jugadores.map((j, idx) => ({ ...j, numero: idx + 1 })) } });
+      navigate('/game', {
+        state: {
+          partidaInicial: response.data,
+          jugadoresConfig: jugadoresNormalized.map((j, idx) => ({ ...j, numero: idx + 1 })),
+        },
+      });
     } catch (err) {
       console.error('Error al crear partida:', err);
       setError(t('players.errors.createGame'));
