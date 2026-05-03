@@ -55,9 +55,10 @@ def test_domain_gate_allows_in_domain_and_calls_gemini(settings, monkeypatch):
     monkeypatch.setattr("game.ai.gemini_api.requests.post", fake_post)
 
     client = APIClient()
+    # Pregunta en dominio que NO coincide con las respuestas deterministas
     res = client.post(
         "/api/chatbot/send_message/",
-        {"mensaje": "¿Cuáles son las reglas del tablero?"},
+        {"mensaje": "Dime algo sobre checkerit"},
         format="json",
     )
 

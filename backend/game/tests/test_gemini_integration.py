@@ -3,6 +3,9 @@ import requests
 
 from game.ai import gemini_api
 
+# Asegurar que el cache de modelo no contamine tests
+gemini_api._CACHED_MODEL_BY_VERSION.clear()
+
 
 def _make_resp(status_code=200, json_data=None, text="OK", json_exc: Exception | None = None):
     class _R:
@@ -28,7 +31,7 @@ def test_generate_gemini_reply_network_error_raises(monkeypatch):
     monkeypatch.setattr("game.ai.gemini_api.requests.post", fake_post)
 
     with pytest.raises(gemini_api.GeminiError) as exc:
-        gemini_api.generate_gemini_reply(api_key="key", user_message="hola")
+        gemini_api.generate_gemini_reply(api_key="key", user_message="hola", model="models/test")
 
     assert "Error de red" in str(exc.value)
 
@@ -46,6 +49,7 @@ def test_generate_gemini_reply_http_retryable_then_raise(monkeypatch):
         gemini_api.generate_gemini_reply(
             api_key="k",
             user_message="hola",
+            model="models/test",
             max_retries=0,
             retry_backoff_seconds=0,
         )
@@ -62,7 +66,7 @@ def test_generate_gemini_reply_invalid_json(monkeypatch):
     monkeypatch.setattr("game.ai.gemini_api.requests.post", fake_post)
 
     with pytest.raises(gemini_api.GeminiError) as exc:
-        gemini_api.generate_gemini_reply(api_key="k", user_message="hola")
+        gemini_api.generate_gemini_reply(api_key="k", user_message="hola", model="models/test")
 
     assert "Respuesta JSON inválida" in str(exc.value)
 
@@ -76,7 +80,7 @@ def test_generate_gemini_reply_no_candidates(monkeypatch):
     monkeypatch.setattr("game.ai.gemini_api.requests.post", fake_post)
 
     with pytest.raises(gemini_api.GeminiError) as exc:
-        gemini_api.generate_gemini_reply(api_key="k", user_message="hola")
+        gemini_api.generate_gemini_reply(api_key="k", user_message="hola", model="models/test")
 
     assert "no devolvió candidatos" in str(exc.value).lower()
 
@@ -91,7 +95,7 @@ def test_generate_gemini_reply_empty_candidate_text(monkeypatch):
     monkeypatch.setattr("game.ai.gemini_api.requests.post", fake_post)
 
     with pytest.raises(gemini_api.GeminiError) as exc:
-        gemini_api.generate_gemini_reply(api_key="k", user_message="hola")
+        gemini_api.generate_gemini_reply(api_key="k", user_message="hola", model="models/test")
 
     assert "respuesta vacía" in str(exc.value).lower()
 
@@ -118,7 +122,9 @@ def test_generate_gemini_reply_404_then_pick_model_and_succeed(monkeypatch):
     monkeypatch.setattr("game.ai.gemini_api.requests.post", fake_post)
     monkeypatch.setattr("game.ai.gemini_api.requests.get", fake_get)
 
-    out = gemini_api.generate_gemini_reply(api_key="k", user_message="hola")
+    # Pasamos un modelo explícito que inicialmente devolverá 404 para forzar
+    # que la función intente auto-seleccionar uno vía _pick_model_from_list
+    out = gemini_api.generate_gemini_reply(api_key="k", user_message="hola", model="models/unknown")
     assert out == "ok"
     assert calls["n"] >= 2
 
@@ -136,6 +142,8 @@ def test_list_models_network_error_raises(monkeypatch):
 
 
 def test_get_or_pick_model_no_models(monkeypatch):
+    # Limpiar cache y forzar lista vacía
+    gemini_api._CACHED_MODEL_BY_VERSION.pop("v1", None)
     monkeypatch.setattr("game.ai.gemini_api._list_models", lambda *a, **k: [])
 
     with pytest.raises(gemini_api.GeminiError) as exc:
@@ -154,10 +162,13 @@ def test_long_message_payload_is_sent(monkeypatch):
     monkeypatch.setattr("game.ai.gemini_api.requests.post", fake_post)
 
     long_msg = "x" * 20000
-    out = gemini_api.generate_gemini_reply(api_key="k", user_message=long_msg)
+    out = gemini_api.generate_gemini_reply(api_key="k", user_message=long_msg, model="models/test")
 
     assert out == "ok"
     assert captured["payload"] is not None
     # last content part should contain the long message
     contents = captured["payload"].get("contents")
-    assert contents and any(long_msg in (p.get("parts")[-1].get("text") if isinstance(p.get("parts"), list) else False for p in contents))
+    assert contents
+    last = contents[-1]
+    assert isinstance(last.get("parts"), list)
+    assert long_msg == last.get("parts")[-1].get("text")
