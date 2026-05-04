@@ -2,13 +2,13 @@
 
 CheckerIT es una aplicación web full-stack para jugar a Damas Chinas. El frontend está desarrollado con React y el backend con Django y Django REST Framework.
 
-## Alcance y características principales
+## Objetivos principales
 
-- Gestión de partidas: creación, finalización y control de turnos.
-- Registro de movimientos con validación de reglas en el backend.
-- Interfaz de usuario con tablero, tutorial y pantallas de juego.
-- Soporte de jugadores humanos e inteligencia artificial.
-- Agente Inteligente con dos niveles: heurística y MCTS (dificultad “Difícil”).
+- Creación de una aplicación que tenga integrado un videojuego basado en el juego de mesa Damas Chinas
+- Implementación de un tutorial de entrenamiento del juego de mesa Damas Chinas.
+- Creación de un agente inteligente que permita simular un jugador basado en la metodología Heurística de asignación de valor.
+- Integración del agente inteligente Monte Carlo Tree Search.
+- Creación e implementación de un chatbot capaz de proporcionar ayuda y un tutorial al usuario si lo necesita.
 
 ## Arquitectura
 
@@ -121,25 +121,12 @@ Se han añadido tests de penetración en el backend para validar que la API rech
 ```powershell
 cd backend
 python -m pytest game/tests/integration/test_api_movimientos.py -v
-python -m pytest game/tests/integration/test_api_partidas.py::TestAccionesPartida::test_accion_avanzar_ronda -v
+python -m pytest game/tests/integration/test_api_partidas.py -v
 ```
 
 #### Frontend: Guards de Integridad
 
 Se ha implementado un módulo de validación cliente-side en `frontend/src/security/integrityGuards.js` que previene el envío de payloads tamperizados al backend:
-
-**Funciones principales:**
-
-1. `isValidPositionKey(key)` — Valida formato de posición (col-fila) contra las dimensiones del tablero hexagonal
-2. `buildSecureMovimientosPayload({moveHistory, actualRound, dbJugadores, currentPlayerIndex, partida})` — Filtra y sanitiza movimientos:
-   - Valida posiciones válidas (origen y destino)
-   - Asegura que pieza_id está presente
-   - Filtra movimientos donde origen == destino
-   - Valida campos completos requeridos
-3. `buildRoundAdvancePayload({partidaId, actualRound, dbJugadores, currentPlayerIndex})` — Construye el payload de avance de ronda:
-   - Calcula el siguiente jugador según la secuencia circular de participantes
-   - Incremente monotónico del número de ronda (numero + 1)
-   - Retorna objeto con oldRound y newRoundCreated, o null si hay campos faltantes
 
 **Tests Frontend (`frontend/src/security/integrityGuards.test.js`):**
 
@@ -148,88 +135,11 @@ cd frontend
 npm run test -- --watchAll=false --runInBand
 ```
 
-#### Arquitectura de Seguridad: Defense in Depth
-
-CheckerIT implementa validación en múltiples capas:
-
-```
-Cliente (React)
-  ↓
-  ├─ Guard de Integridad: isValidPositionKey, buildSecureMov...Payload
-  │  └─ Filtra movimientos/rondas tamperizados antes de red
-  ↓
-Backend (Django REST)
-  ├─ Validación Autoritativa: avanzar_ronda
-  │  ├─ Valida jugador esperado (JugadorPartida.orden_participacion)
-  │  ├─ Rechaza número de ronda no secuencial
-  │  ├─ Rechaza oldRound de partida distinta
-  │  └─ Rechaza jugador no inscrito
-  ├─ Validación de Movimientos: registrar_movimientos
-  │  ├─ Valida pieza_id existe y pertenece a jugador
-  │  ├─ Valida posición dentro de tablero (ROW_LENGTHS)
-  │  ├─ Rechaza DoesNotExist para jugador/ronda/pieza
-  │  └─ Valida reglas (movimiento simple vs. salto)
-  ↓
-Base de Datos
-  └─ Constraints: unique, foreign key, check
-```
-
-**Principios de Defensa:**
-- Server-Authoritative: El servidor nunca confía en datos del cliente; re-valida todo
-- Monotonic Progression: Números de ronda estrictamente secuenciales previenen ID collisions
-- Public Code Defense: Los guards cliente-side asumen que el atacante tiene acceso al código fuente
-- DoesNotExist Fast-Path: Validación temprana de entidades inexistentes reduce carga
-
-## Cambios Implementados en Esta Iteración
-
-### Backend: Hardening de `avanzar_ronda` (`backend/game/views.py`)
-
-Se ha reforzado el método `avanzar_ronda` (líneas 672-830) con validaciones anti-tampering:
-
-- **Validación de Jugador Esperado**: Verifica que `jugador_id` coincida con el siguiente jugador en `JugadorPartida.orden_participacion`, evitando que un jugador suplante otro
-- **Número de Ronda Secuencial**: Rechaza cualquier `numero` que no sea exactamente `actual_round.numero + 1`, previniendo:
-  - Saltos de ronda
-  - Reutilización de números (ID collisions)
-  - Replay attacks
-- **Validación de Partida**: Rechaza `oldRound` que pertenezca a una partida distinta
-- **Membresía en Partida**: Rechaza `jugador_id` no inscrito en la partida
-
-**Cambios en Tests**: Se actualizó `test_accion_avanzar_ronda_crea_nueva_ronda` para usar `numero=2` en lugar de `numero=1` (ahora hay ronda 1 inicial, así que el avance debe ser a ronda 2).
-
-### Frontend: Módulo de Guards de Integridad (NUEVO)
-
-**Archivo creado**: `frontend/src/security/integrityGuards.js`
-
-Módulo de funciones puras que sanitizan payloads antes de enviarlos al backend:
-
-```javascript
-export function isValidPositionKey(key) { /* col-fila validation */ }
-export function buildSecureMovimientosPayload({moveHistory, actualRound, dbJugadores, currentPlayerIndex, partida}) { /* move filtering */ }
-export function buildRoundAdvancePayload({partidaId, actualRound, dbJugadores, currentPlayerIndex}) { /* round advancement */ }
-```
-
-**Beneficios:**
-- Evita enviar movimientos/rondas obviamente tamperizadas
-- Reduce carga en servidor (validación temprana)
-- Proporciona mejor UX (feedback cliente-side rápido)
-- Asume que el atacante tiene acceso al código (defense in depth)
-
-**Archivo de Tests**: `frontend/src/security/integrityGuards.test.js` (4 tests, todos pasando)
-
-### Frontend: Integración de Guards en `Game.js`
-
-Se ha integrado los guards en el flujo principal de `frontend/src/components/Game.js`:
-
-- `saveMoveToDatabase()`: Ahora llama a `buildSecureMovimientosPayload()` para filtrar moveHistory antes de registrar en servidor
-- `saveRoundToDatabase()`: Ahora llama a `buildRoundAdvancePayload()` para construir el payload de ronda en lugar de lógica ad-hoc
-
-**Impacto**: El cliente ahora rechaza movimientos obviamente inválidos antes de la red, manteniendo seguridad servidor-autoritativa.
-
 ### Cobertura de Testing
 
-- **Backend**: 139 tests pasando (incluyendo 11 nuevos tests de hacking/anti-tampering)
+- **Backend**: 139 tests pasando 
 - **Frontend**: 4 tests pasando (integrityGuards.test.js)
-- **Total Warnings**: 4 warnings en backend (deprecaciones normales, no relacionadas con seguridad)
+- **Total Warnings**: 4 warnings en backend, no relacionadas con seguridad
 
 ## Configuración (opcional) de PostgreSQL
 
@@ -277,12 +187,6 @@ CHATBOT_DOMAIN_KEYWORDS=checkerit,reglas,tablero,pieza,movimiento,turno,interfaz
 CHATBOT_REFUSAL_MESSAGE=Solo puedo ayudarte con CheckerIT (reglas del juego e interfaz).
 ```
 
-Endpoint:
-
-- `POST /api/chatbot/send_message/` con body JSON `{ "mensaje": "...", "chatbot_id": 1 }`.
-    - `chatbot_id` es opcional: si no lo envías, el backend usará/creará uno.
-
-
 
 ## Reglas de movimiento
 
@@ -299,7 +203,7 @@ Las reglas de movimiento se validan en el backend al registrar movimientos. De f
     - La acción que explora el MCTS es una ronda completa sobre una única pieza.
     - Una cadena de saltos se representa como una secuencia y se devuelve como `secuencia`.
 
-## API (resumen)
+## API 
 
 Base URL: `http://localhost:8000/api/`
 
@@ -327,7 +231,7 @@ Acciones relevantes:
 ```text
 backend/
     checkerit/              Configuración de Django
-    game/                   App principal (modelos, API, validación, agente Inteligente)
+    game/                   App principal (modelos, API, validación, agente inteligente)
     manage.py
     requirements.txt
 frontend/

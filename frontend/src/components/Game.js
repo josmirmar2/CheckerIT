@@ -1039,6 +1039,17 @@ function Game() {
                 </button>
               </div>
 
+              {showChatInfo && (
+                <div className="chatbot-infoPanel" role="status" aria-live="polite">
+                  <div className="chatbot-infoTitle">{t('game.help.examples.title')}</div>
+                  <ul className="chatbot-infoList">
+                    {t('game.help.examples.questions', { returnObjects: true }).map((question, index) => (
+                      <li key={index}>{question}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="chatbot">
                 {isChatbotDisabled ? (
                   <div className="chatbot-messages" aria-live="polite">
