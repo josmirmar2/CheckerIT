@@ -426,6 +426,115 @@ def test_accion_avanzar_ronda_crea_nueva_ronda(api_client):
 
 
 @pytest.mark.django_db
+def test_accion_avanzar_ronda_rechaza_jugador_no_esperado(api_client):
+    res = _start_game(api_client)
+    assert res.status_code == 201
+    data = res.json()
+    partida_id = data["id_partida"]
+    jugador_ids = [p["jugador"] for p in data.get("participantes", [])]
+
+    payload = {
+        "oldRound": {
+            "numero": 1,
+            "jugador_id": jugador_ids[0],
+            "partida_id": partida_id,
+            "final": None,
+        },
+        "newRoundCreated": {
+            "numero": 1,
+            "jugador_id": jugador_ids[0],
+            "partida_id": partida_id,
+        },
+    }
+
+    res2 = api_client.post(f"/api/partidas/{partida_id}/avanzar_ronda/", payload, format="json")
+    assert res2.status_code == 400
+    assert "jugador_id" in str(res2.data)
+
+
+@pytest.mark.django_db
+def test_accion_avanzar_ronda_rechaza_numero_tampered(api_client):
+    res = _start_game(api_client)
+    assert res.status_code == 201
+    data = res.json()
+    partida_id = data["id_partida"]
+    jugador_ids = [p["jugador"] for p in data.get("participantes", [])]
+
+    payload = {
+        "oldRound": {
+            "numero": 1,
+            "jugador_id": jugador_ids[0],
+            "partida_id": partida_id,
+            "final": None,
+        },
+        "newRoundCreated": {
+            "numero": 99,
+            "jugador_id": jugador_ids[1],
+            "partida_id": partida_id,
+        },
+    }
+
+    res2 = api_client.post(f"/api/partidas/{partida_id}/avanzar_ronda/", payload, format="json")
+    assert res2.status_code == 400
+    assert "numero" in str(res2.data)
+
+
+@pytest.mark.django_db
+def test_accion_avanzar_ronda_rechaza_jugador_fuera_de_partida(api_client, make_jugador):
+    res = _start_game(api_client)
+    assert res.status_code == 201
+    data = res.json()
+    partida_id = data["id_partida"]
+    jugador_ids = [p["jugador"] for p in data.get("participantes", [])]
+
+    jugador_externo = make_jugador(id_jugador="J_EXT", nombre="Intruso", humano=True, numero=99)
+
+    payload = {
+        "oldRound": {
+            "numero": 1,
+            "jugador_id": jugador_ids[0],
+            "partida_id": partida_id,
+            "final": None,
+        },
+        "newRoundCreated": {
+            "numero": 1,
+            "jugador_id": jugador_externo.id_jugador,
+            "partida_id": partida_id,
+        },
+    }
+
+    res2 = api_client.post(f"/api/partidas/{partida_id}/avanzar_ronda/", payload, format="json")
+    assert res2.status_code == 400
+
+
+@pytest.mark.django_db
+def test_accion_avanzar_ronda_rechaza_old_round_de_otra_partida(api_client):
+    res = _start_game(api_client)
+    assert res.status_code == 201
+    data = res.json()
+    partida_id = data["id_partida"]
+    jugador_ids = [p["jugador"] for p in data.get("participantes", [])]
+
+    payload = {
+        "oldRound": {
+            "numero": 1,
+            "jugador_id": jugador_ids[0],
+            "partida_id": "P_FAKE",
+            "final": None,
+        },
+        "newRoundCreated": {
+            "numero": 1,
+            "jugador_id": jugador_ids[1],
+            "partida_id": partida_id,
+        },
+    }
+
+    res2 = api_client.post(f"/api/partidas/{partida_id}/avanzar_ronda/", payload, format="json")
+    assert res2.status_code == 400
+    assert "oldRound.partida_id" in str(res2.data)
+
+
+@pytest.mark.django_db
 def test_delete_partida_elimina_partida_y_jugadores_asociados(api_client):
     res = _start_game(api_client)
     assert res.status_code == 201

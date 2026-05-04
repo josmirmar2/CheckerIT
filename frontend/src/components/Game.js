@@ -5,6 +5,7 @@ import './Game.css';
 import { MUSIC_LIST, getRandomMusicIndex } from './musicList';
 import Board from './Board';
 import Victory from './Victory';
+import { buildRoundAdvancePayload, buildSecureMovimientosPayload } from '../security/integrityGuards';
 
 const PLAYER_COLORS = ['#FFFFFF', '#4444FF', '#44DD44', '#000000', '#FF4444', '#FFDD44'];
 
@@ -688,33 +689,19 @@ function Game() {
   const saveRoundToDatabase = async () => {
     try {
       const url = `http://localhost:8000/api/partidas/${partida.id_partida}/avanzar_ronda/`;
-      const currentJugadorId = dbJugadores[currentPlayerIndex]?.id_jugador;
-      
-      const currentJugadorNumero = dbJugadores[currentPlayerIndex]?.numero || 1;
-      const maxNumero = Math.max(...dbJugadores.map(j => j.numero || 1));
-      const nextNumero = currentJugadorNumero >= maxNumero ? 1 : currentJugadorNumero + 1;
-      const nextJugador = dbJugadores.find(j => j.numero === nextNumero);
-      const nextJugadorId = nextJugador?.id_jugador || dbJugadores[0]?.id_jugador;
-      
-      // Incrementar ronda solo cuando vuelve al jugador 1
-      const shouldIncrementRound = nextNumero === 1;
-      
-      console.log(`🔄 saveRoundToDatabase: Jugador actual ${currentJugadorNumero}, Siguiente ${nextNumero}, Incrementar: ${shouldIncrementRound}, RondaActual: ${actualRound?.numero}`);
-      
-      const oldRound = {
-        numero: actualRound?.numero || 0,
-        inicio: actualRound?.inicio,
-        final: new Date().toISOString(),
-        jugador_id: currentJugadorId,
-        partida_id: partida.id_partida,
-      };
-      const newRoundCreated = {
-        numero: shouldIncrementRound ? (actualRound?.numero || 0) + 1 : actualRound?.numero || 0,
-        inicio: new Date().toISOString(),
-        jugador_id: nextJugadorId,
-        partida_id: partida.id_partida,
-      };
-      
+      const securePayload = buildRoundAdvancePayload({
+        partidaId: partida.id_partida,
+        actualRound,
+        dbJugadores,
+        currentPlayerIndex,
+      });
+      if (!securePayload) {
+        console.error('No se pudo construir payload seguro para avanzar ronda');
+        return null;
+      }
+
+      const { oldRound, newRoundCreated, nextNumero } = securePayload;
+
       console.log(`📊 Nueva ronda a crear: numero=${newRoundCreated.numero}`);
       
       const res = await fetch(url, {
@@ -748,22 +735,14 @@ function Game() {
     try {
       const jugadorId = dbJugadores[currentPlayerIndex]?.id_jugador;
       const rondaId = actualRound?.id_ronda;
-      const movimientos = moves
-        .map(m => ({
-          origen: `${m.from.col}-${m.from.fila}`,
-          destino: `${m.to.col}-${m.to.fila}`,
-          partida_id: partida.id_partida,
-          jugador_id: jugadorId,
-          ronda_id: rondaId,
-          pieza_id: m.pieza_id,
-        }))
-        .filter((m, idx) => {
-          const completo = m.origen && m.destino && m.partida_id && m.jugador_id && m.ronda_id && m.pieza_id;
-          if (!completo) {
-            console.warn('Movimiento incompleto, no se enviará', { idx, m });
-          }
-          return completo;
-        });
+      const allowedPieceIds = new Set(pieceByPos.values());
+      const movimientos = buildSecureMovimientosPayload({
+        moves,
+        partidaId: partida.id_partida,
+        jugadorId,
+        rondaId,
+        allowedPieceIds,
+      });
 
       if (movimientos.length === 0) {
         console.warn('No hay movimientos completos para registrar');

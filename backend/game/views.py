@@ -678,48 +678,110 @@ class PartidaViewSet(viewsets.ModelViewSet):
         if not new_round_data:
             return Response({ 'error': 'newRoundCreated es requerido' }, status=status.HTTP_400_BAD_REQUEST)
 
+        ronda_actual = partida.rondas.filter(fin__isnull=True).order_by('numero').first()
+        if not ronda_actual:
+            return Response({ 'error': 'No hay ronda activa para la partida' }, status=status.HTTP_400_BAD_REQUEST)
+
+        jugadores_ordenados = list(
+            JugadorPartida.objects
+            .filter(partida=partida)
+            .select_related('jugador')
+            .order_by('orden_participacion')
+        )
+        if not jugadores_ordenados:
+            return Response({ 'error': 'La partida no tiene jugadores asociados' }, status=status.HTTP_400_BAD_REQUEST)
+
+        current_idx = next(
+            (idx for idx, jp in enumerate(jugadores_ordenados) if str(jp.jugador_id) == str(ronda_actual.jugador_id)),
+            None,
+        )
+        if current_idx is None:
+            return Response({ 'error': 'La ronda activa tiene un jugador no asociado a la partida' }, status=status.HTTP_400_BAD_REQUEST)
+
+        next_idx = (current_idx + 1) % len(jugadores_ordenados)
+        expected_next_jugador_id = str(jugadores_ordenados[next_idx].jugador_id)
+        expected_next_numero = int(ronda_actual.numero) + 1
+
         updated_round = None
         if old_round_data:
-            ronda_actual = partida.rondas.filter(fin__isnull=True).order_by('numero').first()
-            if ronda_actual:
-                final_val = old_round_data.get('final')
-                inicio_val = old_round_data.get('inicio')
+            old_round_numero = old_round_data.get('numero')
+            old_round_jugador_id = old_round_data.get('jugador_id')
+            old_round_partida_id = old_round_data.get('partida_id')
+
+            if old_round_numero is not None:
                 try:
-                    if inicio_val:
-                        if isinstance(inicio_val, (int, float)):
-                            ronda_actual.inicio = datetime.fromtimestamp(inicio_val / 1000.0, tz=timezone.get_current_timezone())
-                        else:
-                            ronda_actual.inicio = datetime.fromisoformat(str(inicio_val))
-                    if final_val:
-                        if isinstance(final_val, (int, float)):
-                            ronda_actual.fin = datetime.fromtimestamp(final_val / 1000.0, tz=timezone.get_current_timezone())
-                        else:
-                            ronda_actual.fin = datetime.fromisoformat(str(final_val))
-                    else:
-                        ronda_actual.fin = timezone.now()
+                    old_round_numero_int = int(old_round_numero)
                 except Exception:
+                    return Response({ 'error': 'oldRound.numero debe ser un entero' }, status=status.HTTP_400_BAD_REQUEST)
+                if old_round_numero_int != int(ronda_actual.numero):
+                    return Response({ 'error': 'oldRound.numero no coincide con la ronda activa' }, status=status.HTTP_400_BAD_REQUEST)
+            if old_round_jugador_id and str(old_round_jugador_id) != str(ronda_actual.jugador_id):
+                return Response({ 'error': 'oldRound.jugador_id no coincide con la ronda activa' }, status=status.HTTP_400_BAD_REQUEST)
+            if old_round_partida_id and str(old_round_partida_id) != str(partida.id_partida):
+                return Response({ 'error': 'oldRound.partida_id no coincide con la partida de la ruta' }, status=status.HTTP_400_BAD_REQUEST)
+
+            final_val = old_round_data.get('final')
+            inicio_val = old_round_data.get('inicio')
+            try:
+                if inicio_val:
+                    if isinstance(inicio_val, (int, float)):
+                        ronda_actual.inicio = datetime.fromtimestamp(inicio_val / 1000.0, tz=timezone.get_current_timezone())
+                    else:
+                        ronda_actual.inicio = datetime.fromisoformat(str(inicio_val))
+                if final_val:
+                    if isinstance(final_val, (int, float)):
+                        ronda_actual.fin = datetime.fromtimestamp(final_val / 1000.0, tz=timezone.get_current_timezone())
+                    else:
+                        ronda_actual.fin = datetime.fromisoformat(str(final_val))
+                else:
                     ronda_actual.fin = timezone.now()
-                ronda_actual.save()
-                updated_round = ronda_actual
+            except Exception:
+                ronda_actual.fin = timezone.now()
+            ronda_actual.save()
+            updated_round = ronda_actual
 
         numero_nuevo = new_round_data.get('numero')
         inicio_nuevo = new_round_data.get('inicio')
         jugador_id_nuevo = new_round_data.get('jugador_id')
+        partida_id_nuevo = new_round_data.get('partida_id')
 
         if not all([numero_nuevo, jugador_id_nuevo]):
             return Response({ 'error': 'Faltan campos en newRoundCreated: numero y jugador_id son obligatorios' }, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            numero_nuevo_int = int(numero_nuevo)
+        except Exception:
+            return Response({ 'error': 'newRoundCreated.numero debe ser un entero' }, status=status.HTTP_400_BAD_REQUEST)
+
+        if partida_id_nuevo and str(partida_id_nuevo) != str(partida.id_partida):
+            return Response({ 'error': 'newRoundCreated.partida_id no coincide con la partida de la ruta' }, status=status.HTTP_400_BAD_REQUEST)
+
+        if str(jugador_id_nuevo) != expected_next_jugador_id:
+            return Response({
+                'error': 'newRoundCreated.jugador_id no coincide con el siguiente jugador esperado',
+                'jugador_esperado': expected_next_jugador_id,
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        if numero_nuevo_int != expected_next_numero:
+            return Response({
+                'error': 'newRoundCreated.numero no coincide con el numero de ronda esperado',
+                'numero_esperado': expected_next_numero,
+            }, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             jugador_nuevo = Jugador.objects.get(id_jugador=jugador_id_nuevo)
         except Jugador.DoesNotExist:
             return Response({ 'error': f'Jugador no encontrado: {jugador_id_nuevo}' }, status=status.HTTP_400_BAD_REQUEST)
 
-        new_round_id = f"R{numero_nuevo}_{partida.id_partida}"
+        if not JugadorPartida.objects.filter(partida=partida, jugador=jugador_nuevo).exists():
+            return Response({ 'error': 'El jugador no pertenece a la partida' }, status=status.HTTP_400_BAD_REQUEST)
+
+        new_round_id = f"R{numero_nuevo_int}_{partida.id_partida}"
 
         nueva_ronda = Ronda(
             id_ronda=new_round_id,
             jugador=jugador_nuevo,
-            numero=numero_nuevo,
+            numero=numero_nuevo_int,
             partida=partida
         )
         if inicio_nuevo:

@@ -463,6 +463,96 @@ class TestRegistrarMovimientos:
         res = api_client.post(f"/api/partidas/{p.id_partida}/registrar_movimientos/", payload, format="json")
         assert res.status_code == 400
 
+    def test_registrar_movimientos_falla_si_jugador_no_existe(self, api_client, make_jugador, make_partida, make_ronda, make_pieza):
+        j1 = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        p = make_partida(id_partida="P1", numero_jugadores=2)
+        t = make_ronda(id_ronda="R1", jugador=j1, numero=1, partida=p)
+        make_pieza(id_pieza="X1", jugador=j1, partida=p, posicion="0-4")
+
+        payload = {
+            "movimientos": [
+                {
+                    "jugador_id": "J_NO_EXISTE",
+                    "ronda_id": t.id_ronda,
+                    "partida_id": p.id_partida,
+                    "pieza_id": "X1",
+                    "origen": "0-4",
+                    "destino": "1-4",
+                }
+            ]
+        }
+
+        res = api_client.post(f"/api/partidas/{p.id_partida}/registrar_movimientos/", payload, format="json")
+        assert res.status_code == 400
+        assert "Jugador no encontrado" in str(res.data)
+
+    def test_registrar_movimientos_falla_si_pieza_no_existe(self, api_client, make_jugador, make_partida, make_ronda):
+        j1 = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        p = make_partida(id_partida="P1", numero_jugadores=2)
+        t = make_ronda(id_ronda="R1", jugador=j1, numero=1, partida=p)
+
+        payload = {
+            "movimientos": [
+                {
+                    "jugador_id": j1.id_jugador,
+                    "ronda_id": t.id_ronda,
+                    "partida_id": p.id_partida,
+                    "pieza_id": "X_NO_EXISTE",
+                    "origen": "0-4",
+                    "destino": "1-4",
+                }
+            ]
+        }
+
+        res = api_client.post(f"/api/partidas/{p.id_partida}/registrar_movimientos/", payload, format="json")
+        assert res.status_code == 400
+        assert "Pieza no encontrada" in str(res.data)
+
+    def test_registrar_movimientos_falla_si_ronda_no_existe(self, api_client, make_jugador, make_partida, make_pieza, make_ronda):
+        j1 = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        p = make_partida(id_partida="P1", numero_jugadores=2)
+        make_ronda(id_ronda="R1", jugador=j1, numero=1, partida=p)
+        make_pieza(id_pieza="X1", jugador=j1, partida=p, posicion="0-4")
+
+        payload = {
+            "movimientos": [
+                {
+                    "jugador_id": j1.id_jugador,
+                    "ronda_id": "R_NO_EXISTE",
+                    "partida_id": p.id_partida,
+                    "pieza_id": "X1",
+                    "origen": "0-4",
+                    "destino": "1-4",
+                }
+            ]
+        }
+
+        res = api_client.post(f"/api/partidas/{p.id_partida}/registrar_movimientos/", payload, format="json")
+        assert res.status_code == 400
+        assert "Ronda no encontrada" in str(res.data)
+
+    def test_registrar_movimientos_falla_si_destino_fuera_del_tablero(self, api_client, make_jugador, make_partida, make_ronda, make_pieza):
+        j1 = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
+        p = make_partida(id_partida="P1", numero_jugadores=2)
+        t = make_ronda(id_ronda="R1", jugador=j1, numero=1, partida=p)
+        make_pieza(id_pieza="X1", jugador=j1, partida=p, posicion="0-4")
+
+        payload = {
+            "movimientos": [
+                {
+                    "jugador_id": j1.id_jugador,
+                    "ronda_id": t.id_ronda,
+                    "partida_id": p.id_partida,
+                    "pieza_id": "X1",
+                    "origen": "0-4",
+                    "destino": "99-99",
+                }
+            ]
+        }
+
+        res = api_client.post(f"/api/partidas/{p.id_partida}/registrar_movimientos/", payload, format="json")
+        assert res.status_code == 400
+
 
 @pytest.mark.django_db
 class TestMovimientosQueryParams:
