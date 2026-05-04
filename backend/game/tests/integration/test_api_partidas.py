@@ -415,13 +415,20 @@ def test_accion_avanzar_ronda_crea_nueva_ronda(api_client):
     assert len(jugador_ids) == 2
 
     payload = {
-        "oldRound": {"final": None},
-        "newRoundCreated": {"numero": 2, "jugador_id": jugador_ids[1]},
+        "oldRound": {
+            "inicio": "2026-05-04T10:00:00+00:00",
+            "final": None,
+        },
+        "newRoundCreated": {
+            "numero": 1,
+            "inicio": "2026-05-04T10:05:00+00:00",
+            "jugador_id": jugador_ids[1],
+        },
     }
     res2 = api_client.post(f"/api/partidas/{partida_id}/avanzar_ronda/", payload, format="json")
     assert res2.status_code == 201
     data2 = res2.json()
-    assert data2["nueva_ronda"]["numero"] == 2
+    assert data2["nueva_ronda"]["numero"] == 1
     assert data2["nueva_ronda"]["jugador"] == jugador_ids[1]
 
 

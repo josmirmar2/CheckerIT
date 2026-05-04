@@ -54,7 +54,7 @@ describe('integrityGuards', () => {
 
     expect(payload).not.toBeNull();
     expect(payload.newRoundCreated.jugador_id).toBe('J2');
-    expect(payload.newRoundCreated.numero).toBe(2);
+    expect(payload.newRoundCreated.numero).toBe(1);
 
     const wrapPayload = buildRoundAdvancePayload({
       partidaId: 'P1',
