@@ -53,8 +53,7 @@ def generate_gemini_reply(
         raise GeminiError("El mensaje no puede estar vacío")
 
     contents: list[dict] = []
-    # Nota: la API v1 (y algunas variantes) pueden rechazar campos como `systemInstruction`.
-    # Para máxima compatibilidad, incorporamos el system prompt como un primer mensaje.
+
     if system_prompt and str(system_prompt).strip():
         contents.append({
             "role": "user",
@@ -127,12 +126,10 @@ def generate_gemini_reply(
             resp = _post_generate(model_path)
             last_resp = resp
 
-            # 404 se gestiona fuera (para auto-selección de modelo)
             if resp.status_code in retryable_statuses:
                 if attempt >= max_retries:
                     return resp
 
-                # Backoff exponencial con jitter suave
                 sleep_s = retry_backoff_seconds * (2 ** attempt)
                 sleep_s = sleep_s * random.uniform(0.8, 1.2)
                 if sleep_s > 0:
@@ -145,7 +142,6 @@ def generate_gemini_reply(
 
     resp = _request_with_retries(model_name)
 
-    # Si el modelo configurado no existe/no soporta generateContent, intenta auto-seleccionar.
     if resp.status_code == 404:
         try:
             data_404 = resp.json()
@@ -159,7 +155,6 @@ def generate_gemini_reply(
         else:
             raise GeminiHttpError(404, data_404)
 
-    # Errores HTTP con payload útil
     if resp.status_code >= 400:
         try:
             data = resp.json()
@@ -216,7 +211,6 @@ def _pick_model_from_list(*, api_key: str, api_version: str, timeout_seconds: in
     if not candidates:
         return None
 
-    # Preferencia: flash > resto
     def score(m: dict) -> tuple[int, int, int]:
         name = (m.get("name") or "").lower()
         return (

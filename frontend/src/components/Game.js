@@ -411,7 +411,6 @@ function Game() {
           if (ronda?.id_ronda) {
             setActualRound({ id_ronda: ronda.id_ronda, numero: ronda.numero, inicio: ronda.inicio });
             const rondaJugadorId = ronda.jugador_id || ronda.jugador?.id_jugador || ronda.jugador;
-            console.log(`📍 Ronda cargada: numero=${ronda.numero}, jugador=${rondaJugadorId}`);
 
             if (rondaJugadorId && dbJugadores.length > 0) {
               const jugadorDeLaRonda = dbJugadores.find(j => j.id_jugador === rondaJugadorId);
@@ -419,7 +418,6 @@ function Game() {
                 const idx = dbJugadores.findIndex(j => j.id_jugador === jugadorDeLaRonda.id_jugador);
                 if (idx >= 0) {
                   setCurrentPlayerIndex(idx);
-                  console.log(`👤 Jugador establecido al jugador ${jugadorDeLaRonda.numero}`);
                 }
               }
             }
@@ -450,10 +448,8 @@ function Game() {
               })
               .then(res => res.json())
               .then(data => {
-                console.log('Posiciones iniciales actualizadas:', data);
               });
             } else {
-              console.log('Partida ya tiene rondas, no se resetean posiciones');
             }
           })
           .catch(error => {
@@ -726,7 +722,6 @@ function Game() {
 
       const { oldRound, newRoundCreated, nextNumero } = securePayload;
 
-      console.log(`📊 Nueva ronda a crear: numero=${newRoundCreated.numero}`);
       
       const res = await fetch(url, {
         method: 'POST',
@@ -739,7 +734,6 @@ function Game() {
       }
       const data = await res.json();
       const nuevaRonda = data?.nueva_ronda || data;
-      console.log(`✅ Ronda actualizada en servidor: numero=${nuevaRonda?.numero}`);
       if (nuevaRonda?.id_ronda) {
         setActualRound({ id_ronda: nuevaRonda.id_ronda, numero: nuevaRonda.numero, inicio: nuevaRonda.inicio });
         const nextPlayerIdx = dbJugadores.findIndex(j => j.numero === nextNumero);
@@ -772,7 +766,6 @@ function Game() {
         console.warn('No hay movimientos completos para registrar');
         return;
       }
-      console.log('Guardando movimientos IMP:', movimientos);
       const url = `http://localhost:8000/api/partidas/${partida.id_partida}/registrar_movimientos/`; //TODO
       const response = await fetch(url, {
         method: 'POST',
@@ -800,7 +793,6 @@ function Game() {
     }
     if (!roundStartPieceByPos) {
       setRoundStartPieceByPos(new Map(pieceByPos));
-      console.log('📸 Snapshot de pieceByPos guardado en Game.js:', pieceByPos);
     }
     const origenKey = `${move.from.col}-${move.from.fila}`;
     const piezaId = move.pieza_id ?? pieceByPos.get(origenKey) ?? null;
@@ -837,7 +829,6 @@ function Game() {
     
     if (roundStartPieceByPos) {
       setPieceByPos(new Map(roundStartPieceByPos));
-      console.log('🔄 pieceByPos restaurado desde snapshot en Game.js:', roundStartPieceByPos);
     }
   };
 
@@ -896,7 +887,6 @@ function Game() {
     if (isPaused) return;
 
     const autoAdvance = async () => {
-      console.log('🤖 Auto-avanzando ronda del agente Inteligente...');
       await continueRound();
     };
 

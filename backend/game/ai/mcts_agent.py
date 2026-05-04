@@ -10,16 +10,6 @@ from montecarlo.node import Node
 from ..models import JugadorPartida, Movimiento, Pieza, Ronda
 from .max_agent import (AXIAL_DIRECTIONS,GOAL_POSITIONS,POSITION_TO_CARTESIAN,_axial_from_key,_distance_to_goal,_key_from_axial,_parse_punta,_target_punta)
 
-# Nota de diseño
-# --------------
-# Este agente modela una *acción* como un turno completo: mover exactamente 1 pieza.
-# Ese turno puede ser:
-# - Un movimiento simple (adyacente a casilla vacía)
-# - Una cadena de saltos con la misma pieza (cada salto colineal y cayendo en casilla vacía)
-#
-# Es decir, una cadena de saltos cuenta como "un único movimiento" a ojos del MCTS.
-# La legalidad real de cada paso se valida en backend (ver views.py); aquí generamos
-# candidatos legales en memoria para que el MCTS explore opciones válidas.
 
 
 @dataclass(frozen=True)
@@ -33,7 +23,7 @@ class TurnMove:
     """
 
     pieza_id: str
-    sequence: Tuple[str, ...]  # [origen, destino1, destino2, ...] (último = destino final)
+    sequence: Tuple[str, ...] 
 
     @property
     def origen(self) -> str:
@@ -65,7 +55,7 @@ class GameState:
 
     player_order: Tuple[str, ...]
     current_player_index: int
-    player_targets: Tuple[Tuple[str, int], ...]  # (jugador_id, target_punta)
+    player_targets: Tuple[Tuple[str, int], ...]  
     pieces: Tuple[_PieceTuple, ...]
 
     @property
@@ -136,7 +126,6 @@ class GameState:
             return 0.0
         other_avg = sum(others) / float(len(others))
         denom = other_avg + my_total + 1e-6
-        # cuanto menor es my_total respecto a otros, mejor
         score = (other_avg - my_total) / denom
         return max(-1.0, min(1.0, score))
 
@@ -172,8 +161,6 @@ class _LibState:
 
     game: GameState
     last_move: Optional[TurnMove] = None
-    # Profundidad (en turnos) desde la raíz del árbol. Es informativa y permite
-    # extender el agente fácilmente (p.ej. para limitar rollouts) sin tocar GameState.
     ply: int = 0
 
     def apply(self, move: TurnMove) -> "_LibState":
@@ -330,7 +317,6 @@ class MCTSAgent:
         if not partida_id or not jugador_id:
             raise ValueError("partida_id y jugador_id son requeridos")
 
-        # Ronda activa debe corresponder al jugador
         ronda_actual = (
             Ronda.objects.filter(partida_id=partida_id, fin__isnull=True)
             .order_by("numero")
@@ -354,7 +340,6 @@ class MCTSAgent:
         )
         player_order = tuple(str(p.jugador_id) for p in participaciones)
         if not player_order:
-            # fallback mínimo
             player_order = tuple(sorted({str(p.jugador_id) for p in piezas if p.jugador_id}))
 
         try:
@@ -362,7 +347,6 @@ class MCTSAgent:
         except ValueError:
             current_index = 0
 
-        # objetivo por jugador (según el tipo de sus piezas)
         targets: List[Tuple[str, int]] = []
         seen: set[str] = set()
         for p in piezas:
@@ -393,7 +377,6 @@ class MCTSAgent:
             pieces=piece_tuples,
         )
 
-        # La librería usa el módulo random global internamente.
         if seed is not None:
             random.seed(seed)
 
@@ -405,9 +388,6 @@ class MCTSAgent:
         root_node = Node(root_lib_state)
         root_node.player_number = root_state.current_player_id
 
-        # Algunas versiones de la librería exponen `discovery_factor` para el término
-        # de exploración (tipo UCT). Lo conectamos si existe para que el parámetro
-        # `exploration` del endpoint tenga efecto sin romper compatibilidad.
         if hasattr(root_node, "discovery_factor"):
             setattr(root_node, "discovery_factor", float(exploration))
 
@@ -416,7 +396,6 @@ class MCTSAgent:
         def child_finder(node: Node, _mc: MonteCarlo) -> None:
             state: _LibState = node.state
             current_player = state.game.current_player_id
-            # Para el nodo raíz respetamos allow_simple del endpoint; en el resto de turnos permitimos simples.
             allow_simple_local = allow_simple if node is montecarlo.root_node else True
 
             moves = legal_turn_moves(state.game, current_player, allow_simple=allow_simple_local)
@@ -430,7 +409,6 @@ class MCTSAgent:
 
         def node_evaluator(node: Node, _mc: MonteCarlo) -> float:
             state: _LibState = node.state
-            # Valor siempre desde la perspectiva del jugador raíz (la librería invierte en turnos rivales).
             return float(state.game.evaluate(root_player_id=str(jugador_id)))
 
         montecarlo.child_finder = child_finder
@@ -456,11 +434,9 @@ class MCTSAgent:
                 for i in range(len(chosen_move.sequence) - 1)
             ]
 
-        # valor esperado (informativo): promedio de win_value/visits del hijo elegido
         if getattr(chosen_child, "visits", 0):
             payload["puntuacion"] = float(chosen_child.win_value / float(chosen_child.visits))
 
-        # anti-oscillación leve: evita deshacer el último movimiento si hay alternativas
         last_move = (
             Movimiento.objects.filter(partida_id=partida_id, jugador_id=jugador_id)
             .select_related("ronda", "pieza")

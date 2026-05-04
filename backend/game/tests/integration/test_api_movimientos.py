@@ -216,7 +216,6 @@ class TestRegistrarMovimientos:
         p = make_partida(id_partida="P1", numero_jugadores=2)
         r = make_ronda(id_ronda="R1", jugador=j, numero=1, partida=p)
 
-        # 0-4 -> 2-4 sería un salto si 1-4 estuviera ocupado. Aquí NO lo está.
         pieza = make_pieza(id_pieza="X1", jugador=j, partida=p, posicion="0-4")
 
         payload = {
@@ -242,7 +241,6 @@ class TestRegistrarMovimientos:
 
         pieza = make_pieza(id_pieza="X1", jugador=j, partida=p, posicion="0-4")
         make_pieza(id_pieza="B1", jugador=j, partida=p, posicion="1-4")
-        # La casilla de aterrizaje está ocupada: salto prohibido.
         make_pieza(id_pieza="BLOCK", jugador=j, partida=p, posicion="2-4")
 
         payload = {
@@ -267,7 +265,6 @@ class TestRegistrarMovimientos:
         r = make_ronda(id_ronda="R1", jugador=j, numero=1, partida=p)
 
         pieza = make_pieza(id_pieza="X1", jugador=j, partida=p, posicion="0-4")
-        # Ponemos una pieza vecina para que "parezca" un salto, pero el destino no es colineal.
         make_pieza(id_pieza="B1", jugador=j, partida=p, posicion="1-4")
 
         payload = {
@@ -316,7 +313,6 @@ class TestRegistrarMovimientos:
 
         pieza = make_pieza(id_pieza="X1", jugador=j, partida=p, posicion="0-4")
         make_pieza(id_pieza="B1", jugador=j, partida=p, posicion="1-4")
-        # OJO: no creamos pieza en 3-4, así que el segundo salto (2-4 -> 4-4) es inválido.
 
         payload = {
             "movimientos": [
@@ -349,10 +345,8 @@ class TestRegistrarMovimientos:
         p = make_partida(id_partida="P1", numero_jugadores=2)
         t = make_ronda(id_ronda="R1", jugador=j, numero=1, partida=p)
 
-        # Pieza a mover
         pieza = make_pieza(id_pieza="X1", jugador=j, partida=p, posicion="0-4")
 
-        # Piezas intermedias para permitir saltos: 0-4 -> 2-4 (sobre 1-4) -> 4-4 (sobre 3-4)
         make_pieza(id_pieza="B1", jugador=j, partida=p, posicion="1-4")
         make_pieza(id_pieza="B2", jugador=j, partida=p, posicion="3-4")
 
@@ -395,7 +389,6 @@ class TestRegistrarMovimientos:
         make_pieza(id_pieza="B1", jugador=j, partida=p, posicion="1-4")
         make_pieza(id_pieza="B2", jugador=j, partida=p, posicion="3-4")
 
-        # El frontend puede enviar directamente el destino final de un salto encadenado.
         payload = {
             "movimientos": [
                 {

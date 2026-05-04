@@ -8,23 +8,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/5.0/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-change-this-in-production')
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.getenv('DEBUG', 'True') == 'True'
 
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 
-# Application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -69,11 +61,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'checkerit.wsgi.application'
 
-
-# Database
-# https://docs.djangoproject.com/en/5.0/ref/settings/#databases
-
-# Usar variable de entorno para elegir entre SQLite y PostgreSQL
 USE_POSTGRESQL = os.getenv('USE_POSTGRESQL', 'False') == 'True'
 
 if USE_POSTGRESQL:
@@ -91,17 +78,12 @@ if USE_POSTGRESQL:
         }
     }
 else:
-    # Configuración SQLite para desarrollo
     DATABASES = {
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
         }
     }
-
-
-# Password validation
-# https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -118,10 +100,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
-# Internationalization
-# https://docs.djangoproject.com/en/5.0/topics/i18n/
-
 LANGUAGE_CODE = 'es-es'
 
 TIME_ZONE = 'Europe/Madrid'
@@ -130,24 +108,15 @@ USE_I18N = True
 
 USE_TZ = True
 
-
-# Static files (CSS, JavaScript, Images)
-# https://docs.djangoproject.com/en/5.0/howto/static-files/
-
 STATIC_URL = 'static/'
-
-# Default primary key field type
-# https://docs.djangoproject.com/en/5.0/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# CORS settings
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
 
-# REST Framework settings
 REST_FRAMEWORK = {
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
@@ -157,23 +126,16 @@ REST_FRAMEWORK = {
     ],
 }
 
-# Validación de movimientos
-# Por defecto, las reglas del juego (adyacente/salto/cadena) se validan en backend solo para agente Inteligente.
-# Si se quiere forzar también para humanos (p.ej. en producción), activar esta variable.
 ENFORCE_MOVE_VALIDATION_FOR_HUMANS = os.getenv('ENFORCE_MOVE_VALIDATION_FOR_HUMANS', 'False') == 'True'
 
-# Gemini (Google AI) - Chatbot
-# La clave debe ir en backend/.env (nunca en el frontend)
+
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
-# Si no se define, el backend intentará auto-seleccionar un modelo compatible.
 GEMINI_MODEL = os.getenv('GEMINI_MODEL')
-# API version: 'v1' (recomendado) o 'v1beta'
 GEMINI_API_VERSION = os.getenv('GEMINI_API_VERSION', 'v1')
 GEMINI_TIMEOUT_SECONDS = int(os.getenv('GEMINI_TIMEOUT_SECONDS', '15'))
 GEMINI_MAX_RETRIES = int(os.getenv('GEMINI_MAX_RETRIES', '2'))
 GEMINI_RETRY_BACKOFF_SECONDS = float(os.getenv('GEMINI_RETRY_BACKOFF_SECONDS', '0.6'))
 
-# Restricciones / comportamiento del chatbot
 GEMINI_SYSTEM_PROMPT = os.getenv(
     'GEMINI_SYSTEM_PROMPT',
     (
@@ -188,9 +150,7 @@ GEMINI_TEMPERATURE = float(os.getenv('GEMINI_TEMPERATURE', '0.2'))
 GEMINI_MAX_OUTPUT_TOKENS = int(os.getenv('GEMINI_MAX_OUTPUT_TOKENS', '1024'))
 CHATBOT_MAX_INPUT_CHARS = int(os.getenv('CHATBOT_MAX_INPUT_CHARS', '400'))
 
-# Restricción de dominio (hard gate en backend)
 CHATBOT_DOMAIN_ENFORCE = os.getenv('CHATBOT_DOMAIN_ENFORCE', 'True') == 'True'
-# Lista de palabras clave permitidas (separadas por coma). Si está vacío, se usa un conjunto por defecto.
 CHATBOT_DOMAIN_KEYWORDS = os.getenv('CHATBOT_DOMAIN_KEYWORDS', '')
 CHATBOT_REFUSAL_MESSAGE = os.getenv(
     'CHATBOT_REFUSAL_MESSAGE',

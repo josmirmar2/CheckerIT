@@ -324,8 +324,7 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
     next[from.fila][from.col] = next[to.fila][to.col];
     next[to.fila][to.col] = null;
     setBoardPieces(next);
-    console.log('↩️ Movimiento deshecho:', last);
-    console.log('🔙 Estado del tablero después de deshacer:', next);
+
     
     const oldKey = `${to.col}-${to.fila}`;
     const newKey = `${from.col}-${from.fila}`;
@@ -335,7 +334,6 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
         const newMap = new Map(prevMap);
         newMap.delete(oldKey);
         newMap.set(newKey, piezaIdToRestore);
-        console.log('🔄 pieceMapLocal actualizado al deshacer:', { piezaId: piezaIdToRestore, vuelveA: newKey, desdePos: oldKey });
         return newMap;
       });
 
@@ -356,11 +354,9 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
     
     if (turnStartPieceMap) {
       setPieceMapLocal(new Map(turnStartPieceMap));
-      console.log('🔄 pieceMapLocal restaurado desde snapshot de la ronda:', turnStartPieceMap);
     }
     if (turnStartPositionsList) {
       setPositionsList([...turnStartPositionsList]);
-      console.log('🔄 positionsList restaurado desde snapshot de la ronda:', turnStartPositionsList);
     }
     
     if (initialBoardState) {
@@ -460,7 +456,6 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
           }
         }
         newMap.set(newKey, idToMove);
-        console.log('🔄 pieceMapLocal actualizado:', { piezaId: idToMove, from: originKey, to: newKey });
         return newMap;
       });
     }
@@ -515,7 +510,6 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                     const possibleMoves = getValidMovesFrom(key, boardPieces, allowSimple);
                     setValidMoves(possibleMoves);
                     setSelectedPieceColor(BOARD_COLORS[ownerPunta]);
-                    console.log('🎯 Movimientos válidos desde', key, ':', possibleMoves);
                     
                     const fetchPieceId = async () => {
                       try {
@@ -531,7 +525,6 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                         const pieza = piezas.find(p => p.posicion === key);
                         if (pieza) {
                           setSelectedPieceId(pieza.id_pieza);
-                          console.log('🎯 Pieza seleccionada:', { posicion: key, piezaId: pieza.id_pieza, jugador: jugadorDb.id_jugador });
                         } else {
                           const altKey = `${filaIdx}-${colIdx}`;
                           let resolvedId = null;
@@ -610,7 +603,6 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                       setTurnStartBoardState(boardPieces);
                       setTurnStartPieceMap(new Map(pieceMapLocal));
                       setTurnStartPositionsList([...positionsList]);
-                      console.log('📸 Snapshot guardado al inicio de la ronda:', { pieceMapLocal, positionsList });
                     }
                     
                     setBoardPieces(next);
@@ -622,15 +614,12 @@ const Board = ({ jugadoresConfig, dbJugadores = [], currentPlayerIndex = 0, part
                     if (moveHistory.length === 0 && wasSimpleMove) {
                       setFirstMoveWasSimple(true);
                       setValidMoves([]);
-                      console.log('⛔ Primer movimiento fue simple, no se permiten más movimientos');
                     } else {
                       const newPossibleMoves = getValidMovesFrom(destinationKey, next, false);
                       setValidMoves(newPossibleMoves);
-                      console.log('🎯 Movimientos válidos actualizados desde', destinationKey, ':', newPossibleMoves);
                     }
                     
                     if (onMove) {
-                      console.log('➡️ Movimiento realizado desde Board:', { from: { fila, col }, to: { fila: filaIdx, col: colIdx }, occupant: movingPunta, boardState: next, pieza_id: piezaId });
                       setSelectedPieceId(piezaId);
                       onMove({ from: { fila, col }, to: { fila: filaIdx, col: colIdx }, occupant: movingPunta, boardState: boardPieces, pieza_id: piezaId });
                     }

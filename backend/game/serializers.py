@@ -56,7 +56,6 @@ class JugadorPartidaSerializer(serializers.ModelSerializer):
             if existing_pair.exists():
                 raise serializers.ValidationError({'jugador': 'El jugador ya está inscrito en esta partida'})
 
-            # Evitar duplicar el numero de jugador dentro de la misma partida.
             numero = getattr(jugador, 'numero', None)
             if numero is not None:
                 existing = JugadorPartida.objects.filter(partida=partida, jugador__numero=numero)
@@ -114,9 +113,6 @@ class MovimientoSerializer(serializers.ModelSerializer):
                     'origen': 'El origen debe coincidir con la posición actual de la pieza'
                 })
 
-        # La ocupación del destino debe comprobarse en la misma partida del movimiento.
-        # Priorizamos ronda.partida (contexto real del movimiento) y, solo si no existe,
-        # usamos partida o pieza.partida.
         partida_ctx = None
         if ronda is not None:
             partida_ctx = ronda.partida

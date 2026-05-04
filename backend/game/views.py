@@ -331,7 +331,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
 
-        # Determinar/validar numero_jugadores
         if numero_jugadores_raw is None:
             numero_jugadores = len(jugadores_data)
         else:
@@ -349,7 +348,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
-        # Validar que no se repitan numeros de jugador dentro de la partida (p.ej. dos numero=1)
         numeros = []
         for idx, jugador_data in enumerate(jugadores_data):
             numero_raw = jugador_data.get('numero', idx + 1)
@@ -444,7 +442,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
         
         puntas_activas = puntas_activas_map.get(partida.numero_jugadores, [0, 3])
         
-        # Obtener todas las participaciones de la partida ordenadas
         participaciones = JugadorPartida.objects.filter(partida=partida).order_by('orden_participacion')
         
         piezas_actualizadas = 0
@@ -454,10 +451,8 @@ class PartidaViewSet(viewsets.ModelViewSet):
             punta_asignada = puntas_activas[punta_index]
             posiciones = posiciones_por_punta.get(punta_asignada, posiciones_por_punta[0])
             
-            # Obtener las piezas del jugador en esta partida
             piezas = Pieza.objects.filter(jugador=participacion.jugador, partida=partida).order_by('id_pieza')
             
-            # Actualizar cada pieza con su posición inicial
             for i, pieza in enumerate(piezas[:10]):
                 if i < len(posiciones):
                     pieza.posicion = posiciones[i]
@@ -530,7 +525,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
 
                 enforce_move_rules = (not bool(getattr(jugador, 'humano', False))) or bool(getattr(settings, 'ENFORCE_MOVE_VALIDATION_FOR_HUMANS', False))
 
-                # Validaciones de ronda/jugador/pieza
                 if str(ronda.partida_id) != expected_partida_id:
                     return Response({ 'error': 'La ronda no pertenece a la partida' }, status=status.HTTP_400_BAD_REQUEST)
                 if ronda.fin is not None:
@@ -596,7 +590,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
                             'destino': destino
                         }, status=status.HTTP_400_BAD_REQUEST)
                 else:
-                    # Humanos: validación mínima de consistencia (las reglas se validan en frontend)
                     if not coord_from_key(origen):
                         return Response({ 'error': f'Origen fuera del tablero: {origen}', 'origen': origen }, status=status.HTTP_400_BAD_REQUEST)
                     if not coord_from_key(destino):
@@ -606,7 +599,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
                     if destino in occupied_positions:
                         return Response({ 'error': 'El destino está ocupado', 'destino': destino }, status=status.HTTP_400_BAD_REQUEST)
 
-                    # Si el humano envía un destino final de una cadena de saltos, intentamos expandirla.
                     if (not chain_mode) and idx == 1:
                         path = find_jump_chain_path(origen, destino, occupied_positions)
                         if path and len(path) >= 2:
@@ -614,7 +606,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
                                 step_origen = path[step_i]
                                 step_destino = path[step_i + 1]
 
-                                # Validación mínima por paso: origen ocupado y destino libre.
                                 if step_origen not in occupied_positions:
                                     return Response({ 'error': 'No hay pieza en el origen', 'origen': step_origen }, status=status.HTTP_400_BAD_REQUEST)
                                 if step_destino in occupied_positions:
@@ -651,7 +642,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 )
                 created.append(mov)
 
-                # Guardar el último destino de esta pieza (en caso de movimientos encadenados)
                 piece_positions[pieza_id] = (pieza, destino)
                 
             except Jugador.DoesNotExist:
@@ -663,7 +653,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
             except Exception as e:
                 return Response({ 'error': str(e) }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Guardar posiciones finales de TODAS las piezas movidas
         for pieza, destino in piece_positions.values():
             pieza.posicion = destino
             pieza.save()
@@ -703,8 +692,6 @@ class PartidaViewSet(viewsets.ModelViewSet):
 
         next_idx = (current_idx + 1) % len(jugadores_ordenados)
         expected_next_jugador_id = str(jugadores_ordenados[next_idx].jugador_id)
-        # Sólo incrementar el número de ronda cuando se cierra un ciclo
-        # (es decir, cuando el siguiente jugador es el primero de la lista - wraparound)
         expected_next_numero = int(ronda_actual.numero) + 1 if next_idx == 0 else int(ronda_actual.numero)
 
         updated_round = None
@@ -767,8 +754,7 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 'jugador_esperado': expected_next_jugador_id,
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        # Aceptar el mismo numero si aún no se completó el ciclo, o el siguiente numero
-        # cuando se ha hecho wraparound al primer jugador.
+
         allowed_numeros = {int(ronda_actual.numero)}
         if next_idx == 0:
             allowed_numeros.add(int(ronda_actual.numero) + 1)
@@ -892,15 +878,11 @@ class PartidaViewSet(viewsets.ModelViewSet):
         """
         partida = self.get_object()
         
-        # Obtener todos los jugadores de esta partida
         jugadores_partida = JugadorPartida.objects.filter(partida=partida)
         jugadores_ids = [jp.jugador.id_jugador for jp in jugadores_partida]
         
-        # Eliminar la partida (esto eliminará en cascada: rondas, movimientos, piezas, JugadorPartida)
         partida.delete()
-        
-        # Eliminar los jugadores que fueron creados para esta partida
-        # (esto eliminará en cascada sus agentes Inteligentes y Chatbots asociados)
+
         Jugador.objects.filter(id_jugador__in=jugadores_ids).delete()
         
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -1038,7 +1020,6 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         s = str(lang).strip().lower()
         if not s:
             return 'es'
-        # Aceptar formatos tipo en-US, es-ES, en_US
         s = s.replace('_', '-')
         base = s.split('-')[0]
         if base in {'en', 'es'}:
@@ -1058,11 +1039,9 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         if not text:
             return None
 
-        # Señales fuertes de español
         if any(ch in text for ch in ("¿", "¡", "ñ", "á", "é", "í", "ó", "ú", "ü")):
             return 'es'
 
-        # Tokenización simple de palabras latinas (incluye tildes)
         words = re.findall(r"[a-záéíóúüñ']+", text)
         if not words:
             return None
@@ -1086,13 +1065,11 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         es_hits = sum(1 for w in words if w in es_markers)
         en_hits = sum(1 for w in words if w in en_markers)
 
-        # Si hay una señal clara, decidir.
         if es_hits >= en_hits + 2:
             return 'es'
         if en_hits >= es_hits + 2:
             return 'en'
 
-        # Señales suaves: saludos cortos
         if text in {'hola', 'buenas'}:
             return 'es'
         if text in {'hi', 'hello'}:
@@ -1116,7 +1093,6 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         return 'Responde SOLO en español. No uses inglés.'
 
     def _refusal_message(self, lang: str) -> str:
-        # Si se configura explícitamente, respetar ese texto.
         configured = getattr(settings, 'CHATBOT_REFUSAL_MESSAGE', None)
         if configured:
             return str(configured)
@@ -1141,11 +1117,9 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             return ""
         s = str(text)
 
-        # Quitar marcas típicas de negrita Markdown conservando el contenido.
         s = re.sub(r"\*\*(.+?)\*\*", r"\1", s, flags=re.DOTALL)
         s = re.sub(r"__(.+?)__", r"\1", s, flags=re.DOTALL)
 
-        # Si quedaron marcadores sueltos, eliminarlos.
         s = s.replace("**", "").replace("__", "")
         return s
 
@@ -1663,7 +1637,6 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 )
             return respuesta, {"tipo": "reglas_juego"}
 
-        # Desactivado: no se ofrece la funcionalidad de "movimientos posibles" desde el chatbot.
         if wants_possible and not wants_best:
             if lang == 'en':
                 return (
@@ -1691,7 +1664,6 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 {"tipo": "faltan_parametros"},
             )
 
-        # Validar existencia de partida/jugador y    evitar respuestas confusas
         if not Partida.objects.filter(id_partida=str(partida_id)).exists():
             if lang == 'en':
                 return (f"Invalid partida_id: {partida_id}", {"tipo": "error", "campo": "partida_id"})
@@ -1736,7 +1708,6 @@ class ChatbotViewSet(viewsets.ModelViewSet):
 
             return respuesta, {"tipo": "mejor_jugada", "sugerencia": sugerencia}
 
-        # Nota: el caso de movimientos posibles se gestiona arriba como "no disponible".
 
     def _send_and_persist(
         self,
@@ -1759,10 +1730,8 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             mensaje = ''
         mensaje = str(mensaje)
 
-        # Idioma: priorizar detección por contenido del mensaje.
         detected = self._detect_lang_from_message(mensaje)
-        # Si la detección no fue concluyente, realizar una pasada adicional
-        # basada en palabras clave comunes en inglés para preguntas sueltas.
+
         if detected is None:
             text_for_detection = str(mensaje or '').strip().lower()
             words_simple = re.findall(r"[a-z]+", text_for_detection)
@@ -1771,7 +1740,6 @@ class ChatbotViewSet(viewsets.ModelViewSet):
 
         lang_norm = self._normalize_lang(detected or lang or (chatbot.memoria or {}).get('lang'))
 
-        # Persistir idioma preferido por conversación para siguientes turnos.
         if isinstance(chatbot.memoria, dict):
             chatbot.memoria['lang'] = lang_norm
 
@@ -1784,7 +1752,6 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         if len(mensaje) > max_chars:
             respuesta = self._friendly_gemini_reply(reason='too_long', lang=lang_norm)
 
-        # Si el mensaje pide ayuda de jugadas/movimientos y se aporta contexto, responder sin Gemini.
         respuesta_local, extra = (None, None)
         if respuesta is None:
             respuesta_local, extra = self._maybe_answer_game_help(
@@ -1799,11 +1766,9 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 respuesta = respuesta_local
 
         if respuesta is None:
-            # Hard gate: si se fuerza dominio y el mensaje no es del dominio, responder sin IA
             if getattr(settings, 'CHATBOT_DOMAIN_ENFORCE', True) and not self._is_in_domain(mensaje):
                 respuesta = self._refusal_message(lang_norm)
             elif not api_key:
-                # Fallback para entornos sin configuración de Gemini (tests, dev)
                 if lang_norm == 'en':
                     respuesta = f"Chatbot reply to: {mensaje}"
                 else:
@@ -1837,7 +1802,6 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         if 'conversaciones' not in chatbot.memoria:
             chatbot.memoria['conversaciones'] = []
 
-        # Persistir estado útil para "muéstramelo"
         if isinstance(extra, dict):
             if extra.get("tipo") == "mejor_jugada" and isinstance(extra.get("sugerencia"), dict):
                 chatbot.memoria["last_best_move"] = extra.get("sugerencia")
@@ -1873,7 +1837,6 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         pieza_id = request.data.get('pieza_id')
         lang = request.data.get('lang') or request.data.get('language') or request.data.get('idioma')
 
-        # Determinar si es una partida de demo
         is_demo = False
         if partida_id:
             try:
@@ -1882,19 +1845,16 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             except Partida.DoesNotExist:
                 pass
 
-        # Validar que el jugador sea humano, a menos que sea una partida de Demo
         if partida_id and jugador_id and not is_demo:
             try:
                 jugador = Jugador.objects.get(id_jugador=jugador_id)
                 
-                # Si NO es una partida de Demo y el jugador es una IA, rechazar el mensaje
                 if not jugador.humano:
                     return Response(
                         {'error': 'Los agentes inteligentes no pueden usar el chatbot'},
                         status=status.HTTP_403_FORBIDDEN
                     )
             except Jugador.DoesNotExist:
-                # Si no existe, dejar continuar
                 pass
 
         if chatbot_id:
@@ -1903,11 +1863,8 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             except Chatbot.DoesNotExist:
                 return Response({'error': 'chatbot_id no válido'}, status=status.HTTP_400_BAD_REQUEST)
 
-            # Si se aporta contexto de partida/jugador y el chatbot_id no corresponde,
-            # cambiar automáticamente al chatbot asociado a ese (partida, jugador).
             if partida_id:
-                # Para demos: filtrar solo por partida_id
-                # Para no-demos: filtrar por (partida_id, jugador_id)
+
                 if is_demo:
                     if str(getattr(chatbot, 'partida_id', '') or '') != str(partida_id):
                         chatbot = (
@@ -1930,10 +1887,8 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                             if chatbot is None:
                                 chatbot = Chatbot.objects.create(partida_id=str(partida_id), jugador_id=str(jugador_id))
         else:
-            # Preferir un chatbot por partida (si es demo) o (partida, jugador) si no es demo
             if partida_id:
                 if is_demo:
-                    # Para demos: buscar chatbot de la partida sin jugador específico
                     chatbot = (
                         Chatbot.objects
                         .filter(partida_id=str(partida_id), jugador_id__isnull=True)
@@ -1943,7 +1898,6 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                     if chatbot is None:
                         chatbot = Chatbot.objects.create(partida_id=str(partida_id), jugador_id=None)
                 else:
-                    # Para no-demos: buscar chatbot por (partida_id, jugador_id)
                     if jugador_id:
                         chatbot = (
                             Chatbot.objects
@@ -2008,7 +1962,6 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         if not partida_id:
             return Response({'error': 'partida_id es requerido'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Determinar si es una partida de demo
         is_demo = False
         try:
             partida = Partida.objects.get(id_partida=partida_id)
@@ -2016,8 +1969,6 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         except Partida.DoesNotExist:
             return Response({'error': 'partida_id no válido'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Para demos: buscar chatbot solo por partida_id (sin jugador_id)
-        # Para no-demos: buscar por (partida_id, jugador_id)
         if is_demo:
             chatbot = (
                 Chatbot.objects

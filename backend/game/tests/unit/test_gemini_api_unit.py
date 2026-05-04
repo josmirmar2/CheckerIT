@@ -28,7 +28,6 @@ def test_generate_gemini_reply_param_validation():
 
 
 def test_list_models_success_and_http_error(monkeypatch):
-    # success
     def fake_get_ok(*_a, **_k):
         class R:
             status_code = 200
@@ -42,7 +41,6 @@ def test_list_models_success_and_http_error(monkeypatch):
     models = gemini_api._list_models(api_key="k", api_version="v1", timeout_seconds=1)
     assert isinstance(models, list) and models
 
-    # http error
     def fake_get_err(*_a, **_k):
         class R:
             status_code = 400
@@ -62,7 +60,6 @@ def test_list_models_success_and_http_error(monkeypatch):
 
 
 def test_pick_model_from_list_scoring(monkeypatch):
-    # Provide several models to check scoring preference
     models = [
         {"name": "models/other", "supportedGenerationMethods": ["generateContent"]},
         {"name": "models/gemini-old", "supportedGenerationMethods": ["generateContent"]},
@@ -88,7 +85,6 @@ def test_get_or_pick_model_no_models_raises(monkeypatch):
 
 
 def test_generate_gemini_reply_404_without_pick_raises(monkeypatch):
-    # Simulate post returning 404 and pick_model returns None
     class R404:
         status_code = 404
 

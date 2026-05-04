@@ -38,7 +38,6 @@ def test_movimiento_serializer_origen_must_match_pieza():
     p = Partida.objects.create(id_partida='P3', numero_jugadores=2)
     j = Jugador.objects.create(id_jugador='J2', nombre='J2', humano=True)
     pieza = Pieza.objects.create(id_pieza='PX', tipo='f', posicion='0-0', jugador=j, partida=p)
-    # Crear una ronda válida para pasar la validación previa
     from game.models import Ronda as RModel
     ronda = RModel.objects.create(id_ronda='RR1', jugador=j, numero=1, partida=p)
 
@@ -55,7 +54,6 @@ def test_jugadorpartida_serializer_limits_and_duplicates():
     j2 = Jugador.objects.create(id_jugador='B', nombre='B', humano=True, numero=2)
     j3 = Jugador.objects.create(id_jugador='C', nombre='C', humano=True, numero=3)
 
-    # fill limit
     JugadorPartida.objects.create(jugador=j1, partida=p, orden_participacion=1)
     JugadorPartida.objects.create(jugador=j2, partida=p, orden_participacion=2)
 

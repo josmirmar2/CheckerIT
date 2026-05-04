@@ -61,7 +61,6 @@ def test_chatbot_send_message_uses_gemini_and_persists(settings, monkeypatch):
     assert res.data["respuesta"] == "Respuesta de prueba"
     assert res.data["chatbot_id"]
 
-    # Segunda llamada: debe mantener chatbot_id y no fallar
     chatbot_id = res.data["chatbot_id"]
     res2 = client.post(
         "/api/chatbot/send_message/",

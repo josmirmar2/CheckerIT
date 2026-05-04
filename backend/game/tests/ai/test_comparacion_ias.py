@@ -107,8 +107,6 @@ def _pieces_in_goal(partida_id: str, jugador_id: str) -> int:
     target = _player_target(partida_id, jugador_id)
     if target is None:
         return 0
-    # GOAL_POSITIONS está en max_agent, pero aquí no necesitamos el set exacto; basta con contar d==0? No.
-    # Usamos distancia 0 como pertenencia a alguna casilla meta.
     count = 0
     for p in Pieza.objects.filter(partida_id=partida_id, jugador_id=jugador_id).exclude(posicion__isnull=True):
         d = _distance_to_goal(str(p.posicion), int(target))
@@ -145,7 +143,7 @@ class PlayerStats:
     invalid_moves: int = 0
     total_dist_start: float = 0.0
     total_dist_end: float = 0.0
-    progress_sum: float = 0.0  # suma (dist_before - dist_after) en sus turnos
+    progress_sum: float = 0.0 
     in_goal_end: int = 0
 
     @property
@@ -164,7 +162,6 @@ class MatchResult:
     mcts: PlayerStats
 
     def winner_by_distance(self) -> str:
-        # "mejor" = mayor reducción de distancia total
         if self.heuristic.delta_total_dist > self.mcts.delta_total_dist:
             return "heuristica"
         if self.mcts.delta_total_dist > self.heuristic.delta_total_dist:
@@ -220,7 +217,6 @@ def run_match(turns: int, iterations_mcts: int, seed_base: int) -> MatchResult:
 
             dist_before = _total_distance_to_goal(partida.id_partida, jugador_id)
 
-            # Sugerir
             if is_heur:
                 payload = heuristic_agent.suggest_move(partida_id=partida.id_partida, jugador_id=jugador_id, allow_simple=True)
             else:
@@ -244,14 +240,12 @@ def run_match(turns: int, iterations_mcts: int, seed_base: int) -> MatchResult:
             if not steps or not all(o and d for o, d in steps):
                 raise RuntimeError("El agente Inteligente no devolvió origen/destino")
 
-            # coherencia: el primer origen debe coincidir con la posición actual de la pieza
             pieza.refresh_from_db()
             if str(steps[0][0]) != str(pieza.posicion):
                 raise RuntimeError(
                     f"Origen sugerido no coincide con pieza.posicion: sugerido={steps[0][0]} actual={pieza.posicion}"
                 )
 
-            # validar y aplicar
             occupied = set(get_occupied_positions(partida.id_partida))
             chain_mode = len(steps) > 1
             if chain_mode:
@@ -286,7 +280,6 @@ def run_match(turns: int, iterations_mcts: int, seed_base: int) -> MatchResult:
             dist_after = _total_distance_to_goal(partida.id_partida, jugador_id)
             stats.progress_sum += float(dist_before - dist_after)
 
-            # cerrar ronda actual y crear la siguiente
             ronda.fin = timezone.now()
             ronda.save(update_fields=["fin"])
 

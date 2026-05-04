@@ -32,7 +32,6 @@ if ($BackendOnly -and $FrontendOnly) {
 if ($runBackend) {
   Write-Host "[Backend] Preparando entorno..." -ForegroundColor Cyan
 
-  # VENV: versiones antiguas usaban backend/venv. Actualmente preferimos .venv en la raíz.
   $venvCandidates = @(
     (Join-Path $repoRoot '.venv\Scripts\python.exe'),
     (Join-Path $backendDir '.venv\Scripts\python.exe'),

@@ -6,7 +6,6 @@ from game.models import Jugador, Partida, Pieza, JugadorPartida, Ronda
 
 
 def _new_id(prefix: str) -> str:
-    # Suficientemente único para tests sin depender de tiempo exacto
     import uuid
 
     return f"{prefix}_{uuid.uuid4().hex}"[:50]
@@ -29,10 +28,8 @@ def test_chatbot_best_move_returns_local_suggestion_without_gemini(settings, mon
     JugadorPartida.objects.create(jugador=j1, partida=partida, orden_participacion=1)
     JugadorPartida.objects.create(jugador=j2, partida=partida, orden_participacion=2)
 
-    # MCTS requiere que exista una ronda activa y que sea del jugador
     Ronda.objects.create(id_ronda=_new_id("R"), jugador=j1, numero=1, partida=partida)
 
-    # Piezas mínimas para que exista al menos un movimiento legal
     Pieza.objects.create(id_pieza=_new_id("PZ1"), tipo="1-rojo", posicion="0-4", jugador=j1, partida=partida)
     Pieza.objects.create(id_pieza=_new_id("PZ2"), tipo="2-azul", posicion="1-4", jugador=j2, partida=partida)
 

@@ -3,7 +3,6 @@ import requests
 
 from game.ai import gemini_api
 
-# Asegurar que el cache de modelo no contamine tests
 gemini_api._CACHED_MODEL_BY_VERSION.clear()
 
 
@@ -37,7 +36,6 @@ def test_generate_gemini_reply_network_error_raises(monkeypatch):
 
 
 def test_generate_gemini_reply_http_retryable_then_raise(monkeypatch):
-    # always return 429 -> should raise GeminiHttpError after retries
     resp = _make_resp(status_code=429, json_data={"error": {"code": 429}})
 
     def fake_post(*_a, **_k):
@@ -101,7 +99,6 @@ def test_generate_gemini_reply_empty_candidate_text(monkeypatch):
 
 
 def test_generate_gemini_reply_404_then_pick_model_and_succeed(monkeypatch):
-    # First post -> 404, then requests.get returns models, then second post -> 200
     resp404 = _make_resp(status_code=404, json_data={"error": "no model"}, text="404")
     resp200 = _make_resp(status_code=200, json_data={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]})
 
@@ -111,7 +108,6 @@ def test_generate_gemini_reply_404_then_pick_model_and_succeed(monkeypatch):
         calls["n"] += 1
         return resp404 if calls["n"] == 1 else resp200
 
-    # list models returns one compatible model
     def fake_get(*_a, **_k):
         return _make_resp(status_code=200, json_data={
             "models": [
@@ -122,8 +118,7 @@ def test_generate_gemini_reply_404_then_pick_model_and_succeed(monkeypatch):
     monkeypatch.setattr("game.ai.gemini_api.requests.post", fake_post)
     monkeypatch.setattr("game.ai.gemini_api.requests.get", fake_get)
 
-    # Pasamos un modelo explícito que inicialmente devolverá 404 para forzar
-    # que la función intente auto-seleccionar uno vía _pick_model_from_list
+
     out = gemini_api.generate_gemini_reply(api_key="k", user_message="hola", model="models/unknown")
     assert out == "ok"
     assert calls["n"] >= 2
@@ -142,7 +137,6 @@ def test_list_models_network_error_raises(monkeypatch):
 
 
 def test_get_or_pick_model_no_models(monkeypatch):
-    # Limpiar cache y forzar lista vacía
     gemini_api._CACHED_MODEL_BY_VERSION.pop("v1", None)
     monkeypatch.setattr("game.ai.gemini_api._list_models", lambda *a, **k: [])
 
@@ -166,7 +160,6 @@ def test_long_message_payload_is_sent(monkeypatch):
 
     assert out == "ok"
     assert captured["payload"] is not None
-    # last content part should contain the long message
     contents = captured["payload"].get("contents")
     assert contents
     last = contents[-1]
