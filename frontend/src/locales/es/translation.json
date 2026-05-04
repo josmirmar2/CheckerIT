@@ -277,6 +277,8 @@
     "chat": {
       "assistantName": "Asistente",
       "inputPlaceholder": "Pregunta al asistente...",
+      "aiCannotChat": "Los agentes inteligentes no pueden usar el chatbot",
+      "awaitingHumanTurn": "Para preguntar tienes que esperar a que sea el turno de su jugador.",
       "errors": {
         "send": "Error enviando mensaje al chatbot",
         "loadHistory": "Error cargando historial del chatbot"

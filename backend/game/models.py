@@ -65,6 +65,7 @@ class Partida(models.Model):
     numero_jugadores = models.IntegerField(
         validators=[MinValueValidator(2), MaxValueValidator(6)]
     )
+    is_demo = models.BooleanField(default=False)
     jugadores = models.ManyToManyField(
         Jugador,
         related_name='partidas',  # Relación: Jugador 2..6 --> 0..* Partida

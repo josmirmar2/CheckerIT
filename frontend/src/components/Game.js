@@ -52,19 +52,26 @@ function Game() {
     setChatInput('');
 
     try {
+      const isDemo = partida?.is_demo === true;
+      const body = {
+        mensaje,
+        chatbot_id: chatbotId,
+        partida_id: partida?.id_partida || null,
+        lang: i18n.resolvedLanguage || i18n.language,
+      };
+
+      // Para demos, no enviar jugador_id
+      if (!isDemo) {
+        body.jugador_id =
+          currentPlayerIndex !== null && currentPlayerIndex !== undefined
+            ? (dbJugadores?.[currentPlayerIndex]?.id_jugador || null)
+            : null;
+      }
+
       const res = await fetch('http://localhost:8000/api/chatbot/send_message/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mensaje,
-          chatbot_id: chatbotId,
-          partida_id: partida?.id_partida || null,
-          lang: i18n.resolvedLanguage || i18n.language,
-          jugador_id:
-            currentPlayerIndex !== null && currentPlayerIndex !== undefined
-              ? (dbJugadores?.[currentPlayerIndex]?.id_jugador || null)
-              : null,
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -121,18 +128,24 @@ function Game() {
   // Al cambiar de jugador en la misma partida, cambiar también el flujo conversacional.
   useEffect(() => {
     const partidaId = partida?.id_partida;
-    const jugadorId =
+    const isDemo = partida?.is_demo === true;
+    const jugadorId = isDemo ? null : (
       currentPlayerIndex !== null && currentPlayerIndex !== undefined
         ? (dbJugadores?.[currentPlayerIndex]?.id_jugador || null)
-        : null;
+        : null
+    );
 
-    if (!partidaId || !jugadorId) return;
+    if (!partidaId) return;
+    // Para demos, no necesitamos jugadorId; para no-demos, sí
+    if (!isDemo && !jugadorId) return;
 
     let cancelled = false;
     const loadChatbotForContext = async () => {
       try {
         setChatError(null);
-        const url = `http://localhost:8000/api/chatbot/for_context/?partida_id=${encodeURIComponent(partidaId)}&jugador_id=${encodeURIComponent(jugadorId)}`;
+        const url = isDemo
+          ? `http://localhost:8000/api/chatbot/for_context/?partida_id=${encodeURIComponent(partidaId)}`
+          : `http://localhost:8000/api/chatbot/for_context/?partida_id=${encodeURIComponent(partidaId)}&jugador_id=${encodeURIComponent(jugadorId)}`;
         const res = await fetch(url);
         const data = await res.json();
         if (!res.ok) {
@@ -162,7 +175,7 @@ function Game() {
     return () => {
       cancelled = true;
     };
-  }, [partida?.id_partida, currentPlayerIndex, dbJugadores, t]);
+  }, [partida?.id_partida, partida?.is_demo, currentPlayerIndex, dbJugadores, t]);
 
   const AI_FIRST_DELAY_MS = 200;
   const AI_CHAIN_DELAY_MS = 200;
@@ -180,6 +193,17 @@ function Game() {
   const jugadoresConfig = useMemo(() => location.state?.jugadoresConfig || [], [location.state]);
   const isAITurn = useMemo(() => jugadoresConfig[currentPlayerIndex]?.tipo === 'ia', [jugadoresConfig, currentPlayerIndex]);
   const activePuntas = useMemo(() => getActivePuntas(jugadoresConfig.length), [jugadoresConfig.length]);
+
+  // Determinar si el chatbot debe estar deshabilitado
+  const isChatbotDisabled = useMemo(() => {
+    // El chatbot se deshabilita si:
+    // 1. El jugador actual es una IA
+    // 2. Y NO es una partida demo (is_demo === false o no definido)
+    const currentPlayerIsAI = isAITurn;
+    const isDemo = partida?.is_demo === true;
+    return currentPlayerIsAI && !isDemo;
+  }, [isAITurn, partida?.is_demo]);
+
 
   const resolveNombreJugador = (configJugador, jugadorDb) => {
     const nombreDb = jugadorDb?.nombre;
@@ -1025,58 +1049,56 @@ function Game() {
                 </button>
               </div>
 
-              {showChatInfo && (
-                <div className="chatbot-infoPanel">
-                  <div className="chatbot-infoTitle">{t('game.help.examples.title')}</div>
-                  <ul className="chatbot-infoList">
-                    {t('game.help.examples.questions', { returnObjects: true }).map((q, i) => (
-                      <li key={i}>{q}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
               <div className="chatbot">
-                <div className="chatbot-messages" aria-live="polite">
-                  {chatMessages.length === 0 ? (
-                    <p className="help-placeholder">{t('game.help.placeholder')}</p>
-                  ) : (
-                    chatMessages.map((m, idx) => (
-                      <div
-                        key={idx}
-                        className={`chatbot-message ${m.role === 'user' ? 'user' : 'assistant'}`}
+                {isChatbotDisabled ? (
+                  <div className="chatbot-messages" aria-live="polite">
+                    <p className="help-placeholder">{t('game.chat.awaitingHumanTurn')}</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="chatbot-messages" aria-live="polite">
+                      {chatMessages.length === 0 ? (
+                        <p className="help-placeholder">{t('game.help.placeholder')}</p>
+                      ) : (
+                        chatMessages.map((m, idx) => (
+                          <div
+                            key={idx}
+                            className={`chatbot-message ${m.role === 'user' ? 'user' : 'assistant'}`}
+                          >
+                            <div className="chatbot-bubble">
+                              <div className="chatbot-author">{m.role === 'user' ? t('common.you') : t('game.chat.assistantName')}</div>
+                              <div className="chatbot-text">{m.text}</div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    {chatError && <div className="chatbot-error">{chatError}</div>}
+
+                    <div className="chatbot-inputRow">
+                      <input
+                        className="chatbot-input"
+                        type="text"
+                        value={chatInput}
+                        placeholder={t('game.chat.inputPlaceholder')}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') sendChatMessage();
+                        }}
+                        disabled={chatLoading}
+                      />
+                      <button
+                        className="chatbot-sendButton"
+                        onClick={sendChatMessage}
+                        disabled={chatLoading}
+                        type="button"
                       >
-                        <div className="chatbot-bubble">
-                          <div className="chatbot-author">{m.role === 'user' ? t('common.you') : t('game.chat.assistantName')}</div>
-                          <div className="chatbot-text">{m.text}</div>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {chatError && <div className="chatbot-error">{chatError}</div>}
-
-                <div className="chatbot-inputRow">
-                  <input
-                    className="chatbot-input"
-                    type="text"
-                    value={chatInput}
-                    placeholder={t('game.chat.inputPlaceholder')}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') sendChatMessage();
-                    }}
-                    disabled={chatLoading}
-                  />
-                  <button
-                    className="chatbot-sendButton"
-                    onClick={sendChatMessage}
-                    disabled={chatLoading}
-                    type="button"
-                  >
-                    {chatLoading ? t('common.sending') : t('common.send')}
-                  </button>
-                </div>
+                        {chatLoading ? t('common.sending') : t('common.send')}
+                      </button>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
           )}

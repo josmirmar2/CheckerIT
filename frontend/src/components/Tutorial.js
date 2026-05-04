@@ -230,10 +230,20 @@ function Tutorial() {
           ];
 
     try {
+      const payload = {
+        numero_jugadores: 2,
+        jugadores: jugadoresConfig,
+      };
+      
+      // Si es modo demo, marcar la partida como is_demo
+      if (mode === 'demo') {
+        payload.is_demo = true;
+      }
+      
       const res = await fetch(`${API_URL}/partidas/start_game/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ numero_jugadores: 2, jugadores: jugadoresConfig }),
+        body: JSON.stringify(payload),
       });
 
       let data = null;

@@ -391,9 +391,12 @@ class PartidaViewSet(viewsets.ModelViewSet):
             
             jugadores_list.append(jugador)
         
+        is_demo = request.data.get('is_demo', False)
+        
         partida = Partida.objects.create(
             id_partida=f"P_{datetime.now().timestamp()}",
-            numero_jugadores=numero_jugadores
+            numero_jugadores=numero_jugadores,
+            is_demo=is_demo
         )
         
         for idx, jugador in enumerate(jugadores_list):
@@ -1846,6 +1849,30 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         pieza_id = request.data.get('pieza_id')
         lang = request.data.get('lang') or request.data.get('language') or request.data.get('idioma')
 
+        # Determinar si es una partida de demo
+        is_demo = False
+        if partida_id:
+            try:
+                partida = Partida.objects.get(id_partida=partida_id)
+                is_demo = partida.is_demo
+            except Partida.DoesNotExist:
+                pass
+
+        # Validar que el jugador sea humano, a menos que sea una partida de Demo
+        if partida_id and jugador_id and not is_demo:
+            try:
+                jugador = Jugador.objects.get(id_jugador=jugador_id)
+                
+                # Si NO es una partida de Demo y el jugador es una IA, rechazar el mensaje
+                if not jugador.humano:
+                    return Response(
+                        {'error': 'Los agentes inteligentes no pueden usar el chatbot'},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+            except Jugador.DoesNotExist:
+                # Si no existe, dejar continuar
+                pass
+
         if chatbot_id:
             try:
                 chatbot = Chatbot.objects.get(id=chatbot_id)
@@ -1854,27 +1881,58 @@ class ChatbotViewSet(viewsets.ModelViewSet):
 
             # Si se aporta contexto de partida/jugador y el chatbot_id no corresponde,
             # cambiar automáticamente al chatbot asociado a ese (partida, jugador).
-            if partida_id and jugador_id:
-                if str(getattr(chatbot, 'partida_id', '') or '') != str(partida_id) or str(getattr(chatbot, 'jugador_id', '') or '') != str(jugador_id):
+            if partida_id:
+                # Para demos: filtrar solo por partida_id
+                # Para no-demos: filtrar por (partida_id, jugador_id)
+                if is_demo:
+                    if str(getattr(chatbot, 'partida_id', '') or '') != str(partida_id):
+                        chatbot = (
+                            Chatbot.objects
+                            .filter(partida_id=str(partida_id), jugador_id__isnull=True)
+                            .order_by('id')
+                            .first()
+                        )
+                        if chatbot is None:
+                            chatbot = Chatbot.objects.create(partida_id=str(partida_id), jugador_id=None)
+                else:
+                    if jugador_id:
+                        if str(getattr(chatbot, 'partida_id', '') or '') != str(partida_id) or str(getattr(chatbot, 'jugador_id', '') or '') != str(jugador_id):
+                            chatbot = (
+                                Chatbot.objects
+                                .filter(partida_id=str(partida_id), jugador_id=str(jugador_id))
+                                .order_by('id')
+                                .first()
+                            )
+                            if chatbot is None:
+                                chatbot = Chatbot.objects.create(partida_id=str(partida_id), jugador_id=str(jugador_id))
+        else:
+            # Preferir un chatbot por partida (si es demo) o (partida, jugador) si no es demo
+            if partida_id:
+                if is_demo:
+                    # Para demos: buscar chatbot de la partida sin jugador específico
                     chatbot = (
                         Chatbot.objects
-                        .filter(partida_id=str(partida_id), jugador_id=str(jugador_id))
+                        .filter(partida_id=str(partida_id), jugador_id__isnull=True)
                         .order_by('id')
                         .first()
                     )
                     if chatbot is None:
-                        chatbot = Chatbot.objects.create(partida_id=str(partida_id), jugador_id=str(jugador_id))
-        else:
-            # Preferir un chatbot por (partida, jugador) cuando se aporta contexto.
-            if partida_id and jugador_id:
-                chatbot = (
-                    Chatbot.objects
-                    .filter(partida_id=str(partida_id), jugador_id=str(jugador_id))
-                    .order_by('id')
-                    .first()
-                )
-                if chatbot is None:
-                    chatbot = Chatbot.objects.create(partida_id=str(partida_id), jugador_id=str(jugador_id))
+                        chatbot = Chatbot.objects.create(partida_id=str(partida_id), jugador_id=None)
+                else:
+                    # Para no-demos: buscar chatbot por (partida_id, jugador_id)
+                    if jugador_id:
+                        chatbot = (
+                            Chatbot.objects
+                            .filter(partida_id=str(partida_id), jugador_id=str(jugador_id))
+                            .order_by('id')
+                            .first()
+                        )
+                        if chatbot is None:
+                            chatbot = Chatbot.objects.create(partida_id=str(partida_id), jugador_id=str(jugador_id))
+                    else:
+                        chatbot = Chatbot.objects.order_by('id').first()
+                        if chatbot is None:
+                            chatbot = Chatbot.objects.create()
             else:
                 chatbot = Chatbot.objects.order_by('id').first()
                 if chatbot is None:
@@ -1916,22 +1974,43 @@ class ChatbotViewSet(viewsets.ModelViewSet):
 
         Query params:
         - partida_id: str (obligatorio)
-        - jugador_id: str (obligatorio)
+        - jugador_id: str (opcional, requerido solo si no es una partida demo)
 
         No crea el chatbot si no existe.
         """
         partida_id = request.query_params.get('partida_id')
         jugador_id = request.query_params.get('jugador_id')
 
-        if not partida_id or not jugador_id:
-            return Response({'error': 'partida_id y jugador_id son requeridos'}, status=status.HTTP_400_BAD_REQUEST)
+        if not partida_id:
+            return Response({'error': 'partida_id es requerido'}, status=status.HTTP_400_BAD_REQUEST)
 
-        chatbot = (
-            Chatbot.objects
-            .filter(partida_id=str(partida_id), jugador_id=str(jugador_id))
-            .order_by('id')
-            .first()
-        )
+        # Determinar si es una partida de demo
+        is_demo = False
+        try:
+            partida = Partida.objects.get(id_partida=partida_id)
+            is_demo = partida.is_demo
+        except Partida.DoesNotExist:
+            return Response({'error': 'partida_id no válido'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Para demos: buscar chatbot solo por partida_id (sin jugador_id)
+        # Para no-demos: buscar por (partida_id, jugador_id)
+        if is_demo:
+            chatbot = (
+                Chatbot.objects
+                .filter(partida_id=str(partida_id), jugador_id__isnull=True)
+                .order_by('id')
+                .first()
+            )
+        else:
+            if not jugador_id:
+                return Response({'error': 'jugador_id es requerido para partidas no-demo'}, status=status.HTTP_400_BAD_REQUEST)
+            chatbot = (
+                Chatbot.objects
+                .filter(partida_id=str(partida_id), jugador_id=str(jugador_id))
+                .order_by('id')
+                .first()
+            )
+
         if chatbot is None:
             return Response({'chatbot_id': None, 'conversaciones': []}, status=status.HTTP_200_OK)
 

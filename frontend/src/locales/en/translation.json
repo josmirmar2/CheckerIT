@@ -277,6 +277,8 @@
     "chat": {
       "assistantName": "Assistant",
       "inputPlaceholder": "Ask the assistant...",
+      "aiCannotChat": "AI agents cannot use the chatbot",
+      "awaitingHumanTurn": "To ask a question, you must wait for your player's turn.",
       "errors": {
         "send": "Error sending message to the chatbot",
         "loadHistory": "Error loading chatbot history"
