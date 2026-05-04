@@ -703,7 +703,9 @@ class PartidaViewSet(viewsets.ModelViewSet):
 
         next_idx = (current_idx + 1) % len(jugadores_ordenados)
         expected_next_jugador_id = str(jugadores_ordenados[next_idx].jugador_id)
-        expected_next_numero = int(ronda_actual.numero) + 1
+        # Sólo incrementar el número de ronda cuando se cierra un ciclo
+        # (es decir, cuando el siguiente jugador es el primero de la lista - wraparound)
+        expected_next_numero = int(ronda_actual.numero) + 1 if next_idx == 0 else int(ronda_actual.numero)
 
         updated_round = None
         if old_round_data:
@@ -765,10 +767,15 @@ class PartidaViewSet(viewsets.ModelViewSet):
                 'jugador_esperado': expected_next_jugador_id,
             }, status=status.HTTP_400_BAD_REQUEST)
 
-        if numero_nuevo_int != expected_next_numero:
+        # Aceptar el mismo numero si aún no se completó el ciclo, o el siguiente numero
+        # cuando se ha hecho wraparound al primer jugador.
+        allowed_numeros = {int(ronda_actual.numero)}
+        if next_idx == 0:
+            allowed_numeros.add(int(ronda_actual.numero) + 1)
+        if numero_nuevo_int not in allowed_numeros:
             return Response({
                 'error': 'newRoundCreated.numero no coincide con el numero de ronda esperado',
-                'numero_esperado': expected_next_numero,
+                'numero_esperado': sorted(list(allowed_numeros)),
             }, status=status.HTTP_400_BAD_REQUEST)
 
         try:
@@ -1059,7 +1066,6 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         words = re.findall(r"[a-záéíóúüñ']+", text)
         if not words:
             return None
-
         es_markers = {
             'el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas',
             'de', 'del', 'al', 'y', 'o', 'pero', 'porque',
@@ -1070,11 +1076,11 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         }
         en_markers = {
             'the', 'a', 'an', 'and', 'or', 'but', 'because',
-            'what', 'how', 'where', 'when', 'why',
+            'what', 'how', 'where', 'when', 'why', 'who',
             'to', 'of', 'in', 'on', 'for', 'with', 'without',
-            'is', 'are', 'there', 'do', 'does', 'can', 'i', 'you', 'my', 'your',
+            'is', 'are', 'there', 'do', 'does', 'can', 'i', 'you', 'my', 'your', 'we', 'they',
             'time', 'limit', 'music', 'undo', 'skip', 'pass',
-            'hello', 'hi', 'thanks', 'help', 'rules', 'board', 'turn', 'move', 'moves',
+            'hello', 'hi', 'thanks', 'thank', 'help', 'rules', 'board', 'turn', 'move', 'moves', 'name', 'who', 'what', 'where', 'when', 'why', 'how'
         }
 
         es_hits = sum(1 for w in words if w in es_markers)
@@ -1090,6 +1096,16 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         if text in {'hola', 'buenas'}:
             return 'es'
         if text in {'hi', 'hello'}:
+            return 'en'
+
+        if any(text.startswith(w + ' ') or text.startswith(w + "'") for w in ('what', 'who', 'where', 'when', 'why', 'how')):
+            return 'en'
+
+        has_tildes_or_spanish_marks = any(ch in text for ch in ('á', 'é', 'í', 'ó', 'ú', 'ü', 'ñ'))
+        if not has_tildes_or_spanish_marks and en_hits >= 1:
+            return 'en'
+
+        if en_hits > es_hits:
             return 'en'
 
         return None
@@ -1745,6 +1761,14 @@ class ChatbotViewSet(viewsets.ModelViewSet):
 
         # Idioma: priorizar detección por contenido del mensaje.
         detected = self._detect_lang_from_message(mensaje)
+        # Si la detección no fue concluyente, realizar una pasada adicional
+        # basada en palabras clave comunes en inglés para preguntas sueltas.
+        if detected is None:
+            text_for_detection = str(mensaje or '').strip().lower()
+            words_simple = re.findall(r"[a-z]+", text_for_detection)
+            if any(w in words_simple for w in ('what', 'who', 'where', 'when', 'why', 'how', 'name', 'hello', 'hi', 'thanks', 'please')):
+                detected = 'en'
+
         lang_norm = self._normalize_lang(detected or lang or (chatbot.memoria or {}).get('lang'))
 
         # Persistir idioma preferido por conversación para siguientes turnos.

@@ -64,6 +64,8 @@ export function buildRoundAdvancePayload({ partidaId, actualRound, dbJugadores, 
 
   const roundNumber = actualRound.numero || 0;
 
+  const newNumero = nextNumero === 1 ? roundNumber + 1 : roundNumber;
+
   return {
     oldRound: {
       numero: roundNumber,
@@ -73,7 +75,7 @@ export function buildRoundAdvancePayload({ partidaId, actualRound, dbJugadores, 
       partida_id: partidaId,
     },
     newRoundCreated: {
-      numero: roundNumber + 1,
+      numero: newNumero,
       inicio: new Date().toISOString(),
       jugador_id: nextJugador.id_jugador,
       partida_id: partidaId,
