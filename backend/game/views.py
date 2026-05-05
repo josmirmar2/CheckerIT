@@ -1198,6 +1198,9 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 'damas chinas',
                 'chinese checkers',
                 'reglas',
+                'normas',
+                'normativa',
+                'reglamento',
                 'rules',
                 'movimiento',
                 'mover',
@@ -1252,6 +1255,84 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             ]
         return keywords
 
+    def _detect_chatbot_intent_with_gemini(self, *, mensaje: str, lang: str) -> str | None:
+        api_key = getattr(settings, 'GEMINI_API_KEY', None)
+        if not api_key or not mensaje:
+            return None
+
+        try:
+            timeout_seconds = int(getattr(settings, 'GEMINI_TIMEOUT_SECONDS', 15))
+        except Exception:
+            timeout_seconds = 15
+
+        try:
+            max_retries = int(getattr(settings, 'GEMINI_MAX_RETRIES', 2))
+        except Exception:
+            max_retries = 2
+
+        try:
+            retry_backoff_seconds = float(getattr(settings, 'GEMINI_RETRY_BACKOFF_SECONDS', 0.6))
+        except Exception:
+            retry_backoff_seconds = 0.6
+
+        prompt = (
+            "Clasifica la intención del usuario sobre CheckerIT. "
+            "Responde solo con una etiqueta de esta lista: rules, weather, time_limit, other. "
+            "Usa rules si pregunta por normas o reglas del juego. "
+            "Usa weather si pregunta qué tiempo hace, el clima o el tiempo meteorológico de una ciudad o de hoy. "
+            "Usa time_limit si pregunta por el temporizador, límite de tiempo o tiempo de la partida. "
+            "Usa other para cualquier otra cosa. "
+            "No expliques nada más."
+        )
+
+        try:
+            detected = generate_gemini_reply(
+                api_key=str(api_key),
+                model=getattr(settings, 'GEMINI_MODEL', None),
+                timeout_seconds=timeout_seconds,
+                api_version=getattr(settings, 'GEMINI_API_VERSION', 'v1'),
+                max_retries=max_retries,
+                retry_backoff_seconds=retry_backoff_seconds,
+                system_prompt=prompt,
+                temperature=0.0,
+                max_output_tokens=8,
+                user_message=str(mensaje),
+            )
+        except Exception:
+            return None
+
+        normalized = self._sanitize_llm_text(detected).lower().strip()
+        normalized = re.sub(r"[^a-z_]+", "", normalized)
+
+        aliases = {
+            'reglas': 'rules',
+            'normas': 'rules',
+            'normativa': 'rules',
+            'reglamento': 'rules',
+            'clima': 'weather',
+            'meteorologia': 'weather',
+            'meteorología': 'weather',
+            'tiempo': 'time_limit',
+            'temporizador': 'time_limit',
+            'timer': 'time_limit',
+            'partida': 'time_limit',
+            'otro': 'other',
+            'others': 'other',
+            'unknown': 'other',
+        }
+        return aliases.get(normalized, normalized if normalized in {'rules', 'weather', 'time_limit', 'other'} else None)
+
+    def _weather_refusal_message(self, lang: str) -> str:
+        if lang == 'en':
+            return (
+                'I cannot check live weather for that city, but that question is about the weather, not the game. '
+                'Ask me about CheckerIT rules, moves, or the interface.'
+            )
+        return (
+            'No puedo consultar el tiempo meteorológico de esa ciudad, pero esa pregunta es sobre el clima y no sobre el juego. '
+            'Si quieres, pregúntame por las reglas, los movimientos o la interfaz.'
+        )
+
     def _is_in_domain(self, mensaje: str) -> bool:
         if mensaje is None:
             return False
@@ -1270,6 +1351,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         jugador_id: str | None,
         pieza_id: str | None = None,
         lang: str = 'es',
+        intent_hint: str | None = None,
     ) -> tuple[str | None, dict | None]:
         """Respuestas deterministas basadas en estado de partida.
 
@@ -1319,6 +1401,9 @@ class ChatbotViewSet(viewsets.ModelViewSet):
 
         rules_triggers = (
             "reglas",
+            "normas",
+            "normativa",
+            "reglamento",
             "reglas del juego",
             "reglas del tablero",
             "como se juega",
@@ -1382,6 +1467,10 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             "hay limite de tiempo",
             "hay límite de tiempo",
             "tiempo",
+            "tiempo de partida",
+            "tiempo de juego",
+            "cuanto tiempo queda",
+            "cuánto tiempo queda",
             "temporizador",
             "timer",
             "time limit",
@@ -1467,6 +1556,25 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         wants_music = any(t in texto for t in music_triggers)
         wants_end = any(t in texto for t in end_game_triggers)
         wants_show = any(t in texto for t in show_move_triggers)
+        weather_context = any(
+            token in texto
+            for token in (
+                "hace",
+                "clima",
+                "lluvia",
+                "llueve",
+                "temperatura",
+                "pronóstico",
+                "pronostico",
+                "sevilla",
+                "hoy",
+                "mañana",
+                "manana",
+                "weather",
+                "meteorología",
+                "meteorologia",
+            )
+        )
 
         last_best_move = (chatbot.memoria or {}).get("last_best_move")
         awaiting_show_move = bool((chatbot.memoria or {}).get("awaiting_show_move"))
@@ -1564,6 +1672,8 @@ class ChatbotViewSet(viewsets.ModelViewSet):
             )
 
         if wants_time and not wants_best:
+            if intent_hint == 'weather' or (weather_context and 'tiempo' in texto):
+                return self._weather_refusal_message(lang), {"tipo": "clima"}
             if lang == 'en':
                 return (
                     "The game shows a timer with the elapsed match time at the top of the screen.\n"
@@ -1752,6 +1862,13 @@ class ChatbotViewSet(viewsets.ModelViewSet):
         if len(mensaje) > max_chars:
             respuesta = self._friendly_gemini_reply(reason='too_long', lang=lang_norm)
 
+        intent_hint = None
+        if respuesta is None and api_key:
+            lowered = mensaje.lower()
+            needs_intent_check = any(token in lowered for token in ('tiempo', 'timer', 'time', 'normas', 'reglas', 'normativa', 'reglamento'))
+            if needs_intent_check:
+                intent_hint = self._detect_chatbot_intent_with_gemini(mensaje=mensaje, lang=lang_norm)
+
         respuesta_local, extra = (None, None)
         if respuesta is None:
             respuesta_local, extra = self._maybe_answer_game_help(
@@ -1761,6 +1878,7 @@ class ChatbotViewSet(viewsets.ModelViewSet):
                 jugador_id=jugador_id,
                 pieza_id=pieza_id,
                 lang=lang_norm,
+                intent_hint=intent_hint,
             )
             if respuesta_local is not None:
                 respuesta = respuesta_local

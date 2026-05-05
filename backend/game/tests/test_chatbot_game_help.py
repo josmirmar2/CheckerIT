@@ -87,3 +87,47 @@ def test_chatbot_possible_moves_returns_local_moves_without_gemini(settings, mon
 
     assert res.status_code == 200
     assert res.data.get("tipo") == "movimientos_no_disponible"
+
+
+@pytest.mark.django_db
+def test_chatbot_normas_uses_rules_response_with_gemini_classification(settings, monkeypatch):
+    settings.GEMINI_API_KEY = "test-key"
+    settings.CHATBOT_DOMAIN_ENFORCE = False
+
+    class _FakeResponse:
+        status_code = 200
+
+        def json(self):
+            return {
+                "candidates": [
+                    {
+                        "content": {
+                            "parts": [
+                                {"text": "rules"},
+                            ]
+                        }
+                    }
+                ]
+            }
+
+        @property
+        def text(self):
+            return "OK"
+
+    def fake_post(*args, **kwargs):
+        return _FakeResponse()
+
+    monkeypatch.setattr("game.ai.gemini_api.requests.post", fake_post)
+
+    client = APIClient()
+    res = client.post(
+        "/api/chatbot/send_message/",
+        {
+            "mensaje": "¿Cuáles son las normas de este juego?",
+        },
+        format="json",
+    )
+
+    assert res.status_code == 200
+    assert "Reglas básicas de CheckerIT" in res.data["respuesta"]
+    assert res.data.get("tipo") == "reglas_juego"

@@ -121,3 +121,48 @@ def test_gemini_retries_on_503_then_succeeds(settings, monkeypatch):
     assert res.status_code == 200
     assert res.data["respuesta"] == "ok"
     assert calls["n"] >= 2
+
+
+@pytest.mark.django_db
+def test_chatbot_weather_question_is_not_answered_as_timer(settings, monkeypatch):
+    settings.GEMINI_API_KEY = "test-key"
+    settings.GEMINI_API_VERSION = "v1"
+    settings.GEMINI_MODEL = "gemini-any"
+    settings.GEMINI_MAX_RETRIES = 0
+    settings.GEMINI_RETRY_BACKOFF_SECONDS = 0
+    settings.CHATBOT_DOMAIN_ENFORCE = False
+
+    calls = {"n": 0}
+
+    class _ClassificationResp:
+        status_code = 200
+
+        def json(self):
+            return {"candidates": [{"content": {"parts": [{"text": "weather"}]}}]}
+
+        @property
+        def text(self):
+            return "OK"
+
+    def fake_post(*args, **kwargs):
+        calls["n"] += 1
+        payload = kwargs.get("json") or {}
+        contents = payload.get("contents") or []
+        first_part = (((contents[0] if contents else {}) or {}).get("parts") or [{}])[0].get("text", "")
+        if "Clasifica la intención" in first_part:
+            return _ClassificationResp()
+        raise AssertionError("No debería llamar a Gemini para responder como temporizador")
+
+    monkeypatch.setattr("game.ai.gemini_api.requests.post", fake_post)
+
+    client = APIClient()
+    res = client.post(
+        "/api/chatbot/send_message/",
+        {"mensaje": "¿Qué tiempo hace hoy en Sevilla?"},
+        format="json",
+    )
+
+    assert res.status_code == 200
+    assert res.data["tipo"] == "clima"
+    assert "temporizador" not in res.data["respuesta"].lower()
+    assert calls["n"] == 1
