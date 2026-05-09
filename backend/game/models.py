@@ -94,7 +94,7 @@ class Pieza(models.Model):
     """
     Modelo para representar una pieza del juego
     Relación: Jugador 1 --> 1..* Pieza
-    Relación: Chatbot 1 -- 0..* Pieza
+    Relación: Partida 1 --> 1..* Pieza
     """
     id_pieza = models.CharField(max_length=50, primary_key=True)
     tipo = models.CharField(max_length=50)
@@ -106,13 +106,6 @@ class Pieza(models.Model):
         Jugador, 
         on_delete=models.CASCADE, 
         related_name='piezas'  # Jugador 1 --> 1..* Pieza
-    )
-    chatbot = models.ForeignKey(
-        'Chatbot',
-        on_delete=models.CASCADE,
-        related_name='piezas',  # ChatBot 1 -- 0..* Pieza
-        null=True,
-        blank=True
     )
     partida = models.ForeignKey(
         Partida,

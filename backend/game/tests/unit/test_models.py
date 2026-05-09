@@ -98,7 +98,6 @@ class TestPropiedadesYValidaciones:
         )
         assert pieza.jugador_id == "J1"
         assert pieza.partida_id is None
-        assert pieza.chatbot_id is None
 
     @pytest.mark.django_db
     def test_pieza_requiere_jugador(self, make_pieza):
@@ -469,30 +468,6 @@ class TestRelacionesEntreEntidades:
         assert chatbot.partida == p
 
     @pytest.mark.django_db
-    def test_related_name_piezas_desde_chatbot_funciona(self, make_jugador, make_agente_inteligente, make_partida, make_pieza):
-        j = make_jugador(id_jugador="J1", nombre="Ana", humano=False, numero=1)
-        chatbot = Chatbot.objects.create(jugador=j, memoria={})
-        p = make_partida(id_partida="P1", numero_jugadores=2)
-
-        make_pieza(
-            id_pieza="X_CB",
-            tipo="punta-0",
-            posicion="0-0",
-            jugador=j,
-            partida=p,
-            chatbot=chatbot,
-        )
-        make_pieza(
-            id_pieza="X_NO_CB",
-            tipo="punta-0",
-            posicion="0-1",
-            jugador=j,
-            partida=p,
-        )
-
-        assert chatbot.piezas.count() == 1
-
-    @pytest.mark.django_db
     def test_borrado_partida_hace_cascade_a_turnos_movimientos_piezas_y_through(self, make_jugador, make_partida, make_pieza, make_ronda, make_movimiento):
         j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
         p = make_partida(id_partida="P1", numero_jugadores=2)
@@ -588,26 +563,4 @@ class TestRelacionesEntreEntidades:
         assert Pieza.objects.filter(id_pieza=pieza_1.id_pieza).count() == 1
         assert Pieza.objects.filter(id_pieza=pieza_2.id_pieza).count() == 1
 
-    @pytest.mark.django_db
-    def test_borrado_chatbot_hace_cascade_a_piezas_asociadas(self, make_agente_inteligente, make_jugador, make_pieza):
-        j = make_jugador(id_jugador="J1", nombre="Ana", humano=True, numero=1)
-        chatbot = Chatbot.objects.create(jugador=j, memoria={})
 
-        pieza_cb = make_pieza(
-            id_pieza="X_CB",
-            tipo="punta-0",
-            posicion="0-0",
-            jugador=j,
-            chatbot=chatbot,
-        )
-        pieza_sin_cb = make_pieza(
-            id_pieza="X_NO_CB",
-            tipo="punta-0",
-            posicion="0-1",
-            jugador=j,
-        )
-
-        chatbot.delete()
-
-        assert Pieza.objects.filter(id_pieza=pieza_cb.id_pieza).count() == 0
-        assert Pieza.objects.filter(id_pieza=pieza_sin_cb.id_pieza).count() == 1

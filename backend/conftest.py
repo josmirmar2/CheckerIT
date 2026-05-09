@@ -90,7 +90,6 @@ def make_pieza(db, make_jugador, make_partida):
         posicion: str = "0-0",
         jugador=_AUTO,
         partida=_AUTO,
-        chatbot=None,
         **extra,
     ):
         if jugador is _AUTO:
@@ -103,7 +102,6 @@ def make_pieza(db, make_jugador, make_partida):
             posicion=posicion,
             jugador=jugador,
             partida=partida,
-            chatbot=chatbot,
             **extra,
         )
 
