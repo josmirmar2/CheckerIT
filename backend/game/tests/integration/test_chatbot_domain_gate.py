@@ -3,6 +3,9 @@ import pytest
 from rest_framework.test import APIClient
 
 
+pytestmark = pytest.mark.integration
+
+
 @pytest.mark.django_db
 def test_domain_gate_rejects_offtopic_without_calling_gemini(settings, monkeypatch):
     settings.GEMINI_API_KEY = "test-key"

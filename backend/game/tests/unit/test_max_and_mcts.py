@@ -16,6 +16,11 @@ def test_axial_and_key_and_hex_distance():
     d = max_agent._hex_distance((0, 0), (1, 0))
     assert isinstance(d, int) and d >= 0
 
+def test_parse_and_target_punta():
+    assert max_agent._parse_punta('0-something') == 0
+    assert max_agent._parse_punta('bad') is None
+    assert max_agent._target_punta(0) == max_agent.TARGET_MAP[0]
+
 
 def test_distance_to_goal_and_goal_depth():
     for punta, goals in max_agent.GOAL_POSITIONS.items():
@@ -37,12 +42,6 @@ def test_goal_priority_and_penalty():
             penalty, missing, blockers = max_agent._goal_priority_penalty([pos], punta)
             assert isinstance(penalty, float)
             break
-
-
-def test_parse_and_target_punta():
-    assert max_agent._parse_punta('0-something') == 0
-    assert max_agent._parse_punta('bad') is None
-    assert max_agent._target_punta(0) == max_agent.TARGET_MAP[0]
 
 
 def test_max_agent_compute_moves_and_sequences():

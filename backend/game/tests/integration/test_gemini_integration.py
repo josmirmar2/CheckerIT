@@ -3,6 +3,8 @@ import requests
 
 from game.ai import gemini_api
 
+pytestmark = pytest.mark.integration
+
 gemini_api._CACHED_MODEL_BY_VERSION.clear()
 
 

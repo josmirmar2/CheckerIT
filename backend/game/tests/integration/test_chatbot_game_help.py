@@ -11,6 +11,9 @@ def _new_id(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex}"[:50]
 
 
+pytestmark = pytest.mark.integration
+
+
 @pytest.mark.django_db
 def test_chatbot_best_move_returns_local_suggestion_without_gemini(settings, monkeypatch):
     settings.GEMINI_API_KEY = "test-key"
